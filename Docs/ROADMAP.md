@@ -1,6 +1,6 @@
 # ロードマップ・Codex向けMVP実装順序
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00（既存プロジェクト・開発環境確認）は完了済み。M01〜M18は未着手。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00・M01は完了済み。M02〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
 
@@ -28,7 +28,7 @@
 | 順 / ID | 作業と主な成果物 | 前提 | 受入・試験 |
 |---|---|---|---|
 | 01 M00（完了） | 既存プロジェクト・開発環境確認。`.uproject`、Runtimeモジュール、Game/Editorターゲット、基本ディレクトリ、Git・生成物除外を確認 | 既存UEプロジェクトへ適用 | Development Editor Win64通常ビルド成功（最新判定・0アクション）。検証範囲は下記完了記録参照 |
-| 02 M01 | Data共通enum/struct、m/cm換算、ID、Snapshotとイベント契約 | M00 | UHT成功、単位/ID無効値試験 |
+| 02 M01（完了） | Data共通enum/struct、m/cm換算、ID、Snapshotとイベント契約 | M00 | 新規コードのUHT生成・C++コンパイル成功、M01 Automation 4件成功。下記完了記録参照 |
 | 03 M02 | 装備行、3種エギ/無しを含む9選択、係数DataAsset、初期エギ35g | M01、D08決定済み | F01、27組合せ、0g受理、不正値・欠損参照エラー |
 | 04 M03 | Oceanの平底ProviderとSampleOcean | M01/02、テスト環境値 | O01/O03/O04/O05/O06 |
 | 05 M04 | Coordinatorの固定時計、入力キュー、登録解除、用途別seed | M01 | Tick順・ポーズ・catch-up・再現性試験 |
@@ -57,6 +57,14 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 - 開発環境とMSVCの非推奨バージョン警告は [GAME_DESIGNの検証記録](GAME_DESIGN.md#9-検証と実装前確認) を参照。ビルドエラーはなく、実装コード・Config・Contentの修正は不要だった。
 - M00調査前後のGitはクリーン。主要UE生成物の除外と、除外対象の追跡済みファイルがないことを確認。`.vsconfig`も除外されるためVS導入構成はGit共有されない。DefaultEngine.iniには同値のDefaultGraphicsRHI重複があるが、ビルドを妨げておらず変更していない。
 - 今回の文書更新は「UEプロジェクト未作成」「全タスク未着手」という記述と実態の不一致を解消するもの。ゲーム仕様・システム間契約・M01以降の受入試験は変更しない。
+
+### M01完了記録（2026-09-12）
+
+- 追加: 共通enum 15種、値struct 14種、native delegate 4種、m/cm換算、共通秒→Tick換算。値型の詳細表現はGAME_DESIGN第4節を参照。DataAsset・装備行・Actor/Component・状態遷移は追加していない。既存TRBase、Build.cs、Target.cs、Config、Contentは変更なし。
+- Development Editor Win64通常ビルド成功（終了コード0、約22.8秒、9アクション）。Internal UnrealHeaderToolが新規ヘッダを処理し11生成ファイルを書き出した。TRSimulationTypes.cpp、TRCommonTypesTests.cpp、Module.TipRunFishingUE5.gen.cpp等のコンパイルとDLLリンクを確認。最新判定だけの確認ではない。
+- NullRHIのUnrealEditor-Cmdで `TipRun.M01` を実行。Units、Identifiers、TimeConversion、Reflectionの4件すべて成功、各試験の警告・エラー0件、プロセス終了コード0。100cm/1m、ID無効値・Token同一性、0.10/0.55/0.8秒→6/33/48Tick、丸め境界・不正値・オーバーフロー、反射登録・Blueprint読取専用を確認。
+- ビルド警告: MSVC 14.51.36257が推奨範囲より新しいこと、既存IncludeOrderVersionがUnreal5_6互換であること。試験開始前のEngine起動ログにはCondition failed等のエラー出力とレイアウト警告もあるが、M01試験結果には記録されていない。起動ログの原因調査は未実施。M01のコード修正を要するビルド・試験エラーはなかった。
+- 検証記録: `Saved/Logs/M01Build.log`、`Saved/Logs/M01Tests.log`、`Saved/Automation/M01/index.json`（いずれもGit除外）。M02へ進める状態。M02〜M18は未着手。今回の文書更新は実装・検証範囲の記録であり、D番号のゲーム仕様と後続タスクの受入条件は変更しない。
 
 ## 4. 受入シナリオ
 
