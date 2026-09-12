@@ -71,3 +71,15 @@ BlueprintReadOnly: BoatMode、速度、竿先位置、Snapshot。EditDefaultsOnl
 | B08 | 無効Tuning/負の上限/NaN | 開始拒否、ログに原因 |
 
 MVPでは静水/一定潮の方向・速度別シナリオで船速とレンジ履歴を比較する。横風・波の物理評価はAlpha以降。ゲーム近似としての検証と実測校正を区別する。
+
+## 6. M05実装・検証記録（2026-09-13）
+
+- `ATRBoatPawn`、`UTRBoatDriftComponent`、`UTRBoatTuningDataAsset`、`FTRBoatParameters`、`ETRBoatMode`を追加。PawnはSceneRoot、BoatMesh、RodAnchor、SpringArm、Camera、DriftComponentをコンストラクタで所有生成する。Pawn/Driftの独立Tick、船体物理、自由操船、風・波の物理計算はない。SpringArm/Cameraは表示だけで、正本の位置・竿先へ逆流しない。
+- Tuningの`Parameters`に第1節の5調整項目をまとめた。潮応答は有限な[0,1]、速度応答率と上限は有限な正値、船体・竿先offsetはcm境界でも有限であることをRuntime検証/IsDataValidで要求する。速度応答率・上限の初期値0は未設定として拒否する。調整値は初期化時にコピーし、実行中のDataAsset編集を反映しない。失敗時は理由を`TArray<FText>`へ返し、試験で予期した不正値を警告ログとして出し続けない。
+- `InitializeMotion`は明示XY位置、固定方位、海面サンプルから初期状態を作る。初速度は0、Zは海面＋船体offset。`StepDrift`が指数応答を計算し、速度を上限へ制限してから位置を積分する。Snapshotに保存する速度も実際の積分に用いた制限後の値とする。係数が一定で上限に達しない場合、速度は`Target*(1-exp(-rate*t))`へ一致する。これは実測値で校正していないゲーム近似。
+- M04へ`RegisterBoat`を追加。GameがM03の海をDepthM=0で問い合わせて初期化し、同一Worldの船を共通SimIdで弱参照登録する。船登録はBoatフェーズだけに配送され、Fishingコマンドの行先にはできない。更新順はOcean時刻→船→Fishing。Gameが海の値を取得し、計算はDriftComponentへ任せるためBoat→Game/OceanSubsystemの逆依存はない。
+- 移動前と移動候補先の海が有効な場合だけSnapshotを確定する。候補先検証はGameから一時的なcallbackとして渡し、Componentに保存しない。無効環境・非有限値・不正な時刻では直前の有効Snapshotを保持してDisabledへ移り、`OnEnvironmentInvalid`を初期化1回につき1度通知する。通常のUnregister/終了では異常通知せず停止する。再開には明示的な有効設定での再初期化が必要。D14の境界ゲーム仕様や投の中断処理は追加していない。
+- 竿先は凍結した`RodAnchorOffsetM`を固定方位で回転し、シミュレーション位置へ加算する。Pawnへの適用時だけm→cm、rad→degree変換を行う。`GetBoatSnapshot`/`GetRodAnchorWorldM`は正本の読取値で、SceneComponentから再計算しない。Gameの`GetBoatSnapshot(BoatId, Out)`は登録・動作状態が無効ならfalseを返し、Outを変更しない。Fishingフェーズの試験callbackで当該TickのSnapshotを読めることを確認。実エギへの接続・B07はM07/M08以降に残す。
+- Gameが船のOnEndPlayを登録し、EndPlay・明示Unregister・Subsystem終了で対応するバインドと登録を解除する。破棄検査はM04の弱参照管理も併用する。船はEndPlayでDriftと自分の異常通知delegateを解除する。二重登録を拒否し、再登録でもSimIdとWorld時計をリセットしない。
+- `TipRun.M05`の6試験がすべて成功、警告/エラー0、終了コード0。B01/B03静水・表示用風非寄与、B02方向・解析的速度・上限、B04の30/60/120fps一致と明示/Engine pause、B05の竿先変換・Snapshot配送順・表示編集の非逆流、B08の不正設定、Provider破棄と解除を確認した。通常試験の移動は有効範囲内。極小海域の試験は無効な移動候補を確定しない技術防御だけで、M16の境界シナリオ完成を意味しない。
+- 試験値は一時的なTestデータ（例：潮応答0.5、応答率2/s、速度上限3m/s、船体offset0.5m、竿先offset(2,1,1)m）。製品既定値ではなく、Content/Configへの保存や製品メッシュ・マップの作成は行っていない。Editor表示用にはBoatPawn派生BlueprintでBoatMesh/Cameraを設定し、BoatTuningを割り当てる。起動接続側はOceanと固定時計を初期化後に`RegisterBoat`へ明示XY/方位を渡す。今回の検証はNullRHIのC++試験で、PIE目視・船カメラ調整・Windowsパッケージは未実施。

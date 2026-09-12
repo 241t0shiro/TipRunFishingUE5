@@ -1,7 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M03は完了。M03の平底Ocean問い合わせは新規UHT/C++ビルド成功済み。2026-09-13の最終再試験で7件すべて成功、試験警告・エラー0件を確認。M04以降の実装は未着手。**
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M05は完了。M05の船ドリフトと固定更新接続はUHT/C++ビルド成功済み。2026-09-13のM05 Automation Test 6件とM02/M04回帰12件がすべて成功、試験警告・エラー0件。M06以降の実装は未着手。**
 
 ## 1. 文書の効力と読み方
 
@@ -111,7 +111,19 @@ SessionPhaseの正本はSessionActorが所有する。`StartFishing()`で釣りC
 
 CoordinatorがAIスコア、沈下、フッキング成否、ファイト進捗を計算するのは禁止。ComponentのAPIを決められた順に呼ぶだけにする。
 
+### M04の実装契約（2026-09-13）
+
+- `UTRSimulationWorldSubsystem`をGame/PIEだけに生成。`UTRSessionConfigDataAsset`はM04で必要な`StepSeconds / MaxCatchUpSteps / SessionSeed`だけを実装した。刻み・上限の初期値0は未設定として拒否し、有限性・正値・フレーム予算のオーバーフローをRuntime検証とIsDataValidで確認する。60Hz/8ステップ、seed 12345は一時的なTest設定で、製品設定アセットは作成していない。将来の装備・AI・船等の設定参照は該当タスクで追加する。
+- `Configure`はWorldごとに一度だけ設定を値コピーする。固定時刻、登録ID、入力連番を投ごとにリセットするAPIは設けない。`GetSimulationTime`は次の未処理Tickを返す。Oceanには更新中の`T * StepSeconds`をBoatフェーズ前に渡す。未初期化のOceanは従来どおり時刻設定を拒否し、Coordinatorが代替の海を生成しない。
+- `RegisterSession / RegisterSquid`は同一WorldのActorを弱参照で登録し、全登録共通の増加SimIdを付与する。同一Actorの重複登録を拒否し、IDを再利用しない。EndPlayから`Unregister`を呼ぶ契約とし、重複解除を許容する。破棄済みActorは各呼出し前に検査し、次の固定更新冒頭で登録・入力を除去する。更新中の追加登録は次Tickから参加し、解除は同Tickの残りの通知にも反映する。World終了時に全登録・入力を解除する。
+- 後続Componentの接続口はnativeの`FTRSimulationStep / FTRSimulationCommand` delegate。`ETRSimulationPhase`により、入力→全登録のTimers→Ocean→SessionのBoat/Fishing→SquidのAI用フェーズ→SessionのBiteResolution/Fight/Publishの順で配送する。各フェーズ内はSimId順。M04は配送順だけを実装し、BITE要求の収集・仲裁、状態遷移、船・エギ・AIの計算は後続タスクに残す。delegate内でActorを所有参照せず、登録所有者に結び付けた弱いバインドを使用する。
+- `EnqueueCommand`は行先SimIdとコマンド種別を受け、CoordinatorがWorld共通Sequenceを採番する。通常入力は次の未処理Tick、固定更新中の入力はT+1以降へ割当てる。決定論的再生では明示した未来Tickも受け付ける。過去Tick、不正な種類・非有限Axis、無効な行先、Squid宛て入力を拒否する。配送はTargetTick→Sequence順。更新中の`ClearCommands`は取り出し済みの未配送入力も破棄する。CastId/Tokenによるゲーム状態の検証はM06以降の所有者が追加する。
+- `SetSimulationPaused`またはEngineのWorld pauseで時計を停止し、入力と端数時間を破棄する。Engine pause中も入力破棄のためSubsystemのTickだけを受ける。コールバック中のポーズ要求は進行中の固定ステップを完了し、後続ステップを止める。UIの保持キー解除・再接続はM09以降。catch-upは端数を含む累積時間を1フレーム予算へ制限し、超過分を持ち越さず`CatchUpDropCount`を増やす。非有限/負の経過時間を無視し、整数時計のオーバーフローでは停止する。再入による二重更新を拒否する。
+- `CreateRandomStream`はSessionSeed、64bit SimIdの両半分、uint32用途IDを固定の符号なし整数演算で混合する。用途IDは呼出し側で固定し、生成したFRandomStreamを各所有者が継続保持する。同じAPIを再度呼ぶと初期状態へ再生成するため、毎Tickの再生成は行わない。Actorアドレス・グローバル乱数・FNameの内部番号に依存しない。同一ビルドの再現性を検証し、異機種間のbit一致や確率バランスの評価は行っていない。
+
 ## 6. 所有・イベント・Blueprint
+
+M05で`UTRSimulationWorldSubsystem::RegisterBoat`と船Snapshotの読取APIを追加済み。GameがM03 Oceanから値を取得し、M04のBoatフェーズで`ATRBoatPawn`→`UTRBoatDriftComponent`を一度だけ進める。船は共通SimId・弱参照で登録し、EndPlay/Unregister/World終了で登録とバインドを解除する。船の計算、調整値の凍結、無効環境への技術防御、試験と未検証項目は[BOAT_SYSTEM](BOAT_SYSTEM.md)第6節を参照。M06のSessionActor、自由操船、風・波の物理は追加していない。
 
 - 所有Component/Actor/設定は `UPROPERTY` と `TObjectPtr`。非所有の船・イカ・対象には `TWeakObjectPtr` を使い、各ステップで有効性を確認する。
 - Session終了時はエギ破棄、BITE無効化、Coordinator登録解除、delegate解除を実施。イカ破棄時も予約解除。破棄済みActorへイベントを送らない。
@@ -130,7 +142,7 @@ CoordinatorがAIスコア、沈下、フッキング成否、ファイト進捗�
 
 M02で装備行とFishingTuning、装備係数Snapshotを実装済み。PrototypeのDataTable 2件とFishingTuning 1件をUEで保存し、別プロセスの読込で27組合せを検証した。設定確認は行/TuningのIsDataValidとテーブル間のValidateTablesで行う。Snapshotは評価済み係数と設定のコピーを保持する。技術上の検証制約・試験係数の扱いはFISHING_SYSTEM第2節、ビルド・試験結果はROADMAPのM02完了記録を参照。その他のDataAsset、装備ロック、海の問い合わせやシミュレーション処理は後続タスクの範囲。
 
-M03でOceanAreaDataAsset、平底SeabedProvider、OceanWorldSubsystemを追加し、上記M02時点で未実装だった海の問い合わせを実装済み。Game/PIE限定で、初期化時の設定コピーから値を返す。設定検証・Provider寿命・境界と不正値を扱う技術防御を実装し、D14の境界ゲームルールは追加していない。詳細はOCEAN_SYSTEMのM03記録を参照。固定時計・CoordinatorはM04、斜面はM16に残す。
+M03でOceanAreaDataAsset、平底SeabedProvider、OceanWorldSubsystemを追加し、上記M02時点で未実装だった海の問い合わせを実装済み。Game/PIE限定で、初期化時の設定コピーから値を返す。設定検証・Provider寿命・境界と不正値を扱う技術防御を実装し、D14の境界ゲームルールは追加していない。詳細はOCEAN_SYSTEMのM03記録を参照。M04で固定時計・Coordinatorの基盤とOceanへの時刻配送を追加済み。斜面はM16に残す。
 
 ## 8. 要決定事項の正本
 

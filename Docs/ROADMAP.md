@@ -1,6 +1,6 @@
 # ロードマップ・Codex向けMVP実装順序
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M03は完了済み。M04〜M18は未着手。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M05は完了済み。M06〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
 
@@ -31,8 +31,8 @@
 | 02 M01（完了） | Data共通enum/struct、m/cm換算、ID、Snapshotとイベント契約 | M00 | 新規コードのUHT生成・C++コンパイル成功、M01 Automation 4件成功。下記完了記録参照 |
 | 03 M02（完了） | 装備行、3種エギ/無しを含む9選択、係数DataAsset、初期エギ35g | M01、D08決定済み | F01を含む6試験成功、Prototype保存・再読込、新規UHT/C++ビルド成功。下記記録参照 |
 | 04 M03（完了） | Oceanの平底ProviderとSampleOcean | M01/02、テスト環境値 | 新規UHT/C++ビルド成功。2026-09-13の最終7試験すべて成功・警告/エラー0件。下記記録参照 |
-| 05 M04 | Coordinatorの固定時計、入力キュー、登録解除、用途別seed | M01 | Tick順・ポーズ・catch-up・再現性試験 |
-| 06 M05 | 仮BoatPawnと一定水平潮ドリフト、RodAnchor、Snapshot接続 | M03/04、D15決定済み | B01/B02/B03/B05、風/波の物理寄与なし |
+| 05 M04（完了） | Coordinatorの固定時計、入力キュー、登録解除、用途別seed | M01 | 新規UHT/C++ビルド成功。Tick順・ポーズ・catch-up・再現性等の6試験成功、試験警告/エラー0。下記記録参照 |
+| 06 M05（完了） | 仮BoatPawnと一定水平潮ドリフト、RodAnchor、Snapshot接続 | M03/04、D15決定済み | B01/B02/B03/B05を含む6試験成功、30/60/120fps・pause・無効値も確認。UHT/C++ビルド成功、下記記録参照 |
 | 07 M06 | SessionActor、装備ロック、キャストなし投入、最小遷移 | M02/04、D01/D02/D08 | CastId増加、不正入力拒否、F16の釣り開始前限定 |
 | 08 M07 | EgiSimulationの鉛直落下と海底制約、描画用EgiActor | M03/05/06 | F02/F03/F12、仮エギが着底 |
 | 09 M08 | 水平潮応答、ライン長/球面制約、船追従 | M07、D02/D05 | F04/F05/B07。重量・潮・船を一変数ずつ比較 |
@@ -81,6 +81,25 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 - `TipRun.M03`の7件（O01FlatBottom、O03DepthQueries、O04Boundaries、O05ProviderLifetime、O06UnitsAndCurrent、SnapshotAndTimeIndependence、ValidationAndWorldScope）がすべて成功。初回O05のcontext警告に対し試験用Worldの生成・解放にEngine context登録・解除を追加し、修正コードの再コンパイルとDLLリンクも成功（約4.9秒）。2026-09-13に修正後の全7件を再実行し、各試験の警告・エラー0件、終了コード0を確認。最終確認時の追加コード修正は不要だった。
 - ビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。Engine起動時の既知のCondition failed等・対象外SDK不足と、M03の試験結果は区別する。ビルド・試験エラーはなく、上記テストWorld警告への修正のみ行った。
 - ログは`Saved/Logs/M03Build.log`、`M03BuildFinal.log`、最終試験は`Saved/Logs/M03TestsFinal.log`・`Saved/Automation/M03Final/index.json`（Git除外）。Content・Config・Build.cs・Target.cs・TRBaseは変更なし。固定時計/Coordinator・斜面・描画検証は未実施で、それぞれの後続タスクに残す。M03は完了、M04へ進める状態。M04〜M18は未着手。
+
+### M04完了記録（2026-09-13）
+
+- `UTRSimulationWorldSubsystem`、時計項目だけの`UTRSessionConfigDataAsset`、nativeフェーズenumと配送delegateを追加。M01の時刻・ID・コマンド型を使用し、M02の検証・設定コピー方針を適用。M03のOceanへBoatフェーズ前に固定時刻を渡す。実装契約はGAME_DESIGN第5節のM04追記を参照。D番号のゲーム仕様や後続受入条件は変更していない。
+- Development Editor Win64通常ビルド成功（終了コード0、約12.8秒、7アクション）。Internal UnrealHeaderToolが5生成ファイルを書き出し、TRSessionConfigDataAsset.cpp、TRSimulationWorldSubsystem.cpp、TRSimulationTests.cpp、生成コードの実コンパイルとDLLリンクを確認。最新判定だけではない。
+- 初回試験は寿命テストがSubsystemを直接Deinitializeした後にWorldを終了し、UEの二重Deinitializeアサーションで中断した。テストをWorld所有の通常終了経路へ修正し、再コンパイル・DLLリンク成功（終了コード0、約5.0秒、4アクション）。エラーを抑制せず原因を修正した。
+- 修正後の`TipRun.M04`全6件（CommandQueue、ConfigurationAndWorldScope、FrameRateAndSeedReplay、PauseAndCatchUp、RegistrationLifetime、TickOrderAndOcean）が成功。各試験の警告・エラー0、プロセス終了コード0。30/60/120fpsの同一入力Tick列・乱数列、用途/個体別seed、入力順と再入拒否、明示/Engine pause、catch-up上限と超過破棄、設定不正/コピー、World種別、更新中の登録変更・Actor破棄・World終了、Ocean→Boatを含む配送順を確認した。船・AI等の実処理は試験用callbackで代替しており、自然な1投の統合試験とは区別する。
+- 残存するビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。最終試験開始前のEngine起動ログには既存のCondition failed 19件・Editorレイアウト警告1件があり、対象外プラットフォームSDK不足の出力もある。これらはM04試験中の警告・エラーではなく、原因の解消は未実施。Win64 SDKはVALID。
+- 初回ビルドは`Saved/Logs/M04Build.log`、修正後ビルドは`M04BuildFinal.log`、最終試験は`Saved/Logs/M04TestsFinal.log`・`Saved/Automation/M04Final/index.json`（Git除外）。コード5ファイル追加、GAME_DESIGN/ROADMAP更新。Content・Config・Build.cs・Target.cs・TRBase・既存M01〜M03コードは変更なし。M04は合格、M05へ進める状態。M05〜M18は未着手。
+
+### M05完了記録（2026-09-13）
+
+- BoatPawn、BoatDriftComponent、BoatTuningDataAsset、BoatParameters、BoatMode、異常通知delegateを追加。SimulationWorldSubsystemに船の初期化・弱参照登録・固定配送・Snapshot読取・EndPlay解除を追加した。既存M04の未コミット変更を保持して拡張。M03 Oceanコード、Content、Config、Build.cs、Target.cs、TRBaseは変更なし。D15の一定水平潮だけを使用し、M06のSessionActor・自由操船・風/波物理は実装していない。
+- UHTが新規反射宣言を処理し9生成ファイルを書き出した。新規Boat/Data/TestとGameのC++コンパイル成功後、Unity結合された既存M02の2ファイルで匿名namespace内の同名`Require`関数が衝突し初回ビルドが失敗。`TRFishingTuningDataAsset.cpp`の内部関数と呼出しを`RequireFishingTuning`へ変更する最小修正を実施。データ項目・検証条件・釣り機能は変更していない。
+- 修正後のDevelopment Editor Win64は成功（終了コード0、約7.6秒、4アクション）。`-DisableAdaptiveUnity`で全モジュールをUnity結合して再コンパイルし、新規生成コードを含むコンパイルとDLLリンクを確認。関数衝突を非Unityへの切替で回避せず、結合時にも修正が有効なことを確認した。Build/Targetの恒久設定は変更なし。
+- `TipRun.M05`の6件（B01B03StillWater、B02CurrentAndSpeedLimit、B04FrameRatesAndPause、B05RodAnchorAndSnapshotOrder、B08InvalidConfigurationAndSamples、EnvironmentAndRegistrationLifetime）がすべて成功。変更に関係するM02/M04の12件も回帰確認し、全18件の警告/エラー0、終了コード0。静水、一定潮の方向と速度収束・上限、固定60Hzの30/60/120描画fps一致、明示/Engine pause、設定凍結、竿先・単位・更新順、無効値・Provider喪失・解除を確認。
+- 船の計算/接続の詳細と一時Test係数はBOAT_SYSTEM第6節を参照。実際の釣りComponentへの接続、PIEでの船・カメラ目視、製品/Prototypeの保存アセット作成、Windowsパッケージは未実施。M05の合格は固定更新下の船・Snapshot基盤の検証であり、1投統合・実船校正の完了ではない。
+- 残存するビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。Engine起動時の既存Condition failed 19件、Editorレイアウト警告1件、対象外SDK不足の出力は残るが、M05試験由来の警告は0件。Win64 SDK 10.0.22621.0はVALID。
+- ログ: `Saved/Logs/M05Build.log`、修正後`M05BuildFinal.log`、`M05Tests.log`。結果: `Saved/Automation/M05/index.json`（全てGit除外）。M05としてコード7件追加、Game 2件と既存内部関数1件を変更、設計書3件を更新。M05は合格、M06へ進める状態。M06〜M18は未着手。
 
 ## 4. 受入シナリオ
 
