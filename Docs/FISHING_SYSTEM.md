@@ -33,6 +33,15 @@
 
 `StartFishing()`で装備をロックし、MVPの装備変更はその前だけ許す。Deploy前Ready、MISS後、次投Readyでも同じ釣りセッション中は変更不可。EndFishingでロック解除。一投ごとの凍結とは別にセッションロックを持ち、Ready判定だけで装備変更を許さない。
 
+### M02のデータ実装（2026-09-12）
+
+- `TREquipmentData.h/.cpp`に装備行、`FTREquipmentSnapshot`、`TREquipment::ValidateTables/TryBuildSnapshot`を実装。初期エギIDは`InitialEgiId()`、0g専用IDは`NoSinkerId()`で取得。初期シンカーを製品設定として固定する処理や装備ロック処理は追加せず、ロックはM06で実装する。
+- `TRFishingTuningDataAsset.h/.cpp`に`UTRFishingTuningDataAsset`、`FTRFishingParameters`、`FTREgiSimulationProfile`を実装。Fishingの数値設定を保持し、AIのBITE減衰曲線、海・船・入力のDataAsset、表示補間設定はそれぞれの後続タスクで追加する。承認済みのAutoStay 0.8秒、Hook 0.10/0.55秒以外の未指定係数は未設定値として初期化し、必要値を欠く設定は検証を通さない。
+- M02の重量曲線は、30〜90gを覆う2点以上のキー、有限数、厳密に昇順の横軸、正の縦軸、線形補間を要求する技術実装。未検証のスプラインの負値・オーバーシュートを避ける。Snapshotには総重量で評価済みの沈下速度・水平応答係数と釣り設定を値コピーし、元の曲線・DataAssetへの参照を残さない。
+- 行とTuningの`IsDataValid`に加え、`ValidateTables`でテーブル型、論理ID重複、行名とIDの一致、プロファイル参照、全装備の曲線定義域を検証する。エギおよび非0gシンカーのメッシュ参照を必須とし、0gのVisualMeshだけは空を許す。検証は参照メッシュを同期ロードする場合があるため、設定確認時に実行しTickから呼ばない。`TryBuildSnapshot`は固定刻みでの受付窓縮退・時間変換不正も拒否し、失敗時に出力を変更しない。
+- `Content/TipRun/Prototype/Data`に`DT_TR_Egi_Prototype`、`DT_TR_Sinker_Prototype`、`DA_TR_FishingTuning_Prototype`をUEのSavePackageで作成済み。装備重量は本書の確定値、メッシュはEngineの仮Cube。係数は`TREquipmentDataTests.cpp`内で明示した試験用のゲーム近似であり、実測値・製品バランスではない。設定は同一形状用TestProfileの曲線を使用する。
+- 保存アセットの再読込を含む`TipRun.M02`の6試験が成功。アセットを失った場合のみ、Editorを閉じた状態でUnrealEditor-Cmdに`-TRWriteM02PrototypeAssets`と`-ExecCmds="Automation RunTests TipRun.M02.PrototypeAssets"`を指定して再作成可能。通常の試験は読込のみで、生成モードも既存アセットを上書きしない。
+
 ## 3. 操作状態
 
 `ETRFishingState`:

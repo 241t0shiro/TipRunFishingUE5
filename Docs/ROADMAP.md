@@ -1,6 +1,6 @@
 # ロードマップ・Codex向けMVP実装順序
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00・M01は完了済み。M02〜M18は未着手。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M02は完了済み。M03〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
 
@@ -29,7 +29,7 @@
 |---|---|---|---|
 | 01 M00（完了） | 既存プロジェクト・開発環境確認。`.uproject`、Runtimeモジュール、Game/Editorターゲット、基本ディレクトリ、Git・生成物除外を確認 | 既存UEプロジェクトへ適用 | Development Editor Win64通常ビルド成功（最新判定・0アクション）。検証範囲は下記完了記録参照 |
 | 02 M01（完了） | Data共通enum/struct、m/cm換算、ID、Snapshotとイベント契約 | M00 | 新規コードのUHT生成・C++コンパイル成功、M01 Automation 4件成功。下記完了記録参照 |
-| 03 M02 | 装備行、3種エギ/無しを含む9選択、係数DataAsset、初期エギ35g | M01、D08決定済み | F01、27組合せ、0g受理、不正値・欠損参照エラー |
+| 03 M02（完了） | 装備行、3種エギ/無しを含む9選択、係数DataAsset、初期エギ35g | M01、D08決定済み | F01を含む6試験成功、Prototype保存・再読込、新規UHT/C++ビルド成功。下記記録参照 |
 | 04 M03 | Oceanの平底ProviderとSampleOcean | M01/02、テスト環境値 | O01/O03/O04/O05/O06 |
 | 05 M04 | Coordinatorの固定時計、入力キュー、登録解除、用途別seed | M01 | Tick順・ポーズ・catch-up・再現性試験 |
 | 06 M05 | 仮BoatPawnと一定水平潮ドリフト、RodAnchor、Snapshot接続 | M03/04、D15決定済み | B01/B02/B03/B05、風/波の物理寄与なし |
@@ -65,6 +65,14 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 - NullRHIのUnrealEditor-Cmdで `TipRun.M01` を実行。Units、Identifiers、TimeConversion、Reflectionの4件すべて成功、各試験の警告・エラー0件、プロセス終了コード0。100cm/1m、ID無効値・Token同一性、0.10/0.55/0.8秒→6/33/48Tick、丸め境界・不正値・オーバーフロー、反射登録・Blueprint読取専用を確認。
 - ビルド警告: MSVC 14.51.36257が推奨範囲より新しいこと、既存IncludeOrderVersionがUnreal5_6互換であること。試験開始前のEngine起動ログにはCondition failed等のエラー出力とレイアウト警告もあるが、M01試験結果には記録されていない。起動ログの原因調査は未実施。M01のコード修正を要するビルド・試験エラーはなかった。
 - 検証記録: `Saved/Logs/M01Build.log`、`Saved/Logs/M01Tests.log`、`Saved/Automation/M01/index.json`（いずれもGit除外）。M02へ進める状態。M02〜M18は未着手。今回の文書更新は実装・検証範囲の記録であり、D番号のゲーム仕様と後続タスクの受入条件は変更しない。
+
+### M02完了記録（2026-09-12）
+
+- 装備行2種、FishingParameters、EgiSimulationProfile、EquipmentSnapshot、FishingTuningDataAssetを追加。試験用の装備DataTable 2件とFishingTuning 1件を`Content/TipRun/Prototype/Data`に保存。UEのSavePackageを使用し、uassetをテキスト生成していない。詳細・試験値の扱いはFISHING_SYSTEMのM02記録を参照。
+- Development Editor Win64の通常ビルド成功（終了コード0、約13.2秒、7アクション）。Internal UnrealHeaderToolが6生成ファイルを書き出し、TREquipmentData.cpp、TRFishingTuningDataAsset.cpp、TREquipmentDataTests.cpp、生成コードのコンパイルとDLLリンクを確認。
+- アセット生成試験1件成功後、別プロセスで`TipRun.M02`の6件（F01Combinations、FrozenSnapshot、InvalidRows、PrototypeAssets、ReferencesAndDuplicates、TuningValidation）すべて成功。各試験の警告・エラー0、プロセス終了コード0。27組合せ・30〜90g・初期エギ35g・0g受理、欠損/重複/不正値、曲線と時刻境界、凍結、保存アセットの再読込を確認。
+- ビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。Engine起動時にはM01でも見られたCondition failed等の出力と対象外プラットフォームSDK不足があるが、Win64はVALIDでM02試験にはエラーなし。対象外の環境設定は変更していない。
+- ログは`Saved/Logs/M02Build.log`、`M02Generate.log`、`M02Tests.log`、結果は`Saved/Automation/M02/index.json`（Git除外）。既存M01コード・TRBase・Build.cs・Target.cs・Configは変更なし。M03へ進める状態で、M03〜M18は未着手。ゲーム仕様D番号・後続の受入条件は変更せず、データ検証と試験係数の技術上の扱いを文書化した。
 
 ## 4. 受入シナリオ
 

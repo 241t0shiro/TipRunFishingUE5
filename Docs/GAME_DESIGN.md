@@ -1,7 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00の環境確認とM01の共通型実装・検証は完了。Development Editor Win64で新規コードのUHT生成・C++コンパイルを確認済み。M02以降の実装は未着手。**
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M02は完了。共通型・装備データ・FishingTuningを実装し、Development Editor Win64でUHT生成・C++コンパイルと対応Automation Testを確認済み。M03以降の実装は未着手。**
 
 ## 1. 文書の効力と読み方
 
@@ -74,7 +74,7 @@ FishingとSquidは互いのActor/Componentを直接操作しない。`Game` が�
 
 M01の共通型は `Public/Data` に実装。IDは別々のstructで保持し、0を無効値として負値も拒否する。初期化前のFTRSimTimeはStepSeconds=0（未設定）、OceanSampleはbValid=false。スナップショットの数値初期値は未設定時の値であり、製品バランスではない。フィールドはBlueprintReadOnlyで、ID採番・状態遷移・ゲーム判定は後続タスクの所有者が実装する。
 
-イベント契約はFishingCommand、EgiAction、BiteRequest、BiteCue、CatchResultとnative delegateのシグネチャのみ。合わせ結果の理由をETRHookReasonで表し、対象喪失/Stay解除/投終了はTargetLost/StayReleased/CastEndedに対応させる。ETRSampleErrorのNoneはエラーなしを表す。装備行・係数DataAsset・装備係数Snapshot、HUD集約型、BITE仲裁処理は各後続タスクで導入する。
+イベント契約はFishingCommand、EgiAction、BiteRequest、BiteCue、CatchResultとnative delegateのシグネチャのみ。合わせ結果の理由をETRHookReasonで表し、対象喪失/Stay解除/投終了はTargetLost/StayReleased/CastEndedに対応させる。ETRSampleErrorのNoneはエラーなしを表す。M01で先送りした装備行・FishingTuning・装備係数SnapshotはM02で追加済み。HUD集約型、BITE仲裁処理は各後続タスクで導入する。
 
 秒設定はdoubleで保持し、共通の秒→Tick換算で `ceil(DurationS/StepSeconds)` を用いる。ただし比が整数から1e-6 Tick以内なら先にその整数へ丸め、表現誤差で1Tick延びることを防ぐ。Hook、AutoStay、Cooldown、Fight継続時間で同じ換算を使う。60HzのMVP初期値0.10/0.55/0.8秒は6/33/48Tick。
 
@@ -127,6 +127,8 @@ CoordinatorがAIスコア、沈下、フッキング成否、ファイト進捗�
 反復する商品行は `FTREgiSpecRow : FTableRowBase`、`FTRSinkerSpecRow : FTableRowBase`。文字列の表示名で識別せずFName IDを使う。初期エギは3.5号35g、シンカー無し0gを正式に許可（D08）。装備変更は釣り開始前だけとし、`StartFishing()`で装備をロックする。Deploy待ちのReadyや次投Readyも釣り開始後なら変更不可。ロックは明示的なEndFishing/セッション終了で解除する。一投開始時にはロック済み装備をスナップショット化する。初期シンカー選択値は未指定で、試験構成では0gを使用する。
 
 必須バリデーション: エギ/総重量>0、シンカー重量>=0（0gは無しの専用ID）、深度>=0、時間>=0、有限数、曲線の定義域、OpenDelay<CloseDelay、速度上限>0、ID一意、設定参照の存在。値が欠落した場合に黙って製品用既定値を補わない。
+
+M02で装備行とFishingTuning、装備係数Snapshotを実装済み。PrototypeのDataTable 2件とFishingTuning 1件をUEで保存し、別プロセスの読込で27組合せを検証した。設定確認は行/TuningのIsDataValidとテーブル間のValidateTablesで行う。Snapshotは評価済み係数と設定のコピーを保持する。技術上の検証制約・試験係数の扱いはFISHING_SYSTEM第2節、ビルド・試験結果はROADMAPのM02完了記録を参照。その他のDataAsset、装備ロック、海の問い合わせやシミュレーション処理は後続タスクの範囲。
 
 ## 8. 要決定事項の正本
 
