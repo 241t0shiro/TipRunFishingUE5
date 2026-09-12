@@ -1,7 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**設計のみ。実装コード・UEプロジェクト・アセットは未作成。**
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**UE 5.8.2 / C++プロジェクトは作成済み。M00の既存構成・開発環境確認とDevelopment Editor Win64の通常ビルド確認は完了。ゲーム機能の実装（M01以降）は未着手。**
 
 ## 1. 文書の効力と読み方
 
@@ -157,6 +157,8 @@ IDは維持し、変更日・根拠と詳細設計/試験を一緒に更新す�
 - UE Automation: Component状態遷移、設定検証、破棄と再投入、同seed再現。
 - Functional Test: `L_TR_MVP_Test`で入力から1投完結、自然反応と制御された試験反応を別に確認。
 - PIEとWindows Developmentパッケージで起動、入力、結果、再投を確認。描画30/60/120fpsで同じTick入力列の結果を比較する。
-- 実装時にローカルUE 5.8.2の存在、Windows toolchain、プラグイン有効化、Build.cs依存を確認する。本設計段階ではビルド・実行未検証。
+- M00確認済み（2026-09-12）: UE 5.8.2（CL 56702186）、Runtimeモジュール `TipRunFishingUE5`、Game/Editorターゲット、基本ディレクトリとBuild.cs依存を確認。`TRBase`はC++化確認のための仮クラスとして残存する。
+- 確認環境: Visual Studio Community 2026 18.10.0、MSVCツールセット14.51.36231（コンパイラ14.51.36257）、既存ビルド設定のWindows SDK 10.0.22621.0。MSVCはUEの推奨範囲より新しい旨の警告あり。これは確認環境の記録であり、必須バージョンの指定ではない。
+- Development Editor Win64の通常ビルドは `Succeeded`（終了コード0）。`Target is up to date`、実行アクション0件であり、新規コンパイル・UHT反射コード生成の実処理は今回未確認。既存EditorログでプロジェクトDLL読み込みとEngine初期化成功を確認したが、新規の空マップ起動・PIE操作は未実施。M01の反射宣言導入時に通常ビルドとUHTの実処理を確認する。詳細はROADMAPのM00完了記録を参照。
 
 公式資料確認日: 2026-09-12。5.8.2公開は [Epic Hotfix告知](https://forums.unrealengine.com/t/5-8-2-hotfix-released/2746335) で確認。入力接続は [Enhanced Input](https://dev.epicgames.com/documentation/unreal-engine/enhanced-input-in-unreal-engine)、世界単位サービスは [Programming Subsystems](https://dev.epicgames.com/documentation/en-us/unreal-engine/programming-subsystems-in-unreal-engine)、検証の実行手段は [Automation System User Guide](https://dev.epicgames.com/documentation/en-us/unreal-engine/automation-system-user-guide-in-unreal-engine) を参照。これらはUE機構の参照であり、本作のゲーム仕様・釣りの科学的根拠ではない。
