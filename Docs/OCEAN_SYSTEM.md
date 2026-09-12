@@ -25,7 +25,7 @@ SubsystemはGame/PIEで使用する。独立したTickは持たず、Coordinator
 | フィールド | 型・単位 | 意味 |
 |---|---|---|
 | bValid | bool | 環境が利用可能か |
-| InvalidReason | ETRSampleError | NotInitialized / OutsideArea / InvalidDepth / MissingProvider |
+| InvalidReason | ETRSampleError | NotInitialized / OutsideArea / InvalidDepth / MissingProvider / InvalidQuery（非有限XY・負のTick）。有効時はNone |
 | AreaId / SeasonId | FName | エリア識別と将来用季節識別。MVPのSeasonIdはNone、参照不要 |
 | SampleTick | int64 | 問い合わせたsim時刻 |
 | SurfaceZ_M | float、m | ワールド基準の海面Z |
@@ -79,3 +79,12 @@ DataAsset項目はクラス表の通り。BlueprintReadOnly: 現在AreaId、海�
 | O09 | 深度/時刻を変更して同じMVP AreaをSample | 水平潮一定、WindMps=0、SeasonId=None、風/季節アセットなしでReady |
 
 海底表示と判定面の一致はデバッグ断面/深度ラベルで目視する。リアリティ評価に用いる地形・潮の実データの入手元は未決であり、MVP試験データを実在エリアとして表示しない。
+
+## 7. M03実装・検証記録（実装2026-09-12 / 最終確認2026-09-13）
+
+- 実装済み: `UTROceanAreaDataAsset`、`ATRSeabedProviderActor`、`UTROceanWorldSubsystem`。M03はFlatのみ。第3節のPlaneSlopeと斜面の表示・試験はM16で追加する。現時点のETRSeabedModeはFlatだけを定義し、それ以外の値は検証で拒否する。
+- AreaDataの値は`FTROceanAreaSettings Settings`にまとめ、AreaId、XY範囲、固定海面、FlatDepthM、一定水平潮を保持する。未設定深度0は検証不合格。範囲は各軸min < max、問い合わせは境界を含む。有限数・正の水深・海底ワールドZの有限性・水平潮Z=0をIsDataValidでも検証する。
+- 初期化でProviderとSubsystemに設定を値コピーし、Editorによる元アセットの編集が問い合わせ結果を変えないようにした。SubsystemはAreaDataを所有参照、同じWorldのProviderを弱参照で保持し、明示登録する。Provider再設定時は構成リビジョンが変わり、古い登録からの問い合わせをMissingProviderで拒否する。Shutdown/Deinitializeで参照・設定・環境時刻を解除する。
+- ProviderはSceneRootだけを持ち、ActorのTransformや描画・衝突から水深を算出しない。両クラスとも独立Tickなし。SetSimulationTimeは外部から渡された有限・非負の秒を保持するだけで、固定時計・入力キュー・CoordinatorはM04に残す。
+- SampleOceanは初期化前・破棄済みProvider・境界外・不正深度・非有限XY・負のTickを明示的に無効化する。海底より深い有限の非負深度も問い合わせ可能。MVPの潮は評価深度に依存せず、底を超えた問い合わせでも海底位置での潮と同じ一定値を返す。WindMps=0、SeasonId=None。SampleOceanForDisplayは同じ結果を返す読取専用ラッパー。
+- NullRHIのAutomationでO01/O03/O04/O05/O06と設定検証・World種別・設定コピー・時刻非依存の7件が成功。初回O05のテストWorld context警告に対し登録・解除を追加し再ビルド後、2026-09-13に全7件を再実行して成功・警告0・エラー0・終了コード0を確認した。30m等は一時的なTestデータで、Content・Configやマップは追加/変更していない。描画と海底面の目視比較、斜面、船や釣りとの接続は未実施。

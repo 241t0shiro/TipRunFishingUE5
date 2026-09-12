@@ -1,7 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M02は完了。共通型・装備データ・FishingTuningを実装し、Development Editor Win64でUHT生成・C++コンパイルと対応Automation Testを確認済み。M03以降の実装は未着手。**
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M03は完了。M03の平底Ocean問い合わせは新規UHT/C++ビルド成功済み。2026-09-13の最終再試験で7件すべて成功、試験警告・エラー0件を確認。M04以降の実装は未着手。**
 
 ## 1. 文書の効力と読み方
 
@@ -129,6 +129,8 @@ CoordinatorがAIスコア、沈下、フッキング成否、ファイト進捗�
 必須バリデーション: エギ/総重量>0、シンカー重量>=0（0gは無しの専用ID）、深度>=0、時間>=0、有限数、曲線の定義域、OpenDelay<CloseDelay、速度上限>0、ID一意、設定参照の存在。値が欠落した場合に黙って製品用既定値を補わない。
 
 M02で装備行とFishingTuning、装備係数Snapshotを実装済み。PrototypeのDataTable 2件とFishingTuning 1件をUEで保存し、別プロセスの読込で27組合せを検証した。設定確認は行/TuningのIsDataValidとテーブル間のValidateTablesで行う。Snapshotは評価済み係数と設定のコピーを保持する。技術上の検証制約・試験係数の扱いはFISHING_SYSTEM第2節、ビルド・試験結果はROADMAPのM02完了記録を参照。その他のDataAsset、装備ロック、海の問い合わせやシミュレーション処理は後続タスクの範囲。
+
+M03でOceanAreaDataAsset、平底SeabedProvider、OceanWorldSubsystemを追加し、上記M02時点で未実装だった海の問い合わせを実装済み。Game/PIE限定で、初期化時の設定コピーから値を返す。設定検証・Provider寿命・境界と不正値を扱う技術防御を実装し、D14の境界ゲームルールは追加していない。詳細はOCEAN_SYSTEMのM03記録を参照。固定時計・CoordinatorはM04、斜面はM16に残す。
 
 ## 8. 要決定事項の正本
 

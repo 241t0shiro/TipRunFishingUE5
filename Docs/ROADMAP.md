@@ -1,6 +1,6 @@
 # ロードマップ・Codex向けMVP実装順序
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M02は完了済み。M03〜M18は未着手。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M03は完了済み。M04〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
 
@@ -30,7 +30,7 @@
 | 01 M00（完了） | 既存プロジェクト・開発環境確認。`.uproject`、Runtimeモジュール、Game/Editorターゲット、基本ディレクトリ、Git・生成物除外を確認 | 既存UEプロジェクトへ適用 | Development Editor Win64通常ビルド成功（最新判定・0アクション）。検証範囲は下記完了記録参照 |
 | 02 M01（完了） | Data共通enum/struct、m/cm換算、ID、Snapshotとイベント契約 | M00 | 新規コードのUHT生成・C++コンパイル成功、M01 Automation 4件成功。下記完了記録参照 |
 | 03 M02（完了） | 装備行、3種エギ/無しを含む9選択、係数DataAsset、初期エギ35g | M01、D08決定済み | F01を含む6試験成功、Prototype保存・再読込、新規UHT/C++ビルド成功。下記記録参照 |
-| 04 M03 | Oceanの平底ProviderとSampleOcean | M01/02、テスト環境値 | O01/O03/O04/O05/O06 |
+| 04 M03（完了） | Oceanの平底ProviderとSampleOcean | M01/02、テスト環境値 | 新規UHT/C++ビルド成功。2026-09-13の最終7試験すべて成功・警告/エラー0件。下記記録参照 |
 | 05 M04 | Coordinatorの固定時計、入力キュー、登録解除、用途別seed | M01 | Tick順・ポーズ・catch-up・再現性試験 |
 | 06 M05 | 仮BoatPawnと一定水平潮ドリフト、RodAnchor、Snapshot接続 | M03/04、D15決定済み | B01/B02/B03/B05、風/波の物理寄与なし |
 | 07 M06 | SessionActor、装備ロック、キャストなし投入、最小遷移 | M02/04、D01/D02/D08 | CastId増加、不正入力拒否、F16の釣り開始前限定 |
@@ -73,6 +73,14 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 - アセット生成試験1件成功後、別プロセスで`TipRun.M02`の6件（F01Combinations、FrozenSnapshot、InvalidRows、PrototypeAssets、ReferencesAndDuplicates、TuningValidation）すべて成功。各試験の警告・エラー0、プロセス終了コード0。27組合せ・30〜90g・初期エギ35g・0g受理、欠損/重複/不正値、曲線と時刻境界、凍結、保存アセットの再読込を確認。
 - ビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。Engine起動時にはM01でも見られたCondition failed等の出力と対象外プラットフォームSDK不足があるが、Win64はVALIDでM02試験にはエラーなし。対象外の環境設定は変更していない。
 - ログは`Saved/Logs/M02Build.log`、`M02Generate.log`、`M02Tests.log`、結果は`Saved/Automation/M02/index.json`（Git除外）。既存M01コード・TRBase・Build.cs・Target.cs・Configは変更なし。M03へ進める状態で、M03〜M18は未着手。ゲーム仕様D番号・後続の受入条件は変更せず、データ検証と試験係数の技術上の扱いを文書化した。
+
+### M03完了記録（実装2026-09-12 / 最終確認2026-09-13）
+
+- OceanAreaDataAsset、SeabedProviderActor、OceanWorldSubsystemとOcean設定・深度結果型を追加。DataのIsDataValid、平底、一定水平潮、境界、不正数値、Providerの破棄/再設定に対応。独立Tick・Actor探索・描画からの逆流なし。M03に対応する技術上の扱いはOCEAN_SYSTEM第7節を参照。
+- Development Editor Win64通常ビルド成功（終了コード0、約18.0秒、9アクション）。Internal UnrealHeaderToolが12生成ファイルを書き出し、Oceanの新規cpp・Automation Test・生成コードのコンパイルとDLLリンクを確認。
+- `TipRun.M03`の7件（O01FlatBottom、O03DepthQueries、O04Boundaries、O05ProviderLifetime、O06UnitsAndCurrent、SnapshotAndTimeIndependence、ValidationAndWorldScope）がすべて成功。初回O05のcontext警告に対し試験用Worldの生成・解放にEngine context登録・解除を追加し、修正コードの再コンパイルとDLLリンクも成功（約4.9秒）。2026-09-13に修正後の全7件を再実行し、各試験の警告・エラー0件、終了コード0を確認。最終確認時の追加コード修正は不要だった。
+- ビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。Engine起動時の既知のCondition failed等・対象外SDK不足と、M03の試験結果は区別する。ビルド・試験エラーはなく、上記テストWorld警告への修正のみ行った。
+- ログは`Saved/Logs/M03Build.log`、`M03BuildFinal.log`、最終試験は`Saved/Logs/M03TestsFinal.log`・`Saved/Automation/M03Final/index.json`（Git除外）。Content・Config・Build.cs・Target.cs・TRBaseは変更なし。固定時計/Coordinator・斜面・描画検証は未実施で、それぞれの後続タスクに残す。M03は完了、M04へ進める状態。M04〜M18は未着手。
 
 ## 4. 受入シナリオ
 

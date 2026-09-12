@@ -157,7 +157,8 @@ enum class ETRSampleError : uint8
 	NotInitialized,
 	OutsideArea,
 	InvalidDepth,
-	MissingProvider
+	MissingProvider,
+	InvalidQuery
 };
 
 UENUM(BlueprintType)
