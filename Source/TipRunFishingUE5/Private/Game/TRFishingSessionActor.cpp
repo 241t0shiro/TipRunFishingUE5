@@ -95,6 +95,7 @@ ETRCommandResult ATRFishingSessionActor::StartFishing(TArray<FText>& Errors)
 	LockedEgiMesh = Mesh; // Retain the resolved visual; no synchronous loading in fixed steps.
 	LockedEquipment = Candidate; bEquipmentLocked = true; bHasResult = false; LastResult = {};
 	Fishing->Prepare(); Phase = ETRSessionPhase::Ready;
+	CaptureHUD(Coordinator->GetSimulationTime());
 	return ETRCommandResult::Accepted;
 }
 bool ATRFishingSessionActor::SubmitCommand(ETRFishingCommandType Type, FTRCastId ExpectedCastId, int64 TargetTick)
@@ -102,7 +103,7 @@ bool ATRFishingSessionActor::SubmitCommand(ETRFishingCommandType Type, FTRCastId
 	return bInitialized && bEquipmentLocked && !IsActorBeingDestroyed() && Coordinator.IsValid() &&
 		Coordinator->EnqueueCommand(RegistrationId, Type, 0.0f, TargetTick, ExpectedCastId);
 }
-void ATRFishingSessionActor::HandleCommand(const FTRFishingCommand& Command)
+void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 {
 	LastCommandResult = ETRCommandResult::RejectedInvalidState;
 	if (!bInitialized || !bEquipmentLocked || !Coordinator.IsValid() || IsActorBeingDestroyed() ||
@@ -136,9 +137,11 @@ void ATRFishingSessionActor::HandleCommand(const FTRFishingCommand& Command)
 }
 void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSimTime& Time)
 {
-	if (StepPhase == ETRSimulationPhase::Publish && bCastActive && !IsActorBeingDestroyed())
+	if (StepPhase == ETRSimulationPhase::Publish && !IsActorBeingDestroyed())
 	{
-		Fishing->PublishStateChanges(); return;
+		CaptureHUD(Time);
+		if (bCastActive) { Fishing->PublishStateChanges(); }
+		return;
 	}
 	if (StepPhase != ETRSimulationPhase::Fishing || !bCastActive || IsActorBeingDestroyed()) { return; }
 	FTRBoatSnapshot Boat; FTROceanSample Ocean;
@@ -195,6 +198,7 @@ ETRCommandResult ATRFishingSessionActor::AbortCast(FTRCastId ExpectedCastId)
 void ATRFishingSessionActor::ResetInternal()
 {
 	bHasResult = false; LastResult = {}; Fishing->Prepare(); Phase = ETRSessionPhase::Ready;
+	CaptureHUD(Coordinator->GetSimulationTime());
 	Unregister(); Register(); // New queue generation, unchanged equipment lock and cast counter.
 }
 ETRCommandResult ATRFishingSessionActor::ResetCast()
@@ -217,6 +221,8 @@ void ATRFishingSessionActor::ReleaseSession()
 	Coordinator.Reset(); BoatId = {};
 	EgiTable = nullptr; SinkerTable = nullptr; FishingTuning = nullptr;
 	Fishing->OnFishingStateChanged.Clear();
+	OnCommandProcessed.Clear();
+	PublishedHUD = {};
 }
 void ATRFishingSessionActor::ReleaseEgi()
 {
@@ -235,4 +241,38 @@ void ATRFishingSessionActor::Destroyed()
 	// invoke EndPlay in that case, so explicit destruction must also release resources.
 	ReleaseSession();
 	Super::Destroyed();
+}
+
+void ATRFishingSessionActor::HandleCommand(const FTRFishingCommand& Command)
+{
+	ProcessCommand(Command);
+	if (!IsActorBeingDestroyed()) { OnCommandProcessed.Broadcast(Command, LastCommandResult); }
+}
+bool ATRFishingSessionActor::IsAcceptingPlayerInput() const
+{
+	return bInitialized && bEquipmentLocked && !IsActorBeingDestroyed() && Coordinator.IsValid() && Coordinator->IsRegistered(RegistrationId);
+}
+bool ATRFishingSessionActor::IsPlayerPaused() const { return !Coordinator.IsValid() || Coordinator->IsSimulationPaused(); }
+void ATRFishingSessionActor::SetPlayerPaused(bool bPaused) { if (Coordinator.IsValid()) { Coordinator->SetSimulationPaused(bPaused); } }
+void ATRFishingSessionActor::ClearPlayerCommands() { if (Coordinator.IsValid()) { Coordinator->ClearCommands(); } } // MVP: one local session.
+void ATRFishingSessionActor::CaptureHUD(const FTRSimTime& Time)
+{
+	PublishedHUD = {};
+	if (!bInitialized || !Coordinator.IsValid()) { return; }
+	PublishedHUD.Egi = Fishing->GetSnapshot();
+	if (!Coordinator->GetBoatSnapshot(BoatId, PublishedHUD.Boat)) { return; }
+	FTROceanQuery Q; Q.SimTick = Time.TickIndex;
+	Q.PositionXYM = bCastActive ? PublishedHUD.Egi.PositionXYM : FVector2D(PublishedHUD.Boat.RodTipM.X, PublishedHUD.Boat.RodTipM.Y);
+	Q.DepthM = bCastActive ? PublishedHUD.Egi.DepthM : 0.0f;
+	if (const auto* Sea = GetWorld()->GetSubsystem<UTROceanWorldSubsystem>()) { PublishedHUD.Ocean = Sea->SampleOcean(Q); }
+	PublishedHUD.bEnvironmentValid = PublishedHUD.Ocean.bValid;
+}
+FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
+{
+	if (!bInitialized || IsActorBeingDestroyed()) { return {}; }
+	FTRHUDSnapshot Copy = PublishedHUD;
+	Copy.bSessionValid = true; Copy.bEgiValid = bCastActive; Copy.bEquipmentLocked = bEquipmentLocked;
+	Copy.Phase = Phase; Copy.CastId = CurrentCastId; Copy.Equipment = GetEquipmentSnapshot();
+	Copy.Egi.FishingState = Fishing->GetState();
+	return Copy;
 }

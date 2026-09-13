@@ -2,7 +2,7 @@
 
 2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
 
-2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。文書のみの変更で、M08以降は未実装。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況はROADMAPと下記M09記録を参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
 
 関連: [全体正本](GAME_DESIGN.md)、[操作](FISHING_SYSTEM.md)、[BITE](SQUID_AI.md)。MVPのデバッグ表示と製品のプレイヤー向け情報を区別する。
 
@@ -119,3 +119,41 @@ UIContextとFishingContextは同じ入力を二重消費しないよう切替。
 | U12 | 10/11/20回→TensionFall→過渡処理終了でStay、維持/上昇/下降 | 回数上限なし、適用回数と減衰倍率一致。STAY専用入力/待機秒なし、レンジ維持指標がSnapshotと一致 |
 
 MVPではFunctional Testと目視で十分なレイアウト確認を行い、Widgetの内部構造をそのまま写した大量の単体テストは不要。
+
+## 7. M09実装・検証記録（2026-09-13）
+
+M09は完了。Enhanced Inputと最小の内部確認用HUDを追加した。M10以降の操作ロジック、Root/Resultパネル、製品HUD、BITE/Cue/イカ/レンジ評価は未実装。上記の完成形クラス表・試験表は将来範囲を含み、本節がM09の実装範囲を示す。
+
+- `ATRPlayerController`が入力を意味コマンドに変換し、Sessionの公開API→M04 Input Queueへ送る。TargetTickと世界内Sequenceで処理順を決め、Game/Fishingの既存受理判定を維持する。Jerk/HookなどはStartedのみ、RetrieveはStartedとCompleted/Canceledで開始・停止を送る。Triggeredによる毎フレーム連打はしない。
+- `ETRPlayerAction`、`FTRInputBinding`、`UTRInputConfigDataAsset`で機器と意味を分離。9種類の重複しないBoolean Actionと有効なMapping Context/キーを検証する。接続し直すときは自身のBinding/Contextだけを解除し、押下済みキーは解放まで無視する。UIContextの本格切替は結果パネル実装時に残す。
+- 古いCastId、終了・破棄済みSession、異なるWorldへの接続を拒否する。Session登録世代/CastId変更、Pause、アプリの非アクティブ化、ViewportのFlushPressedKeysで保持入力とゲーム入力キューを解除する。Retrieve停止だけは同じ有効Castへの安全な停止コマンドとして再開後に送る。保持の自動再開はなく、安全側に再押下が必要になる場合がある。ControllerのEndPlay/DestroyedでBindingとSlate delegateを解除する。全キュー解除はMVPの1ローカルSession前提。
+- `FTRHUDSnapshot`はSessionがPublishフェーズで保存するEgi/Boat/Oceanの表示コピーと、現在のPhase/CastId/装備/有効性から成る。読取APIは時計、キュー、海問い合わせ、数値シミュレーションを進めない。未投入・終了後のエギはN/A、無効な環境情報もN/Aと表示する。
+- `ATRHUD`と`UTRFishingHUDWidget`がCastId、Fishing State、エギ深度、水深、鉛直速度、ライン長、角度、張力代理値、船速度、潮流、エギ・シンカー・総重量を表示する。鉛直速度は既存SnapshotのワールドZ速度（上向き正）であり、DepthMの差分速度ではない。数値表示は技術案10Hz、状態/投/有効性の変更は次描画で反映。Shippingでは当HUDを生成しない。現段階のC++仮レイアウトは製品レイアウトではない。
+- `ATRGameModeBase`は設定検証、Ocean/Boat/Session生成とController接続を担当する。式や釣り操作は持たない。`UTRSessionConfigDataAsset`に参照と初期船座標を追加。時計だけの設定はM04互換とし、起動用参照を設定したDataAssetはIsDataValidで起動依存も検証する。起動途中の失敗では生成物を破棄し、海を解除し固定時計を止める。理由はStartupErrorへ保持し、設定修正後はWorldを再起動する。
+
+### PrototypeでのEditor確認手順
+
+今回UEのSavePackage/CreateBlueprintで以下の2アセットを新規生成し、別プロセスで再読込・Session開始・投入・HUD Snapshotを確認した。既存アセットを上書きする生成処理はない。
+
+- `/Game/TipRun/Prototype/Data/DA_TR_M09Session_Prototype`: 60Hz/最大catch-up 8、平底30m、水平潮(1,0,0)m/s、船応答0.5/応答率2/上限3m/s、初期位置(10,20)mのテスト設定。Ocean/Boat/InputConfig/Mapping Context/9 Actionはこの設定が内部所有する。M02の既存装備Table・FishingTuningを参照し、35g＋シンカー0gで開始する。すべて試験用値で製品バランスではない。
+- `/Game/TipRun/Prototype/BP_TR_M09GameMode_Prototype`: 上記設定を参照するGameMode派生。既存マップ・Project Default GameModeは変更していない。
+
+1. Editorで検証用Levelを開き、World SettingsのGameMode Overrideへ`BP_TR_M09GameMode_Prototype`を指定する。
+2. Selected ViewportのPlayで起動し、Viewportにフォーカスを置く。既存DefaultInput.iniのEnhancedPlayerInput/EnhancedInputComponent設定を使う。カメラは既存Boatの表示カメラを使用する。海面/船メッシュの表示資産はM09では追加していない。
+3. 以下の仮割当で投入・Pause・中断とHUDを確認する。ゲームパッド配列は将来対応を妨げないための仮設定で、実機操作の検証は未実施。
+
+| 意味 | Prototypeキーボード | Prototypeゲームパッド |
+|---|---|---|
+| Deploy | Enter | 下側フェイス |
+| Shakuri（Jerk） | Space | 右ショルダー |
+| Fall / Re-Fall | F | 左側フェイス |
+| TensionFall要求 | T | 左ショルダー |
+| Hook | H | 上側フェイス |
+| Retrieve / Reel | Rの押下/解放 | 右トリガー |
+| Cancel / EndFishing | Backspace | 右側フェイス |
+| NextCast | N | Special Left |
+| Pause / Resume | P | Special Right |
+
+Deploy/NextCast/EndFishingは既存M06の状態条件に従う。CancelはSession終了であり、その後はPlayを再起動する。Shakuri/Fall/TensionFall/Hook/Retrieveはキューに届くが、M09では既存の未対応状態として拒否され、実動作しない。M10以降で対応する範囲を実装する。STAY専用キー、無入力タイマー、AutoStay表示は追加していない。D08の装備変更UI/一投単位ロックへの移行もM10に残す。
+
+最終AutomationはM09 7件＋回帰13件成功、各試験のエラー・警告0件。U02はUEnhancedPlayerInputへ押下/解放を注入し、長押しと再Bindingでも1押下1コマンドを確認した。他にTick/Sequence順、30/60/120fps、古いCast/終了/破棄、Pause/フォーカス、読取非破壊性、不正起動、保存済み設定を検証した。NullRHI試験であり、PIEの目視、解像度/DPI、実キーボード/ゲームパッド、アプリ切替の実機確認は未実施。M09合格はC++/データ/自動試験の範囲を指す。

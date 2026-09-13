@@ -4,7 +4,7 @@
 
 2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況は下記完了記録を参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M08は完了済み。M09〜M18は未着手。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M09は完了済み。M10〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
 
@@ -40,7 +40,7 @@
 | 07 M06（完了） | SessionActor、装備ロック、キャストなし投入、最小遷移 | M02/04、D01/D02/D08 | CastId増加、不正入力拒否、F16全境界を含む5試験と必要な既存回帰6件成功。UHT/C++ビルド成功、下記記録参照 |
 | 08 M07（完了） | EgiSimulationの鉛直落下と海底制約、描画用EgiActor | M03/05/06 | F02/F03/F12のM07範囲を含む6試験と依存回帰8件成功。仮エギの着底座標、UHT/C++ビルド成功。範囲・未検証は下記記録参照 |
 | 09 M08（完了） | 水平潮応答、ライン長/球面制約、船追従 | M07、D02/D05 | F04/F05/B07を含む7試験と依存回帰14件成功、UHT/C++ビルド成功。制御入力による検証範囲は下記参照 |
-| 10 M09 | Enhanced Input接続と最小デバッグHUD（状態/深度/装備） | M06/07、D12 | U02、入力が各1回、数値とSnapshot一致 |
+| 10 M09（完了） | Enhanced Input接続と最小デバッグHUD（状態/深度/装備） | M06/07、D12 | U02を含む7試験＋回帰13件成功、各試験の警告・エラー0。UHT生成/C++/Development Editor Win64成功。目視・実機未検証は下記参照 |
 | 11 M10 | 連続シャクリと一連回数、Shakuri→TensionFall→Stay、再Fall、回収、一投単位の装備ロック/次投変更、レンジ評価用Snapshot、旧タイマー/設定/テスト撤去 | M08/09、D03/D04/D08/D13 | F06/F07/F08/F16/F17/F18/F19、処理終了で即Stay、上昇/下降でも移行、上限なし、回数保持/新しい一連リセット |
 | 12 M11 | テストイカ1体、3段階活性、距離/RangeError/RangeStability/RangeHoldScore/Exposure/STAY時間、評価用DataAsset | M10、D01/D07 | S01/S13/S14/S19、維持指標検証、季節データ不要 |
 | 13 M12 | Attack/Bite、10回超減衰、Caution/Cooldown、仲裁、Hook最小API | M11、D03/D07 | S02〜S04/S07/S08/S15〜S17/S20。非StayのBITEゼロ、維持良好ほど高確率、回数に応じ強い減衰 |
@@ -139,6 +139,34 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 - ログは`Saved/Logs/M08Build.log`、`M08BuildFinal.log`、`M08Tests.log`、`M08TestsFinal.log`。回帰結果は`Saved/Automation/M08/index.json`、最終M08は`Saved/Automation/M08Final/index.json`（Git除外）。コード1ファイル追加・6ファイル変更、GAME_DESIGN/FISHING_SYSTEM/ROADMAP更新。既存未追跡のequipment_revision.patchを保持。Config/Content・Build.cs/Target.cs・M03/M05実装は変更なし。
 - M08は合格、M09へ進める状態。M09〜M18には未着手。D04/D07/D08の最新仕様を維持し、旧AutoStay設定撤去・Shakuri/Stay操作・Retrieveと一投ごとの装備変更・深度速度/接触Snapshot公開はM10、レンジ評価はM11、BITE倍率はM12に残す。NullRHIによる数値/Actor検証であり、PIE目視・入力HUD・パッケージ起動は未実施。
 
+### M09完了記録（2026-09-13）
+
+- `ATRPlayerController`、`UTRInputConfigDataAsset`、`ETRPlayerAction`、`FTRInputBinding`、`FTRHUDSnapshot`、`ATRHUD`、`UTRFishingHUDWidget`、最小接続用`ATRGameModeBase`を追加。SessionConfigに起動参照/初期位置、Sessionに入力安全API/処理通知/表示コピーを追加した。M01の型、M02の装備、M03の海、M04の時計/Queue、M05の船、M06の寿命、M07/08のエギ数値を使用し、計算式をUIやGameModeへ移していない。
+- Enhanced InputのStarted/Completed/Canceledから既存コマンドを送り、Tick→Sequence順、CastId/Session登録世代/破棄防御を維持。Pause/フォーカス喪失/Resultで保持を解除し、再開時に動作を勝手に再送しない。Retrieve停止だけは有効な同Castへの安全停止として保持できる。詳細はUI_SPEC第7節。
+- HUDはCastId、Fishing State、Egi Depth、Water Depth、Vertical Velocity（world Z、上向き正）、Line Length/Angle、Tension代理値、Boat Velocity、Current、Egi/Sinker/総重量を表示。表示APIは固定更新済みのコピーを返し、数値を変更しない。Squid State/BITE Window/RangeError/RangeStabilityは未追加。
+- M09は7試験成功: U02EnhancedPressRelease、FixedOrderAndFrameRates、CastSessionAndControllerLifetime、PauseFocusAndHeldInput、HUDReadOnlySnapshot、InputConfigAndStartup、PrototypeAssets。Enhanced PlayerInputの実イベント注入、30/60/120fps、古い要求、破棄、保持解除、読取非破壊、不正な起動、Blueprintと内部所有Input参照の保存/別プロセス再読込を含む。
+- 回帰13件成功: M04全6件（新規SessionConfig参照が時計専用データを壊さないことも確認）、M06全5件、M08のB07FixedBoatIntegration/SessionLifetimeAndDestination。最終20件すべてエラー・警告0件。保存用試験も警告0件。試験World/Controller由来の残存警告なし。
+- UE5.8.2 / MSVC14.51.36257 / Windows SDK10.0.22621.0。初回M09Build.logでUHTが17ファイルを生成、入力/HUDを含むC++9アクションとDLLリンク成功。M09BuildFinal.logでもUHTを実行。追加試験のTSubclassOf型指定エラー1件を修正し、最終M09BuildVerified.logでC++再コンパイル/リンク成功。Prototype Blueprintの設定保存不備は変更通知＋再コンパイルで修正し、最終再読込試験成功。
+- 既存MSVC推奨範囲外・Unreal5_6互換include順序の注意は残る。Engine起動時の既知のCondition failed（Error表記）19件、Editorレイアウト警告1件、対象外SDK不足の出力は各試験のエラー・警告0件と区別する。Win64 SDKはVALID。M09変更由来の残存警告なし。
+- 証跡は`Saved/Automation/M09Final/index.json`、`Saved/Automation/M09Assets/index.json`、`Saved/Logs/M09TestsFinal.log`、`M09Assets.log`、`M09Build.log`、`M09BuildFinal.log`、`M09BuildVerified.log`（Git除外）。最終20件成功をJSONで確認し、プロセス終了コードだけで成功判定していない。
+- 新規Prototype SessionConfigとGameMode BlueprintをUEのシリアライザで保存した。World SettingsでGameMode Overrideへ指定する手順をUI_SPEC第7節に記載。Config/既存Content/既存Mapは未変更、既存未追跡`equipment_revision.patch`も保持。UnrealEd依存はEditorターゲットのアセット生成試験に限定し、Runtimeへ含めない。
+- **M09合格、M10へ進める。M10〜M18は未着手。** 合格はコード・データ・自動試験の範囲。PIE目視、解像度/DPI、実キーボード/ゲームパッド、アプリ切替の実機確認、パッケージ起動は未実施。Shakuri/TensionFall/Stay、Retrieve実動作、D08の装備変更/ロック移行、旧AutoStay設定撤去はM10以降に残す。未実装コマンドがキューで拒否されることを操作完了と扱っていない。
+
+変更ファイル（23件、既存equipment_revision.patchは対象外）:
+
+| 区分 | ファイル |
+|---|---|
+| 新規型・入力データ | `Source/TipRunFishingUE5/Public/Data/TRHUDSnapshot.h`、`Public/Data/TRInputConfigDataAsset.h`、`Private/Data/TRInputConfigDataAsset.cpp` |
+| 起動設定更新 | `Source/TipRunFishingUE5/Public/Data/TRSessionConfigDataAsset.h`、`Private/Data/TRSessionConfigDataAsset.cpp` |
+| Game新規 | `Source/TipRunFishingUE5/Public/Game/TRGameModeBase.h`、`Private/Game/TRGameModeBase.cpp`、`Public/Game/TRPlayerController.h`、`Private/Game/TRPlayerController.cpp` |
+| Session更新 | `Source/TipRunFishingUE5/Public/Game/TRFishingSessionActor.h`、`Private/Game/TRFishingSessionActor.cpp` |
+| UI新規 | `Source/TipRunFishingUE5/Public/UI/TRHUD.h`、`Private/UI/TRHUD.cpp`、`Public/UI/TRFishingHUDWidget.h`、`Private/UI/TRFishingHUDWidget.cpp` |
+| 試験新規 | `Source/TipRunFishingUE5/Private/Tests/TRInputHUDTests.cpp` |
+| 依存更新 | `Source/TipRunFishingUE5/TipRunFishingUE5.Build.cs`、`TipRunFishingUE5.uproject` |
+| アセット新規 | `Content/TipRun/Prototype/Data/DA_TR_M09Session_Prototype.uasset`、`Content/TipRun/Prototype/BP_TR_M09GameMode_Prototype.uasset` |
+| 設計記録更新 | `Docs/GAME_DESIGN.md`、`Docs/UI_SPEC.md`、`Docs/ROADMAP.md` |
+
+表中のPublic/Privateで始まる省略パスは、すべて`Source/TipRunFishingUE5/`配下。
 ## 4. 受入シナリオ
 
 ### A: 成功する1投

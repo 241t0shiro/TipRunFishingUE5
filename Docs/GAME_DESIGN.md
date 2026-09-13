@@ -5,7 +5,7 @@
 2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況は下記とROADMAPを参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
 
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M08は完了。M08の水平潮応答・船追従・ライン制約はUHT処理/C++コンパイル/Development Editor Win64ビルド成功済み。M08最終7試験と依存回帰14件が成功、各試験の警告・エラー0件。M09以降は未着手。D04/D07/D08改訂の操作・評価・装備ロック移行はM10以降の範囲。**
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M09は完了。M09のEnhanced Input接続・最小デバッグHUDはUHT生成/C++コンパイル/Development Editor Win64ビルド成功済み。M09最終7試験と依存回帰13件が成功、各試験の警告・エラー0件。M10以降は未着手。PIE目視・実機入力は未検証。D04/D07/D08改訂の操作・評価・装備ロック移行はM10以降の範囲。**
 
 ## 1. 文書の効力と読み方
 
@@ -122,7 +122,7 @@ CoordinatorがAIスコア、沈下、フッキング成否、ファイト進捗�
 - `RegisterSession / RegisterSquid`は同一WorldのActorを弱参照で登録し、全登録共通の増加SimIdを付与する。同一Actorの重複登録を拒否し、IDを再利用しない。EndPlayから`Unregister`を呼ぶ契約とし、重複解除を許容する。破棄済みActorは各呼出し前に検査し、次の固定更新冒頭で登録・入力を除去する。更新中の追加登録は次Tickから参加し、解除は同Tickの残りの通知にも反映する。World終了時に全登録・入力を解除する。
 - 後続Componentの接続口はnativeの`FTRSimulationStep / FTRSimulationCommand` delegate。`ETRSimulationPhase`により、入力→全登録のTimers→Ocean→SessionのBoat/Fishing→SquidのAI用フェーズ→SessionのBiteResolution/Fight/Publishの順で配送する。各フェーズ内はSimId順。M04は配送順だけを実装し、BITE要求の収集・仲裁、状態遷移、船・エギ・AIの計算は後続タスクに残す。delegate内でActorを所有参照せず、登録所有者に結び付けた弱いバインドを使用する。
 - `EnqueueCommand`は行先SimIdとコマンド種別を受け、CoordinatorがWorld共通Sequenceを採番する。通常入力は次の未処理Tick、固定更新中の入力はT+1以降へ割当てる。決定論的再生では明示した未来Tickも受け付ける。過去Tick、不正な種類・非有限Axis、無効な行先、Squid宛て入力を拒否する。配送はTargetTick→Sequence順。更新中の`ClearCommands`は取り出し済みの未配送入力も破棄する。CastId/Tokenによるゲーム状態の検証はM06以降の所有者が追加する。
-- `SetSimulationPaused`またはEngineのWorld pauseで時計を停止し、入力と端数時間を破棄する。Engine pause中も入力破棄のためSubsystemのTickだけを受ける。コールバック中のポーズ要求は進行中の固定ステップを完了し、後続ステップを止める。UIの保持キー解除・再接続はM09以降。catch-upは端数を含む累積時間を1フレーム予算へ制限し、超過分を持ち越さず`CatchUpDropCount`を増やす。非有限/負の経過時間を無視し、整数時計のオーバーフローでは停止する。再入による二重更新を拒否する。
+- `SetSimulationPaused`またはEngineのWorld pauseで時計を停止し、入力と端数時間を破棄する。Engine pause中も入力破棄のためSubsystemのTickだけを受ける。コールバック中のポーズ要求は進行中の固定ステップを完了し、後続ステップを止める。UIの保持キー解除・再接続はM09で実装済み（UI_SPEC第7節）。catch-upは端数を含む累積時間を1フレーム予算へ制限し、超過分を持ち越さず`CatchUpDropCount`を増やす。非有限/負の経過時間を無視し、整数時計のオーバーフローでは停止する。再入による二重更新を拒否する。
 - `CreateRandomStream`はSessionSeed、64bit SimIdの両半分、uint32用途IDを固定の符号なし整数演算で混合する。用途IDは呼出し側で固定し、生成したFRandomStreamを各所有者が継続保持する。同じAPIを再度呼ぶと初期状態へ再生成するため、毎Tickの再生成は行わない。Actorアドレス・グローバル乱数・FNameの内部番号に依存しない。同一ビルドの再現性を検証し、異機種間のbit一致や確率バランスの評価は行っていない。
 
 ## 6. 所有・イベント・Blueprint
@@ -192,3 +192,9 @@ IDは維持し、変更日・根拠と詳細設計/試験を一緒に更新す�
 - Development Editor Win64の通常ビルドは `Succeeded`（終了コード0）。`Target is up to date`、実行アクション0件であり、新規コンパイル・UHT反射コード生成の実処理は今回未確認。既存EditorログでプロジェクトDLL読み込みとEngine初期化成功を確認したが、新規の空マップ起動・PIE操作は未実施。M01の反射宣言導入時に通常ビルドとUHTの実処理を確認する。詳細はROADMAPのM00完了記録を参照。
 
 公式資料確認日: 2026-09-12。5.8.2公開は [Epic Hotfix告知](https://forums.unrealengine.com/t/5-8-2-hotfix-released/2746335) で確認。入力接続は [Enhanced Input](https://dev.epicgames.com/documentation/unreal-engine/enhanced-input-in-unreal-engine)、世界単位サービスは [Programming Subsystems](https://dev.epicgames.com/documentation/en-us/unreal-engine/programming-subsystems-in-unreal-engine)、検証の実行手段は [Automation System User Guide](https://dev.epicgames.com/documentation/en-us/unreal-engine/automation-system-user-guide-in-unreal-engine) を参照。これらはUE機構の参照であり、本作のゲーム仕様・釣りの科学的根拠ではない。
+
+## M09実装補足（2026-09-13）
+
+`ATRPlayerController`→Session→固定Input Queueの入力経路と、Publish時の数値コピーから作る`FTRHUDSnapshot`を追加。HUDは状態/深度/重量/ライン/船速/潮流を表示し、釣りの数値・状態を更新しない。`ATRGameModeBase`は既存Ocean/Boat/Sessionと入力/HUDの初期化・接続のみを担当する。調整値・仮キー割当はPrototype SessionConfigおよび所有するDataAsset/Input Actionに保持する。製品値を確定していない。
+
+UHTは新規反射型を含む17ファイルを生成し、C++実コンパイルとDLLリンクに成功。保存済みPrototypeを別プロセスで再読込する試験を含め、M09 7件と回帰13件が成功。詳細な実装契約・操作準備・未検証範囲はUI_SPEC第7節、変更一覧・ログはROADMAPのM09完了記録を参照。既存M06の装備ロック寿命は保持し、D08移行はM10で実施する。Shakuri/TensionFall/Stay、回収の実動作、旧AutoStay設定撤去、レンジ評価、BITEには着手していない。

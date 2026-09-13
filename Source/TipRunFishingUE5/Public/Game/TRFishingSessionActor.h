@@ -5,12 +5,15 @@
 #include "Data/TREvents.h"
 #include "Data/TRSnapshots.h"
 #include "Game/TRSimulationWorldSubsystem.h"
+#include "Data/TRHUDSnapshot.h"
 #include "TRFishingSessionActor.generated.h"
 
 class UTRFishingComponent;
 class UTREgiSimulationComponent;
 class ATREgiActor;
 class UStaticMesh;
+
+DECLARE_MULTICAST_DELEGATE_TwoParams(FTRCommandProcessed, const FTRFishingCommand&, ETRCommandResult);
 
 UCLASS()
 class TIPRUNFISHINGUE5_API ATRFishingSessionActor : public AActor
@@ -39,6 +42,13 @@ public:
 	FTREquipmentSnapshot GetEquipmentSnapshot() const { return bEquipmentLocked ? LockedEquipment : SelectedEquipment; }
 	UFUNCTION(BlueprintPure, Category = "TipRun|Session")
 	FTRCatchResult GetLastResult() const { return LastResult; }
+	UFUNCTION(BlueprintPure, Category = "TipRun|Debug")
+	FTRHUDSnapshot GetHUDSnapshot() const;
+	bool IsAcceptingPlayerInput() const;
+	bool IsPlayerPaused() const;
+	void SetPlayerPaused(bool bPaused);
+	void ClearPlayerCommands();
+	FTRCommandProcessed OnCommandProcessed;
 	bool HasResult() const { return bHasResult; }
 	FTRActorSimId GetRegistrationId() const { return RegistrationId; }
 	ETRCommandResult GetLastCommandResult() const { return LastCommandResult; }
@@ -53,6 +63,9 @@ protected:
 private:
 	void FixedStep(ETRSimulationPhase StepPhase, const FTRSimTime& Time);
 	void HandleCommand(const FTRFishingCommand& Command);
+	void ProcessCommand(const FTRFishingCommand& Command);
+	void CaptureHUD(const FTRSimTime& Time);
+	FTRHUDSnapshot PublishedHUD;
 	bool ReadEnvironment(FTRBoatSnapshot& Boat, FTROceanSample& Ocean) const;
 	bool Register();
 	void Unregister();
