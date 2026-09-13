@@ -24,6 +24,10 @@ struct TIPRUNFISHINGUE5_API FTRFishingCommand
 
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	float AxisValue = 0.0f;
+
+	// M06: identity observed when input was submitted; sessions reject stale casts.
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
+	FTRCastId ExpectedCastId;
 };
 
 USTRUCT(BlueprintType)

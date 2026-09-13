@@ -44,6 +44,17 @@
 
 ## 3. 操作状態
 
+### M06のSession・最小操作状態（2026-09-13）
+
+- `ATRFishingSessionActor`と`UTRFishingComponent`を追加。SessionはComponentをCreateDefaultSubobjectで所有し、装備・設定参照をUPROPERTY、Coordinatorを弱参照、船をCoordinatorの登録IDで保持する。Fishingが操作状態を所有し、SessionがSessionPhase・CastId採番・装備ロックを所有する。両者の独立Tickはない。EgiSimulation/Hook/FightのComponentと描画EgiActorは、それぞれの後続タスクで追加する。
+- `Initialize`へ同一Worldの設定済Coordinator、登録済BoatId、エギ/シンカーDataTable、FishingTuning、明示的な初期シンカーIDを渡す。初期エギはM02の`InitialEgiId()`（3.5号35g）。初期シンカー未指定を0gへ補完しない。設定・選択・竿先位置の海を検証し、成功時はSessionPhase=Ready、FishingState=Inactive。失敗時は理由を返し、有効な設定で再試行できる。
+- `TrySetEquipment`は開始前とEndFishing後だけ許可する。`StartFishing`でM02の検証・数値Snapshot作成を再実行し、登録成功後に装備をロックしてFishingState=Readyへ進む。元DataAssetの編集中変更は釣りセッション中と次投にも影響しない。装備解決は同期ロードを伴い得るため、Initialize/TrySetEquipment/StartFishingを固定ステップ内から呼ぶ要求は拒否する。Deploy時はロック済Snapshotをコピーするだけで、アセットをロードしない。
+- `SubmitCommand(Type, ExpectedCastId, TargetTick)`でM04へ入力を送る。FTRFishingCommandへExpectedCastIdを追加し、Sessionは自身の現在IDとの一致とTargetTick→Sequence順を検査する。最初の投入前のIDは無効値0、それ以降は直近のCastIdを添える。未来Tickを先に予約しても、受付順だけで誤って拒否しない。拒否結果はGetLastCommandResultで読める。M06の入力実装はDeploy/NextCast/EndFishingだけで、未実装のJerk/Hook等を成功扱いしない。
+- ReadyでDeployを受理するとCastIdを増やしDeployingへ移る。同TickのBoat更新後、Fishingフェーズで最新竿先のXYと海面を読み、深度0・初速度0のFTREgiSnapshotを作ってFreeFallへ進む。初期ライン長はMinLineMと竿先の海面上高さの大きい方を使用し、MaxLineLengthMに収まらない配置や海面より低い竿先は拒否/安全中断する。GetActionはFreeFallでPayoutと凍結したSinkScaleを返す。実際の深度・位置・ライン繰出し積分、着底、描画Actorは未実装でありM07以降に残す。M06のEgiSnapshot.Tickは投入確定時刻で、その後の物理更新済み時刻とは称さない。
+- F16の次投Readyを検証する最小経路として、明示的な`AbortCast(ExpectedCastId)`→Result→`ResetCast`/NextCast→Readyを実装した。中断結果はAborted・重量0・対象SimIdなしで一度だけ保存し、重複/古いCastIdの中断は拒否する。Result/次投Readyでも装備ロックは維持。EndFishingだけがロックを解除してInactiveへ戻す。CastIdカウンタは投間・釣り開始/終了で戻さない。回収完了・Caught・MISS・Fight結果、UI動線、結果イベント配信は今回の実装範囲外。
+- Abort/次投リセットではCoordinator登録を更新して旧登録IDの入力を無効化し、EndFishing/EndPlayで登録とキューを解除する。BeginPlay前の破棄ではEndPlayが呼ばれないためDestroyedでも同じ冪等な解放を行う。登録delegateは弱いUObjectバインドで、終了時は設定参照も解放する。船やOcean自体はSession終了で停止/破棄しない。活動中に船/Oceanの有効性を失った場合はAbortedへ進め、装備ロックは明示終了まで維持する。
+- `TipRun.M06`の5試験でF16全境界、初期35g/明示0g、CastId増加・不正入力、Boat更新後の投入、設定凍結、旧入力破棄、未来入力順、ポーズ、環境喪失、BeginPlay前後の破棄を確認。試験の次投は明示中断経由であり、M10以降の回収やM15の結果UI完成を意味しない。Content/Config・保存アセットは変更していない。
+
 `ETRFishingState`:
 `Inactive, Ready, Deploying, FreeFall, BottomContact, Jerking, TensionFall, Stay, Retrieving, Fighting, Landing, Result`
 

@@ -1,7 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M05は完了。M05の船ドリフトと固定更新接続はUHT/C++ビルド成功済み。2026-09-13のM05 Automation Test 6件とM02/M04回帰12件がすべて成功、試験警告・エラー0件。M06以降の実装は未着手。**
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M06は完了。M06のSession・装備ロック・最小投入遷移はUHT/C++ビルド成功済み。2026-09-13の最終M06試験5件と必要な既存回帰6件が成功、各試験の警告・エラー0件。M07以降は未着手。**
 
 ## 1. 文書の効力と読み方
 
@@ -122,6 +122,8 @@ CoordinatorがAIスコア、沈下、フッキング成否、ファイト進捗�
 - `CreateRandomStream`はSessionSeed、64bit SimIdの両半分、uint32用途IDを固定の符号なし整数演算で混合する。用途IDは呼出し側で固定し、生成したFRandomStreamを各所有者が継続保持する。同じAPIを再度呼ぶと初期状態へ再生成するため、毎Tickの再生成は行わない。Actorアドレス・グローバル乱数・FNameの内部番号に依存しない。同一ビルドの再現性を検証し、異機種間のbit一致や確率バランスの評価は行っていない。
 
 ## 6. 所有・イベント・Blueprint
+
+M06で`ATRFishingSessionActor`と最小の`UTRFishingComponent`を実装済み。Sessionは釣り開始からEndFishingまで装備をロックし、単調増加CastIdとSessionPhaseを保持する。M04入力にExpectedCastIdを追加して古い投を拒否し、M05 Boat更新後に竿先直下の海面へ投入Snapshotを作る。M06ではFreeFallのPayout指示までを扱い、移動積分・EgiActorはM07、Hook/Fight等は対応タスクに残す。明示中断・次投Ready・終了は装備ロックと寿命を検証する最小経路で、結果UI・釣果イベント配送は先行実装していない。詳細はFISHING_SYSTEM第3節のM06契約を参照。
 
 M05で`UTRSimulationWorldSubsystem::RegisterBoat`と船Snapshotの読取APIを追加済み。GameがM03 Oceanから値を取得し、M04のBoatフェーズで`ATRBoatPawn`→`UTRBoatDriftComponent`を一度だけ進める。船は共通SimId・弱参照で登録し、EndPlay/Unregister/World終了で登録とバインドを解除する。船の計算、調整値の凍結、無効環境への技術防御、試験と未検証項目は[BOAT_SYSTEM](BOAT_SYSTEM.md)第6節を参照。M06のSessionActor、自由操船、風・波の物理は追加していない。
 
