@@ -51,7 +51,7 @@ bool FTRInputEnhancedTest::RunTest(const FString& Parameters)
 	TArray<ETRFishingCommandType> Commands;
 	R.F.Session->OnCommandProcessed.AddLambda([&](const FTRFishingCommand& C, ETRCommandResult Result)
 	{
-		Commands.Add(C.Type); TestTrue(TEXT("Future game logic is still rejected"), Result == ETRCommandResult::RejectedInvalidState);
+		Commands.Add(C.Type); TestTrue(TEXT("Hook remains pending; reel is implemented"), Result == (C.Type == ETRFishingCommandType::Hook ? ETRCommandResult::RejectedInvalidState : ETRCommandResult::Accepted));
 	});
 	R.PC->InstallInputBindings(R.Input.Get()); // Rebinding must not duplicate handlers.
 	TestEqual(TEXT("Started/Completed/Canceled, never Triggered"), R.Input->GetActionEventBindings().Num(), 27);
@@ -102,7 +102,7 @@ bool FTRInputLifetimeTest::RunTest(const FString& Parameters)
 {
 	FTRTestInput R; if (!R.Start(*this)) { return false; } R.F.Deploy();
 	const auto Old = R.F.Session->GetCastId();
-	R.F.Session->AbortCast(Old); R.F.Session->ResetCast(); R.F.Deploy();
+	if (!TestTrue(TEXT("Retrieve before next cast"), R.F.ReturnToReady())) { return false; } R.F.Deploy();
 	TestFalse(TEXT("Controller rejects stale CastId"), R.PC->SubmitFishingCommand(ETRFishingCommandType::EndFishing, Old));
 	R.F.Session->SubmitCommand(ETRFishingCommandType::EndFishing, Old); R.F.Step();
 	TestTrue(TEXT("Session also rejects stale queued input"), R.F.Session->IsAcceptingPlayerInput() && R.F.Session->GetLastCommandResult() == ETRCommandResult::RejectedInvalidState);

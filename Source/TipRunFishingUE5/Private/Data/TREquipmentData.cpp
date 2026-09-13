@@ -105,7 +105,6 @@ bool TREquipment::TryBuildSnapshot(const UDataTable* Egis, const UDataTable* Sin
 	const FTRFishingParameters& P = Tuning->Parameters;
 	if (!Require(TRTime::TrySecondsToTicks(P.HookOpenDelayS, StepSeconds, OpenTicks) &&
 		TRTime::TrySecondsToTicks(P.HookCloseDelayS, StepSeconds, CloseTicks) && CloseTicks > OpenTicks &&
-		TRTime::TrySecondsToTicks(P.AutoStayDelayS, StepSeconds, OtherTicks) &&
 		TRTime::TrySecondsToTicks(P.JerkDurationS, StepSeconds, OtherTicks) && OtherTicks > 0 &&
 		TRTime::TrySecondsToTicks(P.OverTensionDurationS, StepSeconds, OtherTicks) && OtherTicks > 0,
 		TEXT("Invalid fixed step or unrepresentable timing window"), Errors)) { return false; }

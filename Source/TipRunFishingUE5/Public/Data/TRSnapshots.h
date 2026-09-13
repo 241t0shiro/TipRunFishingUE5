@@ -124,6 +124,16 @@ struct TIPRUNFISHINGUE5_API FTREgiSnapshot
 
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	int64 StayPenaltyJerkCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun") float DepthVelocityMps = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun") bool bBottomContact = false;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun") bool bSurfaceContact = false;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun") int64 JerkCount = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun") int64 SeriesJerkCount = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun") int64 PendingJerkCount = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun") int64 StateEnteredTick = 0;
+	// Observation duration only; neither a stability score nor a Stay gate.
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun") double RangeObservationSeconds = 0.0;
 };
 
 USTRUCT(BlueprintType)

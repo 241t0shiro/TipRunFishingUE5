@@ -36,7 +36,11 @@ FText UTRFishingHUDWidget::FormatSnapshot(const FTRHUDSnapshot& S)
 			S.Ocean.CurrentMps.X, S.Ocean.CurrentMps.Y, S.Ocean.CurrentMps.Z);
 	}
 	else { Text += TEXT("Water depth / boat / current: N/A (invalid environment)\n"); }
-	Text += TEXT("Prototype controls: see assigned InputConfig\nShakuri / Fall / Hook / Reel: input routing only (logic pending)");
+	Text += TEXT("Prototype controls: see assigned InputConfig\nShakuri / Fall / Reel active | Hook: logic pending");
+	Text += FString::Printf(TEXT("\nJerks: %lld | Series: %lld | Stay count: %lld | Queued: %lld\nDepth speed (down +): %+.3f m/s | Bottom: %d | Surface: %d\nEquipment: %s | Onboard: %d | Change allowed: %d"),
+		S.Egi.JerkCount, S.Egi.SeriesJerkCount, S.Egi.StayPenaltyJerkCount, S.Egi.PendingJerkCount,
+		S.Egi.DepthVelocityMps, S.Egi.bBottomContact, S.Egi.bSurfaceContact,
+		S.bEquipmentLocked ? TEXT("Locked") : TEXT("Unlocked"), S.bEgiOnboard, S.bCanChangeEquipment);
 	return FText::FromString(Text);
 }
 void UTRFishingHUDWidget::ApplySnapshot(const FTRHUDSnapshot& Snapshot)

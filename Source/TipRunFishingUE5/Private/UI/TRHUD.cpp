@@ -12,7 +12,7 @@ void ATRHUD::BeginPlay()
 		if (RootWidget)
 		{
 			RootWidget->AddToPlayerScreen(); RootWidget->SetPositionInViewport(FVector2D(16.0, 16.0));
-			RootWidget->SetDesiredSizeInViewport(FVector2D(650.0, 330.0));
+			RootWidget->SetDesiredSizeInViewport(FVector2D(700.0, 450.0));
 		}
 	}
 #endif

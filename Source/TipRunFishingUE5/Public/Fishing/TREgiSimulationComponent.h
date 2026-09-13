@@ -22,6 +22,7 @@ public:
 	// Fishing owns operation state; numeric authority lives here.
 	FTREgiSnapshot BuildSnapshot(ETRFishingState FishingState) const;
 	void Reset();
+	bool IsTransientComplete() const { return ResidualLiftMps <= FrozenEquipment.Parameters.TensionLiftCompletionMps; }
 private:
 	FTREgiSnapshot Snapshot;
 	FTREquipmentSnapshot FrozenEquipment;
@@ -30,4 +31,5 @@ private:
 	int64 HighestCastValue = 0;
 	bool bActive = false;
 	bool bOnBottom = false;
+	double ResidualLiftMps = 0.0;
 };

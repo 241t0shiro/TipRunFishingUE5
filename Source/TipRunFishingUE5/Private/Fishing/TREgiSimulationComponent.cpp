@@ -38,6 +38,8 @@ bool UTREgiSimulationComponent::InitializeCast(const FTREgiSnapshot& Initial, co
 	bActive = true;
 	// Contact is reported on the first step even if initialized exactly on the seabed.
 	bOnBottom = false;
+	ResidualLiftMps = 0.0;
+	Snapshot.DepthVelocityMps = 0.0f; Snapshot.bSurfaceContact = Initial.DepthM == 0.0f; Snapshot.bBottomContact = false;
 	return true;
 }
 ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, const FTRSimTime& Time,
@@ -48,17 +50,27 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 		(GetOwner() && GetOwner()->IsActorBeingDestroyed())) { return ETREgiStepEvent::None; }
 	const bool bSupportedState = Action.FishingState == ETRFishingState::FreeFall ||
 		Action.FishingState == ETRFishingState::BottomContact || Action.FishingState == ETRFishingState::TensionFall ||
-		Action.FishingState == ETRFishingState::Stay;
+		Action.FishingState == ETRFishingState::Stay || Action.FishingState == ETRFishingState::Jerking || Action.FishingState == ETRFishingState::Retrieving;
 	const bool bSupportedLine = Action.LineMode == ETRLineMode::Payout ||
-		Action.LineMode == ETRLineMode::ControlledPayout || Action.LineMode == ETRLineMode::Locked;
+		Action.LineMode == ETRLineMode::ControlledPayout || Action.LineMode == ETRLineMode::Locked || Action.LineMode == ETRLineMode::ReelIn;
 	if (!Time.IsValid() || !ValidEgiOcean(Ocean) || Ocean.SampleTick != Time.TickIndex || Boat.Tick != Time.TickIndex ||
 		Boat.RodTipM.ContainsNaN() || Boat.PositionM.ContainsNaN() || Boat.VelocityMps.ContainsNaN() ||
 		!FMath::IsFinite(Boat.HeadingRad) || !bSupportedState || !bSupportedLine ||
-		!FMath::IsFinite(Action.SinkScale) || Action.SinkScale <= 0.0f || Action.LiftMps != 0.0f || Action.ReelMps != 0.0f)
+		!FMath::IsFinite(Action.SinkScale) || Action.SinkScale <= 0.0f || !FMath::IsFinite(Action.LiftMps) || Action.LiftMps < 0.0f ||
+		!FMath::IsFinite(Action.ReelMps) || Action.ReelMps < 0.0f ||
+		(Action.LiftMps > 0.0f && Action.FishingState != ETRFishingState::Jerking) ||
+		(Action.ReelMps > 0.0f && Action.LineMode != ETRLineMode::ReelIn))
 	{
 		return ETREgiStepEvent::EnvironmentInvalid;
 	}
 	const FTRFishingParameters& P = FrozenEquipment.Parameters;
+	double NextResidual = 0.0;
+	if (Action.FishingState == ETRFishingState::Jerking) { NextResidual = Action.LiftMps; }
+	else if (Action.FishingState == ETRFishingState::TensionFall)
+	{
+		NextResidual = ResidualLiftMps * std::exp(-P.TensionLiftDecayPerS * Time.StepSeconds);
+		if (NextResidual <= P.TensionLiftCompletionMps) { NextResidual = 0.0; }
+	}
 	const double RateDt = double(FrozenEquipment.HorizontalResponsePerS) * Time.StepSeconds;
 	if (!FMath::IsFinite(RateDt)) { return ETREgiStepEvent::EnvironmentInvalid; }
 	// Boat velocity is not added to current. Its moving rod tip supplies the pull constraint.
@@ -66,7 +78,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	FVector Velocity = Snapshot.VelocityMps;
 	Velocity.X += (Ocean.CurrentMps.X - Velocity.X) * Alpha;
 	Velocity.Y += (Ocean.CurrentMps.Y - Velocity.Y) * Alpha;
-	Velocity.Z = -double(FrozenEquipment.SinkSpeedMps) * Action.SinkScale;
+	Velocity.Z = -double(FrozenEquipment.SinkSpeedMps) * Action.SinkScale + NextResidual;
 	const double Speed = std::hypot(Velocity.X, Velocity.Y, Velocity.Z);
 	if (!FMath::IsFinite(Speed)) { return ETREgiStepEvent::EnvironmentInvalid; }
 	if (Speed > P.MaxEgiSpeedMps) { Velocity *= double(P.MaxEgiSpeedMps) / Speed; }
@@ -75,9 +87,12 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	Candidate += Velocity * Time.StepSeconds;
 	const double PayoutMps = Action.LineMode == ETRLineMode::Payout ? P.PayoutMps :
 		(Action.LineMode == ETRLineMode::ControlledPayout ? P.TensionPayoutMps : 0.0);
-	const double TrialLineM = double(Snapshot.LineLengthM) + PayoutMps * Time.StepSeconds;
+	const double TrialLineM = double(Snapshot.LineLengthM) + (PayoutMps - double(Action.ReelMps)) * Time.StepSeconds;
 	if (Candidate.ContainsNaN() || !FMath::IsFinite(TrialLineM)) { return ETREgiStepEvent::EnvironmentInvalid; }
-	const float LineM = float(FMath::Clamp(TrialLineM, double(P.MinLineM), double(P.MaxLineLengthM)));
+	const double MinimumLineM = Action.LineMode == ETRLineMode::ReelIn ?
+		FMath::Max(double(P.MinLineM), Boat.RodTipM.Z - Ocean.SurfaceZ_M) : double(P.MinLineM);
+	if (MinimumLineM > P.MaxLineLengthM) { return ETREgiStepEvent::EnvironmentInvalid; }
+	const float LineM = float(FMath::Clamp(TrialLineM, MinimumLineM, double(P.MaxLineLengthM)));
 	// Numerical convergence limits, not balance coefficients. Never commit a partial solution.
 	constexpr int32 MaxConstraintIterations = 4;
 	constexpr double ConstraintToleranceM = 1.e-5;
@@ -107,6 +122,23 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 		}
 		DepthM = float(FMath::Clamp(double(Destination.SurfaceZ_M) - Candidate.Z, 0.0, double(Destination.BottomDepthM)));
 		Candidate.Z = double(Destination.SurfaceZ_M) - DepthM;
+		if (Action.LineMode == ETRLineMode::ReelIn)
+		{
+			// Exact intersection with the depth-clamped horizontal plane, including the
+			// tangent point at minimum retrieval length. Avoid asymptotic surface projection.
+			const double Height = Boat.RodTipM.Z - Candidate.Z;
+			const double RadiusSquared = double(LineM) * LineM - Height * Height;
+			const FVector2D OffsetXY(Candidate.X - Boat.RodTipM.X, Candidate.Y - Boat.RodTipM.Y);
+			if (RadiusSquared >= 0.0 && OffsetXY.SizeSquared() > RadiusSquared)
+			{
+				const FVector2D Limited = OffsetXY.GetSafeNormal() * FMath::Sqrt(RadiusSquared);
+				Candidate.X = Boat.RodTipM.X + Limited.X; Candidate.Y = Boat.RodTipM.Y + Limited.Y;
+				Query.PositionXYM = FVector2D(Candidate.X, Candidate.Y);
+				Destination = SampleDestination(Query);
+				if (!ValidEgiOcean(Destination) || Destination.SampleTick != Time.TickIndex ||
+					DepthM > Destination.BottomDepthM || Destination.SurfaceZ_M != Ocean.SurfaceZ_M) { return ETREgiStepEvent::EnvironmentInvalid; }
+			}
+		}
 		const FVector FinalOffset = Candidate - Boat.RodTipM;
 		const double FinalDistanceM = std::hypot(FinalOffset.X, FinalOffset.Y, FinalOffset.Z);
 		if (FMath::IsFinite(FinalDistanceM) && FinalDistanceM <= double(LineM) + ConstraintToleranceM)
@@ -130,7 +162,11 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	const bool bReachedBottom = DepthM >= Destination.BottomDepthM;
 	const ETREgiStepEvent Event = bReachedBottom && !bOnBottom ? ETREgiStepEvent::ReachedBottom :
 		(!bReachedBottom && bOnBottom ? ETREgiStepEvent::LeftBottom : ETREgiStepEvent::None);
+	const double DepthSpeed = (double(DepthM) - Snapshot.DepthM) / Time.StepSeconds;
+	if (!FMath::IsFinite(DepthSpeed) || FMath::Abs(DepthSpeed) > MAX_flt) { return ETREgiStepEvent::EnvironmentInvalid; }
 	Snapshot.PositionXYM = FVector2D(Candidate.X, Candidate.Y);
+	Snapshot.DepthVelocityMps = float(DepthSpeed);
+	Snapshot.bBottomContact = bReachedBottom; Snapshot.bSurfaceContact = DepthM == 0.0f;
 	Snapshot.DepthM = DepthM;
 	Snapshot.VelocityMps = CorrectedVelocity;
 	Snapshot.LineLengthM = LineM;
@@ -140,6 +176,12 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	Snapshot.Tick = Time.TickIndex;
 	LastSurfaceZ_M = Destination.SurfaceZ_M;
 	bOnBottom = bReachedBottom;
+	ResidualLiftMps = NextResidual;
+	if (Action.FishingState == ETRFishingState::Retrieving && Action.ReelMps > 0.0f && DepthM <= P.RetrievalToleranceM &&
+		FVector2D(Candidate.X - Boat.RodTipM.X, Candidate.Y - Boat.RodTipM.Y).Size() <= P.RetrievalToleranceM)
+	{
+		bActive = false; return ETREgiStepEvent::Retrieved;
+	}
 	return Event;
 }
 FTREgiSnapshot UTREgiSimulationComponent::BuildSnapshot(ETRFishingState FishingState) const
@@ -151,4 +193,5 @@ FTREgiSnapshot UTREgiSimulationComponent::BuildSnapshot(ETRFishingState FishingS
 void UTREgiSimulationComponent::Reset()
 {
 	bActive = false; bOnBottom = false; Snapshot = {}; FrozenEquipment = {}; LastSurfaceZ_M = 0.0f;
+	ResidualLiftMps = 0.0;
 }

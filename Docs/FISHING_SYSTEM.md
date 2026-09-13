@@ -1,8 +1,7 @@
 # 釣りシステム技術設計
 
-2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
 
-2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況はM08記録を参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
 関連: [全体正本・要決定事項](GAME_DESIGN.md)、[BITE・AI](SQUID_AI.md)。本書の数式と未指定操作は技術提案/暫定案。実測の釣りモデルと称さない。
 
@@ -247,3 +246,31 @@ BlueprintAssignable: OnFishingStateChanged、OnBottomContact、OnHookResolved、
 | F19 | 同じ狙いレンジ付近で釣合い維持/上昇/下降を比較（M10） | 補正後深度速度と接触状態を正しく出力、全ケースが過渡処理完了後Stayへ進む。維持指標/BITE率の比較はS19/S20で検証 |
 
 数値許容誤差は試験側で明示（例: 静水直線積分0.001m）。ラインと海底の両制約に解がない試験も含める。確率試験と操作試験の乱数を混在させない。
+
+## 8. M10の操作・装備・観測契約（2026-09-13）
+
+M10完了。第2〜4節の最新D03/D04/D08に移行した。M06〜M09の記録中にある全セッションロック、操作未対応、旧設定撤去予定は過去の履歴であり、本節が現在の実装を示す。
+
+- FishingComponentが操作と回数を所有し、Sessionの固定コマンド受理からHandleCommandへ渡す。入力→操作時間満了確認→既存Boat/Oceanを使ったEgi積分→状態確定→Publishの順。Shakuriのenum名はJerkingを維持する。
+- 1入力で1動作を開始。動作中のJerkはint64のPendingJerkCountへ予約し、動作終了後のTensionFallで次の1件を取り出す。予約の途中にStayを挟まない。JerkDurationSは既存の秒→整数Tick換算を使用し、開始から所定Tick数だけJerkLiftMps/JerkReelMpsを適用する。並列合成・固定回数の自動動作・瞬間リフトの二重加算はない。
+- JerkCount/SeriesJerkCountは実際の開始時に増加する。Stayで一連の回数をStayPenaltyJerkCountへ固定し、次の実Jerkで新しい一連を開始する。Fallだけでは前の適用回数を消さない。Fall/Retrieve/中断は未実行予約を取り消す。ゲーム上の回数上限はなく、int64演算の飽和/表現限界時の防御はゲームバランスの上限とは区別する。
+- TensionFallではEgiSimulationが残留リフト速度を`ResidualLift *= exp(-TensionLiftDecayPerS * dt)`で減衰し、そのステップの沈下に上向き速度として加える。残留速度が`TensionLiftCompletionMps`以下になったら0へ確定し、Fishingへ完了を返す。完了Tickで即Stay（予約Jerk・有効入力・海底接触を優先）。残留リフトがない明示TensionFall要求は、ライン制御を1固定ステップ処理した時点で完了できる。
+- 新しい減衰率・完了速度はFishingTuningの正値/有限数を要求し、完了速度はJerkLiftMps未満とする。Prototypeは12/sと0.05m/sのゲーム近似。製品値ではない。深度速度ゼロ、無入力時間、RangeError、安定達成は完了条件にしない。シャクリ時間以外のStay待機タイマーはない。
+- Stayは既存ライン長をLockedで維持し、M08の潮応答・重量沈下・移動した竿先による牽引を継続する。Re-FallでFreeFall/Payoutへ戻る。FreeFall/Bottomは無入力だけではStay化しない。底に接触したままTensionFallを要求してもBottomContactを優先する。
+- RetrieveStartedでRetrieving/ReelIn、RetrieveStoppedで巻取り速度だけ0へ戻す。解放後もRetrievingに留まり、潮・重量・ライン制約は継続する。再押下で巻取り再開。最低ライン長は設定MinLineMと竿先の海面上高さの大きい方とし、海面補正時はライン球と水平面の交差円へ水平位置を制限する。球が海面に接する極限でも反復収束待ちや海上への貫通を避ける。
+- 回収完了は巻取り中、深度と竿先からの水平距離がそれぞれRetrievalToleranceM以内になった時に1回だけRetrievedを返す。SessionがCast終了・論理的船上帰還・前投の結果と装備コピーを確定し、数値エギ/描画Actorを解放する。Resultから既存NextCastでReadyへ進むと装備変更を許可する。EndFishingは不要。操作手順はUI_SPECのM10追記を参照。
+- StartFishingは装備をロックしない。TrySetEquipmentは船上・活動中Castなし・Ready・非Pause・固定更新外を共通条件とし、M02検証とメッシュ解決で次投候補を準備する。Deploy受理と装備コピー/ロックを同じ処理で確定。候補は外部から書換不能な値コピーで、保持したメッシュの有効性も再確認する。Tick内の同期ロードはない。
+- Abort/EndFishing/環境異常で投を終えただけでは船上帰還を作らない。Abort後にReadyへ戻しても装備変更・再投入は拒否する。この場合のPrototype再開はWorld/Playの再起動とし、架空の帰還操作を追加しない。CastIdは同じSession内で再利用しない。
+- `GetLastResultEquipment()`で前投の凍結した総重量・係数を取得できる。NextCast/次投の装備変更/Deployで前投の結果を上書きしない（次の終端結果で更新）。OnCastCompletedは通常Publishで1回通知し、EndFishingで登録を解除する場合は残った終端通知を終了処理で1回だけ配送する。
+
+### 後続レンジ評価へ渡す値
+
+FTREgiSnapshotへDepthVelocityMps（補正後DepthM差/固定dt、下向き正）、bBottomContact、bSurfaceContact、JerkCount、SeriesJerkCount、PendingJerkCount、StateEnteredTick、RangeObservationSecondsを追加した。既存CastId/Tick/世界VelocityMps/ライン長・角度/張力/StayPenaltyJerkCountも保持する。世界速度には既存速度上限があるため、深度速度を単に`-VelocityMps.Z`で代用しない。
+
+RangeObservationSecondsは連続したTensionFall/Stayの観測時間であり、安定していた秒数・RangeStabilityではない。TF→Stayでは保持、両状態から離れたら0、新Castでも0、Pause中は停止する。安定の閾値・速度履歴・イカ好適深度に対する誤差・BITE倍率はM11/M12が評価する。今回未定義の安定秒数やスコアを仮値で埋めない。読取Snapshotは時計・数値・入力を変更しない。
+
+### 移行・試験
+
+AutoStayDelaySを宣言・時刻換算・データ検証から削除し、旧前提の試験を置換した。汎用秒→Tick試験は維持。既存DA_TR_FishingTuning_PrototypeをUEで再保存し、未知の旧プロパティを除去、新係数だけを追加した。既存重量曲線・釣り設定は保持し、M02全6件と別プロセスの再読込で確認。Content内に旧項目名が残らないことも確認した。
+
+M10はF06/F07/F08/F16/F17/F18/F19と設定移行を含む8試験成功。1/10/11/20入力、予約取消、一連の保持/更新、無入力Bottom、同Tick入力優先、回収/解放/再開、0g/次投90g、同Tick装備変更拒否、次投メッシュ差替え、旧Cast、Pause/フォーカス、30/60/120fpsの状態列・結果時刻一致、深度速度・境界接触・読取非破壊を確認した。詳細な結果と回帰内訳はROADMAPを参照。M11以降のAI/確率/Hook/Fightは未実装、実測校正・PIE目視・実機入力・パッケージ起動も未実施。

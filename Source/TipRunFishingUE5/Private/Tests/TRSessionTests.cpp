@@ -6,32 +6,25 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRSessionLockTest, "TipRun.M06.F16EquipmentLoc
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FTRSessionLockTest::RunTest(const FString& Parameters)
 {
-	FTRTestSession F;
-	if (!F.Initialize(*this)) { return false; }
+	FTRTestSession F; if (!F.Start(*this)) { return false; }
 	TArray<FText> Errors;
-	TestTrue(TEXT("Initial 3.5 egi"), F.Session->GetEquipmentSnapshot().EgiId == TREquipment::InitialEgiId());
-	TestEqual(TEXT("Initial 35 g with explicit no-sinker test selection"), F.Session->GetEquipmentSnapshot().TotalMassG, 35.0f);
-	TestTrue(TEXT("Before start may change"), F.Session->TrySetEquipment(TEXT("Egi_4"), TEXT("Sinker_5"), Errors) == ETRCommandResult::Accepted);
-	TestTrue(TEXT("Start"), F.Session->StartFishing(Errors) == ETRCommandResult::Accepted);
-	TestTrue(TEXT("Duplicate start refused"), F.Session->StartFishing(Errors) == ETRCommandResult::RejectedInvalidState);
-	TestTrue(TEXT("Ready after start stays locked"), F.Session->TrySetEquipment(TEXT("Egi_3"), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::RejectedBusy);
-	F.Deploy();
-	TestTrue(TEXT("During cast stays locked"), F.Session->TrySetEquipment(TEXT("Egi_3"), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::RejectedBusy);
-	const FTRCastId First = F.Session->GetCastId();
-	TestTrue(TEXT("Explicit abort allows next-cast preparation without implementing retrieval"), F.Session->AbortCast(First) == ETRCommandResult::Accepted);
-	TestTrue(TEXT("Result stays locked"), F.Session->IsEquipmentLocked());
-	F.Session->SubmitCommand(ETRFishingCommandType::NextCast, First); F.Step();
-	TestTrue(TEXT("Next cast Ready"), F.Session->Fishing->GetState() == ETRFishingState::Ready);
-	TestTrue(TEXT("Next Ready still locked"), F.Session->TrySetEquipment(TEXT("Egi_3"), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::RejectedBusy);
-	F.Deploy();
-	TestTrue(TEXT("Cast IDs increase"), F.Session->GetCastId().Value > First.Value);
-	TestEqual(TEXT("Locked equipment carried to next cast"), F.Session->GetEquipmentSnapshot().TotalMassG, 45.0f);
-	F.Session->EndFishing();
-	TestFalse(TEXT("End releases lock"), F.Session->IsEquipmentLocked());
-	TestTrue(TEXT("End allows equipment changes"), F.Session->TrySetEquipment(TEXT("Egi_3"), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::Accepted);
+	TestFalse(TEXT("Start does not lock equipment"), F.Session->IsEquipmentLocked());
+	TestTrue(TEXT("Duplicate start rejected"), F.Session->StartFishing(Errors) == ETRCommandResult::RejectedInvalidState);
+	TestTrue(TEXT("Initial Ready allows change"), F.Session->TrySetEquipment(TEXT("Egi_4"), TEXT("Sinker_5"), Errors) == ETRCommandResult::Accepted);
+	F.Deploy(); TestTrue(TEXT("Deploy locks"), F.Session->IsEquipmentLocked());
+	TestTrue(TEXT("Cast change rejected"), F.Session->TrySetEquipment(TEXT("Egi_3"), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::RejectedBusy);
+	const auto First = F.Session->GetCastId();
+	if (!TestTrue(TEXT("Retrieve unlocks next preparation"), F.ReturnToReady())) { return false; }
+	TestTrue(TEXT("Can change next equipment"), F.Session->CanChangeEquipment());
+	TestTrue(TEXT("Change next equipment"), F.Session->TrySetEquipment(TEXT("Egi_3"), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::Accepted);
+	TestEqual(TEXT("Previous result equipment preserved"), F.Session->GetLastResultEquipment().TotalMassG, 45.0f);
+	F.Deploy(); TestTrue(TEXT("New cast identity and lock"), F.Session->GetCastId().Value > First.Value && F.Session->IsEquipmentLocked());
+	TestEqual(TEXT("New weight"), F.Session->GetEquipmentSnapshot().TotalMassG, 30.0f);
+	F.Session->AbortCast(F.Session->GetCastId()); F.Session->ResetCast();
+	TestFalse(TEXT("Abort Ready is not onboard preparation"), F.Session->CanChangeEquipment());
+	F.Session->EndFishing(); TestFalse(TEXT("End cannot invent onboard return"), F.Session->CanChangeEquipment());
 	return true;
 }
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRSessionDeployTest, "TipRun.M06.DeploymentAndCastIdentity",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FTRSessionDeployTest::RunTest(const FString& Parameters)
@@ -65,9 +58,9 @@ bool FTRSessionDeployTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Result not rewritten"), F.Session->GetLastResult().ElapsedSimSeconds, Result.ElapsedSimSeconds);
 	F.Session->EndFishing();
 	TArray<FText> Errors;
-	TestTrue(TEXT("Restart fishing"), F.Session->StartFishing(Errors) == ETRCommandResult::Accepted);
+	TestTrue(TEXT("Restart without onboard return rejected"), F.Session->StartFishing(Errors) == ETRCommandResult::RejectedInvalidState);
 	F.Deploy();
-	TestTrue(TEXT("End/start does not reuse CastId"), F.Session->GetCastId().Value > Egi.CastId.Value);
+	TestEqual(TEXT("Rejected restart preserves last identity"), F.Session->GetCastId().Value, Egi.CastId.Value);
 	return true;
 }
 
@@ -75,35 +68,25 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRSessionFrozenTest, "TipRun.M06.FrozenEquipme
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FTRSessionFrozenTest::RunTest(const FString& Parameters)
 {
-	FTRTestSession F;
-	if (!F.Start(*this)) { return false; }
-	const double Original = F.Session->GetEquipmentSnapshot().Parameters.AutoStayDelayS;
-	F.Tuning->Parameters.AutoStayDelayS = 2.0;
-	F.Deploy();
-	TestEqual(TEXT("Editor change cannot alter locked tuning"), F.Session->GetEquipmentSnapshot().Parameters.AutoStayDelayS, Original);
-	F.Session->SubmitCommand(ETRFishingCommandType::EndFishing, F.Session->GetCastId(), F.Sim()->GetSimulationTime().TickIndex + 1);
-	F.Session->AbortCast(F.Session->GetCastId());
-	TestEqual(TEXT("Abort clears old registration queue"), F.Sim()->GetQueuedCommandCount(), 0);
-	F.Session->ResetCast(); F.Deploy(); F.Step(2);
-	TestTrue(TEXT("Old queued end cannot end new cast"), F.Session->IsEquipmentLocked());
-	TestEqual(TEXT("Next cast keeps frozen tuning"), F.Session->GetEquipmentSnapshot().Parameters.AutoStayDelayS, Original);
-	F.Session->EndFishing();
+	FTRTestSession F; if (!F.Start(*this)) { return false; }
+	const double Original = F.Session->GetEquipmentSnapshot().Parameters.JerkDurationS;
+	F.Tuning->Parameters.JerkDurationS = 2.0; F.Deploy();
+	TestEqual(TEXT("Prepared candidate frozen through Deploy"), F.Session->GetEquipmentSnapshot().Parameters.JerkDurationS, Original);
+	F.Session->SubmitCommand(ETRFishingCommandType::EndFishing, F.Session->GetCastId(), F.Sim()->GetSimulationTime().TickIndex + 10000);
+	if (!TestTrue(TEXT("Retrieve and prepare"), F.ReturnToReady())) { return false; }
+	TestEqual(TEXT("Cast end clears old queue"), F.Sim()->GetQueuedCommandCount(), 0);
 	TArray<FText> Errors;
-	TestTrue(TEXT("Restart validates new settings"), F.Session->StartFishing(Errors) == ETRCommandResult::Accepted);
-	TestEqual(TEXT("New fishing session uses edited settings"), F.Session->GetEquipmentSnapshot().Parameters.AutoStayDelayS, 2.0);
+	F.Session->TrySetEquipment(TREquipment::InitialEgiId(), TREquipment::NoSinkerId(), Errors);
+	TestEqual(TEXT("Explicit candidate preparation reads edited tuning"), F.Session->GetEquipmentSnapshot().Parameters.JerkDurationS, 2.0);
 	F.Session->SubmitCommand(ETRFishingCommandType::Deploy, F.Session->GetCastId());
 	F.Sim()->SetSimulationPaused(true); F.Step(60); F.Sim()->SetSimulationPaused(false); F.Step();
-	TestTrue(TEXT("Paused input does not replay deployment"), F.Session->Fishing->GetState() == ETRFishingState::Ready);
-	F.Deploy();
-	const int64 Now = F.Sim()->GetSimulationTime().TickIndex;
+	TestTrue(TEXT("Paused deploy discarded"), F.Session->Fishing->GetState() == ETRFishingState::Ready);
+	F.Deploy(); const int64 Now = F.Sim()->GetSimulationTime().TickIndex;
 	F.Session->SubmitCommand(ETRFishingCommandType::EndFishing, F.Session->GetCastId(), Now + 2);
-	F.Session->SubmitCommand(ETRFishingCommandType::Jerk, F.Session->GetCastId(), Now);
-	F.Step(3);
-	TestTrue(TEXT("Future tick with earlier sequence is processed in Tick/Sequence order"),
-		!F.Session->IsEquipmentLocked() && F.Session->GetLastCommandResult() == ETRCommandResult::Accepted);
+	F.Session->SubmitCommand(ETRFishingCommandType::Jerk, F.Session->GetCastId(), Now); F.Step(3);
+	TestTrue(TEXT("Earlier sequence at future tick processed"), !F.Session->IsAcceptingPlayerInput() && F.Session->GetLastCommandResult() == ETRCommandResult::Accepted);
 	return true;
 }
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRSessionInvalidTest, "TipRun.M06.InvalidInputsAndDependencies",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FTRSessionInvalidTest::RunTest(const FString& Parameters)

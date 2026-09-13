@@ -220,7 +220,7 @@ bool FTRLineSessionTest::RunTest(const FString& Parameters)
 	const auto Old = F.Session->Fishing->GetSnapshot();
 	TestTrue(TEXT("Real Session integrates current and payout"), Old.VelocityMps.X > 0.0 && Old.LineLengthM > 1.5f);
 	TWeakObjectPtr<ATREgiActor> OldVisual = F.Session->GetEgiActor();
-	F.Session->AbortCast(Old.CastId); F.Session->ResetCast(); F.Deploy();
+	if (!TestTrue(TEXT("Retrieve before next cast"), F.ReturnToReady())) { return false; } F.Deploy();
 	TestTrue(TEXT("Old visual released"), !OldVisual.IsValid() || OldVisual->IsActorBeingDestroyed());
 	FTRSimTime T = F.Sim()->GetSimulationTime(); FTRBoatSnapshot B = F.Boat->GetBoatSnapshot(); B.Tick = T.TickIndex;
 	FTROceanQuery Q; Q.SimTick = T.TickIndex;

@@ -6,7 +6,7 @@
 #include "TRFishingTuningDataAsset.generated.h"
 
 // All unspecified zeros mean unconfigured, not product balance.
-// Only the three approved timing values have usable defaults.
+	// Only the approved Hook timing values have usable defaults.
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRFishingParameters
 {
@@ -46,7 +46,10 @@ struct TIPRUNFISHINGUE5_API FTRFishingParameters
 	float JerkReelMps = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
-	double AutoStayDelayS = 0.8;
+	double TensionLiftDecayPerS = 0.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
+	float TensionLiftCompletionMps = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
 	float TensionReferenceM = 0.0f;

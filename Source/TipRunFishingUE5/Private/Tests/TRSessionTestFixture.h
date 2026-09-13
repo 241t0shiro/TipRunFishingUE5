@@ -94,6 +94,13 @@ namespace
 		}
 		void Step(int32 Count = 1) { for (int32 I = 0; I < Count; ++I) { Sim()->AdvanceFrame(1.0 / 60.0); } }
 		void Deploy() { Session->SubmitCommand(ETRFishingCommandType::Deploy, Session->GetCastId()); Step(); }
+		bool ReturnToReady()
+		{
+			Session->SubmitCommand(ETRFishingCommandType::RetrieveStarted, Session->GetCastId());
+			for (int32 I = 0; I < 12000 && Session->Fishing->GetState() != ETRFishingState::Result; ++I) { Step(); }
+			if (!Session->IsEgiOnboard()) { return false; }
+			return Session->ResetCast() == ETRCommandResult::Accepted;
+		}
 	};
 }
 

@@ -1,10 +1,9 @@
 # ロードマップ・Codex向けMVP実装順序
 
-2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
 
-2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況は下記完了記録を参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M09は完了済み。M10〜M18は未着手。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は完了済み。M11〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
 
@@ -41,7 +40,7 @@
 | 08 M07（完了） | EgiSimulationの鉛直落下と海底制約、描画用EgiActor | M03/05/06 | F02/F03/F12のM07範囲を含む6試験と依存回帰8件成功。仮エギの着底座標、UHT/C++ビルド成功。範囲・未検証は下記記録参照 |
 | 09 M08（完了） | 水平潮応答、ライン長/球面制約、船追従 | M07、D02/D05 | F04/F05/B07を含む7試験と依存回帰14件成功、UHT/C++ビルド成功。制御入力による検証範囲は下記参照 |
 | 10 M09（完了） | Enhanced Input接続と最小デバッグHUD（状態/深度/装備） | M06/07、D12 | U02を含む7試験＋回帰13件成功、各試験の警告・エラー0。UHT生成/C++/Development Editor Win64成功。目視・実機未検証は下記参照 |
-| 11 M10 | 連続シャクリと一連回数、Shakuri→TensionFall→Stay、再Fall、回収、一投単位の装備ロック/次投変更、レンジ評価用Snapshot、旧タイマー/設定/テスト撤去 | M08/09、D03/D04/D08/D13 | F06/F07/F08/F16/F17/F18/F19、処理終了で即Stay、上昇/下降でも移行、上限なし、回数保持/新しい一連リセット |
+| 11 M10（完了） | 連続シャクリと一連回数、Shakuri→TensionFall→Stay、再Fall、回収、一投単位の装備ロック/次投変更、レンジ評価用Snapshot、旧タイマー/設定/テスト撤去 | M08/09、D03/D04/D08/D13 | F06/F07/F08/F16/F17/F18/F19を含む8試験と回帰32件成功。UHT/C++/Development Editor Win64成功。詳細・未検証は下記記録 |
 | 12 M11 | テストイカ1体、3段階活性、距離/RangeError/RangeStability/RangeHoldScore/Exposure/STAY時間、評価用DataAsset | M10、D01/D07 | S01/S13/S14/S19、維持指標検証、季節データ不要 |
 | 13 M12 | Attack/Bite、10回超減衰、Caution/Cooldown、仲裁、Hook最小API | M11、D03/D07 | S02〜S04/S07/S08/S15〜S17/S20。非StayのBITEゼロ、維持良好ほど高確率、回数に応じ強い減衰 |
 | 14 M13 | Hook受付初期0.10/0.55秒、早/適正/遅判定、仮Cue1種 | M12、D06、D11暫定 | S05/S06/S09/S11/S12、S18のCue部分。HIT/MISS重複なし |
@@ -167,6 +166,56 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 | 設計記録更新 | `Docs/GAME_DESIGN.md`、`Docs/UI_SPEC.md`、`Docs/ROADMAP.md` |
 
 表中のPublic/Privateで始まる省略パスは、すべて`Source/TipRunFishingUE5/`配下。
+### M10完了記録（2026-09-13）
+
+- M10は合格、M11へ進める状態。M11〜M18は未着手。操作の技術契約はFISHING_SYSTEM第8節、入力と次投変更手順はUI_SPEC第8節に記録した。Squid AI/Attack/Bite/Hook/Fight/RangeError・RangeStability評価は実装していない。
+- FishingComponentに1入力1シャクリ、予約・一連の回数、Jerking→TensionFall→Stay、Re-Fall、Retrieve開始/停止を追加。EgiSimulationへリフトと巻取り、残留リフトの指数減衰・完了、回収終点と1回だけのRetrieved、補正後深度速度・海底/海面接触を追加した。海底接触中のTensionFall要求はBottomを優先する。M08の潮応答・重量沈下・船ドリフト/ライン制約を継続して使用する。
+- SessionはStartFishingでロックせず、固定更新外の候補検証・メッシュ準備とDeploy時のコピー/ロックを分離。回収終了で船上帰還/結果/前投装備を確定し、NextCastでReadyへ進むと変更可。次のDeployで新重量・係数・メッシュを使い再ロックする。Abort/EndFishingは船上帰還を代用しない。古いCast/登録世代の入力を拒否し、終端通知を一度だけ発行する。
+- SnapshotにDepthVelocityMps、bBottomContact/bSurfaceContact、投内/一連/予約のシャクリ回数、StateEnteredTick、RangeObservationSecondsを追加。後者はTF/Stayの観測時間であり安定時間の判定ではない。世界速度と深度速度の符号・補正/速度上限を区別し、コピー取得で正本を更新しない。Controllerに内部確認用TRSetEquipment Execを追加し、HUDへ今回の回数・接触・装備変更可否を表示する。
+- AutoStayDelaySの宣言/検証/時刻換算と旧前提の試験を撤去。既存Prototype FishingTuningをUEのSavePackageで移行し、新しいTensionLiftDecayPerS=12/s、TensionLiftCompletionMps=0.05m/sだけを試験値として追加した。既存の重量曲線・設定を維持し、保存ファイルに旧項目名がないことを確認した。通常のAutomationは読込だけで、移行は明示の`-TRMigrateM10Prototype`付き`TipRun.M10.TuningMigration`で実行した。
+- M10 Automation 8件成功: TuningMigration、F06OneInputOneJerk、F07F18ReFallAndSeries、F08InputPriorityAndCancellation、F16RetrieveEquipmentLoop、F17PauseFocusAndSnapshot、FixedFrameRatesAndResults、F19DepthVelocityAndContact。1/10/11/20シャクリ・予約取消、TF完了・Stay再操作、海底への再Fall、回収開始/停止/完了、0g/次投90g、同Tickの装備変更拒否、次投メッシュ更新、前投結果の保持、古いCast、Pause/フォーカス、30/60/120fpsの状態列と終了時刻一致、深度速度・接触・読取非破壊を確認。
+- 必要な回帰は計32件成功: M07全6件、M08全7件、M09全7件、改訂D08に期待値を合わせたM06全5件、移行対象M02全6件、M01.TimeConversionの1件。M07/M08/M09の再投寿命試験はAbortを架空の船上帰還として使わず、Retrieve完了を経て次投を開始する構成へ修正。M09のRetrieve受付期待値も実装済みに更新した。旧仕様の成功を新仕様の成功として流用していない。
+- 初回は全40件成功。最終レビュー後に海底接触優先/終端通知処理と同Tick変更・メッシュ・重複通知の検証を補強し、影響するM10＋M06〜M09の33件を再実行して全件成功。変更のないM02/汎用時刻7件は初回成功を採用。すべての試験エラー・警告は0件、プロセス終了コード0。Prototype移行単独試験も成功。
+- UE5.8.2 / MSVC14.51.36257 / Windows SDK10.0.22621.0。初回UHTで14生成ファイルを書き出し、15 C++コンパイルアクションとDLLリンクを含む18アクション成功。最終もUHT、変更C++の実コンパイル、DLLリンク、Development Editor Win64ビルド成功。up-to-date判定だけではない。今回コンパイル/試験エラーは発生していない。
+- M10変更由来の残存警告なし。既存MSVC推奨範囲外、Unreal5_6互換include順序、Engine起動時のCondition failed（Error表記）19件、Editorレイアウト警告1件、対象外SDK不足は残る。これらを各試験のエラー・警告0件と区別する。Win64 SDKはVALID。
+- 証跡: `Saved/Logs/M10Build.log`、`M10BuildFinal.log`、`M10Migration.log`、`M10Tests.log`、`M10TestsFinal.log`。結果: `Saved/Automation/M10Migration/index.json`、`M10/index.json`、`M10Final/index.json`（いずれもGit除外）。試験結果JSONとUHT/Compile/Linkの実処理を確認した。
+- 未検証: PIE目視、実キーボード/ゲームパッド・コンソール操作、解像度/DPI、Windowsパッケージ、実測/製品バランス校正。今回合格は固定更新のコード・データ・自動試験の範囲。製品値を確定せず、レンジの安定判定・BITE評価はM11/M12へ残す。
+- 既存の`TipRunFishingUE5.uproject`差分と未追跡`equipment_revision.patch`は保持し、M10の変更一覧から除外。Config・Build.cs/Target.cs・Boat/Ocean実装・既存Mapには変更なし。AGENTS/設計書の更新はM10の実装状態と技術契約の記録であり、後続AIのゲーム仕様を変更していない。
+
+#### M10変更ファイル一覧
+
+計29件。
+
+- `AGENTS.md`
+- `Content/TipRun/Prototype/Data/DA_TR_FishingTuning_Prototype.uasset`
+- `Docs/FISHING_SYSTEM.md`
+- `Docs/GAME_DESIGN.md`
+- `Docs/ROADMAP.md`
+- `Docs/SQUID_AI.md`
+- `Docs/UI_SPEC.md`
+- `Source/TipRunFishingUE5/Private/Data/TREquipmentData.cpp`
+- `Source/TipRunFishingUE5/Private/Data/TRFishingTuningDataAsset.cpp`
+- `Source/TipRunFishingUE5/Private/Fishing/TREgiSimulationComponent.cpp`
+- `Source/TipRunFishingUE5/Private/Fishing/TRFishingComponent.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRFishingSessionActor.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRPlayerController.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TREgiTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TREquipmentDataTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRFishingOperationsTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRInputHUDTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRLineTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRSessionTestFixture.h`
+- `Source/TipRunFishingUE5/Private/Tests/TRSessionTests.cpp`
+- `Source/TipRunFishingUE5/Private/UI/TRFishingHUDWidget.cpp`
+- `Source/TipRunFishingUE5/Private/UI/TRHUD.cpp`
+- `Source/TipRunFishingUE5/Public/Data/TRFishingTuningDataAsset.h`
+- `Source/TipRunFishingUE5/Public/Data/TRHUDSnapshot.h`
+- `Source/TipRunFishingUE5/Public/Data/TRSnapshots.h`
+- `Source/TipRunFishingUE5/Public/Fishing/TREgiSimulationComponent.h`
+- `Source/TipRunFishingUE5/Public/Fishing/TRFishingComponent.h`
+- `Source/TipRunFishingUE5/Public/Game/TRFishingSessionActor.h`
+- `Source/TipRunFishingUE5/Public/Game/TRPlayerController.h`
+
 ## 4. 受入シナリオ
 
 ### A: 成功する1投

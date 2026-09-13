@@ -174,3 +174,11 @@ void ATRPlayerController::Cleanup()
 }
 void ATRPlayerController::EndPlay(const EEndPlayReason::Type Reason) { Cleanup(); Super::EndPlay(Reason); }
 void ATRPlayerController::Destroyed() { Cleanup(); Super::Destroyed(); }
+
+void ATRPlayerController::TRSetEquipment(FName EgiId, FName SinkerId)
+{
+	if (!bInputFocused || !BoundSession.IsValid()) { return; }
+	TArray<FText> Errors;
+	const auto Result = BoundSession->TrySetEquipment(EgiId, SinkerId, Errors);
+	UE_LOG(LogTemp, Display, TEXT("Prototype equipment request: %s"), *StaticEnum<ETRCommandResult>()->GetNameStringByValue(int64(Result)));
+}

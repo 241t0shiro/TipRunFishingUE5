@@ -13,6 +13,8 @@ struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bEgiValid = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bEnvironmentValid = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bEquipmentLocked = false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bEgiOnboard = false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bCanChangeEquipment = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") ETRSessionPhase Phase = ETRSessionPhase::Initializing;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRCastId CastId;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTREgiSnapshot Egi;

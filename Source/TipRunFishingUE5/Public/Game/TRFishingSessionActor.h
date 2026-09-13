@@ -36,6 +36,9 @@ public:
 	ETRSessionPhase GetSessionPhase() const { return Phase; }
 	UFUNCTION(BlueprintPure, Category = "TipRun|Session")
 	bool IsEquipmentLocked() const { return bEquipmentLocked; }
+	UFUNCTION(BlueprintPure, Category = "TipRun|Session") bool CanChangeEquipment() const;
+	UFUNCTION(BlueprintPure, Category = "TipRun|Session") bool IsEgiOnboard() const { return bEgiOnboard; }
+	UFUNCTION(BlueprintPure, Category = "TipRun|Session") FTREquipmentSnapshot GetLastResultEquipment() const { return LastResultEquipment; }
 	UFUNCTION(BlueprintPure, Category = "TipRun|Session")
 	FTRCastId GetCastId() const { return CurrentCastId; }
 	UFUNCTION(BlueprintPure, Category = "TipRun|Session")
@@ -49,6 +52,7 @@ public:
 	void SetPlayerPaused(bool bPaused);
 	void ClearPlayerCommands();
 	FTRCommandProcessed OnCommandProcessed;
+	FTRCastCompleted OnCastCompleted;
 	bool HasResult() const { return bHasResult; }
 	FTRActorSimId GetRegistrationId() const { return RegistrationId; }
 	ETRCommandResult GetLastCommandResult() const { return LastCommandResult; }
@@ -70,11 +74,13 @@ private:
 	bool Register();
 	void Unregister();
 	void AbortInternal();
+	void FinishInternal(ETRCastOutcome Outcome, bool bReturnedOnboard);
 	void ResetInternal();
 	void ReleaseSession();
 	void ReleaseEgi();
 	UPROPERTY() TObjectPtr<ATREgiActor> ActiveEgi;
 	UPROPERTY() TObjectPtr<UStaticMesh> LockedEgiMesh;
+	UPROPERTY() TObjectPtr<UStaticMesh> SelectedEgiMesh;
 	UPROPERTY() TObjectPtr<UDataTable> EgiTable;
 	UPROPERTY() TObjectPtr<UDataTable> SinkerTable;
 	UPROPERTY() TObjectPtr<UTRFishingTuningDataAsset> FishingTuning;
@@ -82,6 +88,7 @@ private:
 	FTRActorSimId BoatId, RegistrationId;
 	FTRCastId CurrentCastId;
 	FTREquipmentSnapshot SelectedEquipment, LockedEquipment;
+	FTREquipmentSnapshot LastResultEquipment;
 	FTRCatchResult LastResult;
 	ETRSessionPhase Phase = ETRSessionPhase::Initializing;
 	ETRCommandResult LastCommandResult = ETRCommandResult::RejectedInvalidState;
@@ -93,4 +100,7 @@ private:
 	bool bEquipmentLocked = false;
 	bool bCastActive = false;
 	bool bHasResult = false;
+	bool bFishingStarted = false;
+	bool bEgiOnboard = true;
+	bool bPendingResultNotification = false;
 };

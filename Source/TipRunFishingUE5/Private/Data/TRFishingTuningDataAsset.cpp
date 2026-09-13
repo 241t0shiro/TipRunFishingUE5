@@ -55,8 +55,8 @@ bool FTRFishingParameters::Validate(TArray<FText>& Errors) const
 	bValid &= RequireFishingTuning(FMath::IsFinite(OverTensionDurationS) && OverTensionDurationS > 0, TEXT("OverTensionDurationS: must be finite and positive"), Errors);
 	bValid &= RequireFishingTuning(FMath::IsFinite(ReelProgressPerSecond) && ReelProgressPerSecond > 0, TEXT("ReelProgressPerSecond: must be finite and positive"), Errors);
 	bValid &= RequireFishingTuning(FMath::IsFinite(RetrievalToleranceM) && RetrievalToleranceM > 0, TEXT("RetrievalToleranceM: must be finite and positive"), Errors);
-	bValid &= RequireFishingTuning(FMath::IsFinite(AutoStayDelayS) && AutoStayDelayS >= 0.0,
-		TEXT("AutoStayDelayS: must be finite and nonnegative"), Errors);
+	bValid &= RequireFishingTuning(FMath::IsFinite(TensionLiftDecayPerS) && TensionLiftDecayPerS > 0.0 && FMath::IsFinite(TensionLiftCompletionMps) && TensionLiftCompletionMps > 0.0f && TensionLiftCompletionMps < JerkLiftMps,
+		TEXT("Tension lift decay/completion: require positive finite values, completion below jerk lift"), Errors);
 	bValid &= RequireFishingTuning(FMath::IsFinite(HookOpenDelayS) && HookOpenDelayS >= 0.0 && HookOpenDelayS < HookCloseDelayS,
 		TEXT("Hook window: require 0 <= open < close"), Errors);
 	bValid &= RequireFishingTuning(MinLineM <= MaxLineLengthM, TEXT("MinLineM exceeds MaxLineLengthM"), Errors);

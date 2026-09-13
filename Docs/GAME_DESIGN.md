@@ -1,11 +1,10 @@
 # TipRun Fishing — 全体技術設計の正本
 
-2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
 
-2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況は下記とROADMAPを参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M09は完了。M09のEnhanced Input接続・最小デバッグHUDはUHT生成/C++コンパイル/Development Editor Win64ビルド成功済み。M09最終7試験と依存回帰13件が成功、各試験の警告・エラー0件。M10以降は未着手。PIE目視・実機入力は未検証。D04/D07/D08改訂の操作・評価・装備ロック移行はM10以降の範囲。**
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M10は完了。M10操作・一投単位の装備ロック・観測Snapshot・旧AutoStay撤去を実装し、UHT生成/C++/Development Editor Win64ビルド成功。M10 8件・必要回帰32件成功、各試験のエラー・警告0件。M11以降は未着手。PIE目視・実機入力は未検証。**
 
 ## 1. 文書の効力と読み方
 
@@ -68,7 +67,7 @@ FishingとSquidは互いのActor/Componentを直接操作しない。`Game` が�
 | `FTRActorSimId` | Coordinatorが登録順に付与する安定ID。Actorアドレスを並び順に使わない |
 | `FTROceanSample` | 有効性、海面Z、海底深度、潮流m/s、風m/s、環境ID。詳細はOCEAN |
 | `FTRBoatSnapshot` | Tick、位置m、竿先m、速度m/s、向き。読取専用コピー |
-| `FTREgiSnapshot` | CastId、Tick、XYm、DepthM、速度m/s、DepthVelocityMps（下向き正）/海底・海面接触（M10で追加）、ライン長m、角度rad、張力代理値0..1、釣り状態、StayPenaltyJerkCount:int64 |
+| `FTREgiSnapshot` | CastId、Tick、XYm、DepthM、速度m/s、DepthVelocityMps（下向き正）/海底・海面接触（M10で追加済み）、ライン長m、角度rad、張力代理値0..1、釣り状態、StayPenaltyJerkCount:int64 |
 | `FTRSquidSnapshot` | SimId、位置m、深度m、AI状態、ActivityLevel（Low/Medium/High）、重量kg |
 | `FTRBiteRequest` | CastId、SimId、要求Tick。承認前の要求にすぎない |
 | `FTRCatchResult` | CastId、SimId、Outcome、重量kg、装備ID、所要sim秒。釣果確定時にコピーして保持 |
@@ -198,3 +197,11 @@ IDは維持し、変更日・根拠と詳細設計/試験を一緒に更新す�
 `ATRPlayerController`→Session→固定Input Queueの入力経路と、Publish時の数値コピーから作る`FTRHUDSnapshot`を追加。HUDは状態/深度/重量/ライン/船速/潮流を表示し、釣りの数値・状態を更新しない。`ATRGameModeBase`は既存Ocean/Boat/Sessionと入力/HUDの初期化・接続のみを担当する。調整値・仮キー割当はPrototype SessionConfigおよび所有するDataAsset/Input Actionに保持する。製品値を確定していない。
 
 UHTは新規反射型を含む17ファイルを生成し、C++実コンパイルとDLLリンクに成功。保存済みPrototypeを別プロセスで再読込する試験を含め、M09 7件と回帰13件が成功。詳細な実装契約・操作準備・未検証範囲はUI_SPEC第7節、変更一覧・ログはROADMAPのM09完了記録を参照。既存M06の装備ロック寿命は保持し、D08移行はM10で実施する。Shakuri/TensionFall/Stay、回収の実動作、旧AutoStay設定撤去、レンジ評価、BITEには着手していない。
+
+## M10実装補足（2026-09-13）
+
+Fishingが入力受理、シャクリ予約/一連の回数、Shakuri→TensionFall→Stay/Re-Fall/Retrieveを所有する。EgiSimulationが固定更新で上向き作用・残留リフト減衰・巻取りをM08の潮流/重量/船/ライン制約へ合成する。過渡完了は残留リフトの処理完了であり、無入力待機やレンジ安定判定ではない。新係数はDataAssetの試験値で、式と受入条件はFISHING_SYSTEM第8節を参照。
+
+Sessionは次投候補の準備とDeployでの凍結、RetrieveでのCast終了・船上帰還、NextCastでのReady/装備ロック解除を管理する。EndFishingなしで次投重量を変更でき、旧Cast・過去の結果/装備コピーは更新しない。Abortだけでは船上帰還を作らない。M06当時のセッション全体ロックの記録を現行仕様と読み替えない。
+
+SnapshotのDepthVelocityMps/境界接触/状態開始Tick/連続TF・Stay観測時間を後続へ公開した。RangeObservationSecondsは安定時間ではなく、安定履歴の評価はM11、BITEへの倍率接続はM12に残す。旧AutoStayの宣言・検証・Prototype保存項目を撤去し、汎用時計の試験は維持。検証・変更一覧はROADMAPのM10記録、仮入力と次投装備変更の手順はUI_SPEC第8節を参照。

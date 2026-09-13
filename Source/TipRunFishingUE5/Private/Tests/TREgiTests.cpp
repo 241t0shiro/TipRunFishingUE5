@@ -157,9 +157,9 @@ bool FTREgiLifetimeTest::RunTest(const FString& Parameters)
 	F.Deploy(); F.Step(5);
 	const FTREgiSnapshot Old = F.Session->Fishing->GetSnapshot();
 	TWeakObjectPtr<ATREgiActor> OldVisual = F.Session->GetEgiActor();
-	F.Session->AbortCast(Old.CastId);
-	TestTrue(TEXT("Abort destroys old visual"), !OldVisual.IsValid() || OldVisual->IsActorBeingDestroyed());
-	F.Session->ResetCast(); F.Deploy();
+	if (!TestTrue(TEXT("Retrieve returns onboard"), F.ReturnToReady())) { return false; }
+	TestTrue(TEXT("Retrieve destroys old visual"), !OldVisual.IsValid() || OldVisual->IsActorBeingDestroyed());
+	F.Deploy();
 	const FTREgiSnapshot Current = F.Session->Fishing->GetSnapshot();
 	FTRSimTime Time = F.Sim()->GetSimulationTime();
 	FTROceanQuery Query; Query.PositionXYM = Current.PositionXYM; Query.SimTick = Time.TickIndex;

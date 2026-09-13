@@ -26,6 +26,8 @@ public:
 	void SetInputFocus(bool bFocused);
 	bool IsRetrieveHeld() const { return bRetrieveHeld; }
 	bool InstallInputBindings(UEnhancedInputComponent* Component);
+	// Internal MVP console control; the session applies the same onboard/Ready guard as UI.
+	UFUNCTION(Exec) void TRSetEquipment(FName EgiId, FName SinkerId);
 	virtual void FlushPressedKeys() override;
 	virtual void PlayerTick(float DeltaTime) override;
 protected:

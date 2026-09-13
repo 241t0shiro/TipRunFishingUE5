@@ -1,8 +1,7 @@
 # UI・入力接続技術設計
 
-2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
 
-2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況はROADMAPと下記M09記録を参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
 関連: [全体正本](GAME_DESIGN.md)、[操作](FISHING_SYSTEM.md)、[BITE](SQUID_AI.md)。MVPのデバッグ表示と製品のプレイヤー向け情報を区別する。
 
@@ -157,3 +156,15 @@ M09は完了。Enhanced Inputと最小の内部確認用HUDを追加した。M10
 Deploy/NextCast/EndFishingは既存M06の状態条件に従う。CancelはSession終了であり、その後はPlayを再起動する。Shakuri/Fall/TensionFall/Hook/Retrieveはキューに届くが、M09では既存の未対応状態として拒否され、実動作しない。M10以降で対応する範囲を実装する。STAY専用キー、無入力タイマー、AutoStay表示は追加していない。D08の装備変更UI/一投単位ロックへの移行もM10に残す。
 
 最終AutomationはM09 7件＋回帰13件成功、各試験のエラー・警告0件。U02はUEnhancedPlayerInputへ押下/解放を注入し、長押しと再Bindingでも1押下1コマンドを確認した。他にTick/Sequence順、30/60/120fps、古いCast/終了/破棄、Pause/フォーカス、読取非破壊性、不正起動、保存済み設定を検証した。NullRHI試験であり、PIEの目視、解像度/DPI、実キーボード/ゲームパッド、アプリ切替の実機確認は未実施。M09合格はC++/データ/自動試験の範囲を指す。
+
+## 8. M10操作接続（2026-09-13）
+
+第7節の「操作は未対応」という記録はM09当時の履歴。M10ではSpaceのShakuri、FのRe-Fall、TのTensionFall要求、R押下/解放の回収を実装した。Hookは引き続き未実装。キーは既存Prototype割当で、製品配置を確定していない。
+
+確認ループは`Enter投入 → Spaceで任意回数シャクリ → TensionFallの過渡処理完了 → Stay → Fで再フォール`。回収はRを押して進め、離すと巻取りだけ停止する。Pause/フォーカス喪失では保持解除し、再開後に自動で巻かない。回収完了でResultと船上帰還を確定し、N（NextCast）でReadyへ進むと装備ロックを解除する。次のEnterで再ロックする。Result/Readyの切替をWidget独自の状態として管理しない。
+
+M10の内部確認用装備変更はControllerのExecコマンド`TRSetEquipment <EgiId> <SinkerId>`で提供する。例: 次投Readyでコンソールから`TRSetEquipment Egi_4 Sinker_50`（40g＋50g）、または`TRSetEquipment Egi_3_5 Sinker_None`（35g＋0g）。同じSessionのTrySetEquipment/CanChangeEquipment条件を使い、一投中・回収中・船上未確認・Pauseでは拒否する。出力ログにAccepted/拒否理由enumを示す。製品の装備選択パネルや自動重量選択は作らない。
+
+HUDへJerkCount/SeriesJerkCount/StayPenaltyJerkCount/PendingJerkCount、DepthVelocityMps（下向き正）、海底/海面接触、装備ロック、船上帰還、変更可能性を追加した。既存のworld Z速度（上向き正）と区別する。仮パネル高さを広げ、操作未実装の案内も更新した。RangeError/RangeStability/安定達成時間/BITE値は先行表示しない。RangeObservationSecondsは観測時間のSnapshot契約であり、安定スコアではない。
+
+M10の入力・保持解除・装備変更試験とM09回帰は成功。UIのPIE目視、解像度/DPI、実キーボード/ゲームパッド/コンソール操作は未検証。Onboard/Ready条件やメッシュ変更はAutomationで検証している。製品UI・Resultパネルの完成はM15に残す。

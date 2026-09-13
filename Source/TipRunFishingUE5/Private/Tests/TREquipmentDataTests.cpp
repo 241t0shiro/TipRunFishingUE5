@@ -76,7 +76,7 @@ namespace
 			P.FreeFallSinkScale = 1.0f;
 			P.TensionFallSinkScale = 0.5f;
 			P.StaySinkScale = 0.2f;
-			P.JerkDurationS = 0.2;
+			P.JerkDurationS = 0.2; P.TensionLiftDecayPerS = 12.0; P.TensionLiftCompletionMps = 0.05f;
 			P.JerkLiftMps = 2.0f;
 			P.JerkReelMps = 1.0f;
 			P.TensionReferenceM = 0.1f;
@@ -247,7 +247,6 @@ bool FTRM02Tuning::RunTest(const FString& Parameters)
 	FTRTestEquipment Data;
 	TArray<FText> Errors;
 	const FTRFishingParameters Good = Data.Tuning->Parameters;
-	TestEqual(TEXT("Approved AutoStay default"), FTRFishingParameters().AutoStayDelayS, 0.8);
 	TestEqual(TEXT("Approved Hook open default"), FTRFishingParameters().HookOpenDelayS, 0.10);
 	TestEqual(TEXT("Approved Hook close default"), FTRFishingParameters().HookCloseDelayS, 0.55);
 	TestFalse(TEXT("Unconfigured coefficients are not valid product defaults"), FTRFishingParameters().Validate(Errors));
