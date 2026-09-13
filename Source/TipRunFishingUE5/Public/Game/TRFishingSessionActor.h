@@ -8,6 +8,9 @@
 #include "TRFishingSessionActor.generated.h"
 
 class UTRFishingComponent;
+class UTREgiSimulationComponent;
+class ATREgiActor;
+class UStaticMesh;
 
 UCLASS()
 class TIPRUNFISHINGUE5_API ATRFishingSessionActor : public AActor
@@ -41,6 +44,9 @@ public:
 	ETRCommandResult GetLastCommandResult() const { return LastCommandResult; }
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TipRun|Session")
 	TObjectPtr<UTRFishingComponent> Fishing;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TipRun|Session")
+	TObjectPtr<UTREgiSimulationComponent> EgiSimulation;
+	ATREgiActor* GetEgiActor() const { return ActiveEgi.Get(); }
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Destroyed() override;
@@ -53,6 +59,9 @@ private:
 	void AbortInternal();
 	void ResetInternal();
 	void ReleaseSession();
+	void ReleaseEgi();
+	UPROPERTY() TObjectPtr<ATREgiActor> ActiveEgi;
+	UPROPERTY() TObjectPtr<UStaticMesh> LockedEgiMesh;
 	UPROPERTY() TObjectPtr<UDataTable> EgiTable;
 	UPROPERTY() TObjectPtr<UDataTable> SinkerTable;
 	UPROPERTY() TObjectPtr<UTRFishingTuningDataAsset> FishingTuning;

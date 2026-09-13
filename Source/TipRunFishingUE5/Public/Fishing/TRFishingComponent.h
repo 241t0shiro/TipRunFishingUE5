@@ -6,7 +6,7 @@
 #include "Data/TRSnapshots.h"
 #include "TRFishingComponent.generated.h"
 
-// M06 owns only the minimal operation states and deployment snapshot. No integration.
+// Owns operation state; numeric Egi integration is a separate component.
 UCLASS()
 class TIPRUNFISHINGUE5_API UTRFishingComponent : public UActorComponent
 {
@@ -18,6 +18,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "TipRun|Fishing")
 	FTREgiSnapshot GetSnapshot() const { return Snapshot; }
 	FTREgiAction GetAction() const;
+	FTRFishingStateChanged OnFishingStateChanged;
 private:
 	friend class ATRFishingSessionActor;
 	void Prepare();
@@ -25,6 +26,9 @@ private:
 	bool CompleteDeployment(const FTRBoatSnapshot& Boat, const FTROceanSample& Ocean, int64 Tick);
 	void FinishCast();
 	void Stop();
+	void ApplyEgiStep(const FTREgiSnapshot& Updated, ETREgiStepEvent Event);
+	void PublishStateChanges();
+	bool bPendingBottomNotification = false;
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Fishing", meta = (AllowPrivateAccess = "true"))
 	ETRFishingState State = ETRFishingState::Inactive;
 	FTREgiSnapshot Snapshot;

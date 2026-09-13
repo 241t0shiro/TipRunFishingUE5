@@ -1,6 +1,6 @@
 # ロードマップ・Codex向けMVP実装順序
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M06は完了済み。M07〜M18は未着手。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M07は完了済み。M08〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
 
@@ -34,7 +34,7 @@
 | 05 M04（完了） | Coordinatorの固定時計、入力キュー、登録解除、用途別seed | M01 | 新規UHT/C++ビルド成功。Tick順・ポーズ・catch-up・再現性等の6試験成功、試験警告/エラー0。下記記録参照 |
 | 06 M05（完了） | 仮BoatPawnと一定水平潮ドリフト、RodAnchor、Snapshot接続 | M03/04、D15決定済み | B01/B02/B03/B05を含む6試験成功、30/60/120fps・pause・無効値も確認。UHT/C++ビルド成功、下記記録参照 |
 | 07 M06（完了） | SessionActor、装備ロック、キャストなし投入、最小遷移 | M02/04、D01/D02/D08 | CastId増加、不正入力拒否、F16全境界を含む5試験と必要な既存回帰6件成功。UHT/C++ビルド成功、下記記録参照 |
-| 08 M07 | EgiSimulationの鉛直落下と海底制約、描画用EgiActor | M03/05/06 | F02/F03/F12、仮エギが着底 |
+| 08 M07（完了） | EgiSimulationの鉛直落下と海底制約、描画用EgiActor | M03/05/06 | F02/F03/F12のM07範囲を含む6試験と依存回帰8件成功。仮エギの着底座標、UHT/C++ビルド成功。範囲・未検証は下記記録参照 |
 | 09 M08 | 水平潮応答、ライン長/球面制約、船追従 | M07、D02/D05 | F04/F05/B07。重量・潮・船を一変数ずつ比較 |
 | 10 M09 | Enhanced Input接続と最小デバッグHUD（状態/深度/装備） | M06/07、D12 | U02、入力が各1回、数値とSnapshot一致 |
 | 11 M10 | 連続シャクリと一連回数、0.8秒AutoStay、再Fall、回収 | M08/09、D03/D04/D13 | F06/F07/F08/F17/F18、上限なし、回数保持/新しい一連リセット |
@@ -110,6 +110,16 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 - ログは`Saved/Logs/M06Build.log`、`M06BuildFinal.log`、`M06Tests.log`、`M06TestsFinal.log`。既存回帰を含む初回結果は`Saved/Automation/M06/index.json`（M06寿命試験の初回失敗も保持）、修正後M06結果は`Saved/Automation/M06Final/index.json`。いずれもGit除外。
 - 残存するビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。Engine起動前処理の既存Condition failed・Editorレイアウト警告・対象外SDK不足は残るが、M06最終試験中の警告は0。Win64 SDK 10.0.22621.0はVALID。
 - 作業開始時のGitはクリーン。コード5ファイル追加、既存3ファイル変更、設計書3件更新。Config/Content、Build.cs/Target.cs、M02の解決器、M03 Ocean、M05 Boatコードは変更なし。UI/PIE操作・Windowsパッケージ・自然な1投は未検証。M06は合格、M07へ進める状態。M07〜M18は未着手。D番号の未決仕様を新たに製品仕様へ確定していない。
+
+### M07完了記録（2026-09-13）
+
+- `UTREgiSimulationComponent`、`ATREgiActor`を追加し、Session/Fishingへ固定更新・着底通知・破棄を接続。共通Snapshot/イベント型、M02重量/係数、M03海面/水深、M04更新順、M05 Boat値契約、M06の装備ロック/CastId/寿命を使用する。数値式と境界はFISHING_SYSTEM第4節のM07契約を参照。
+- Development Editor Win64通常ビルド成功（終了コード0、約11.9秒、10アクション）。Internal UnrealHeaderToolが8生成ファイルを書き出し、新規Actor/Component/Test、変更したSession/Fishing/M06 Test、生成コードの実コンパイルとDLLリンクを確認。最新判定だけではない。
+- `TipRun.M07`全6件（F02WeightAndZeroSinker、F03DepthsAndSingleBottomTransition、LargeFixedStep、FrameRatesAndPause、CastAndSessionLifetime、F12InvalidDataAndEnvironment）成功。重量差と0g、異なる平底水深、海底貫通防止、着底通知一度、ポーズ、30/60/120fps同一結果、旧CastId/破棄Session、不正値/環境喪失、描画からの逆流防止を確認した。
+- 必要な回帰8件（M06全5件、M02.F01Combinations、M03.O03DepthQueries、M05.B05RodAnchorAndSnapshotOrder）成功。M04固定更新はM07の描画fps/ポーズ試験と上記接続試験で検証。全14件の試験警告・エラー0、プロセス終了コード0。M06の共通World fixtureをヘッダへ抽出し、「深度積分なし」の旧assertだけをM07導入後の落下確認へ更新した。
+- 残存ビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。試験開始前のEngine起動には既知のCondition failed 19件、Editorレイアウト警告1件、対象外プラットフォームSDK不足の出力がある。試験World/各試験に由来する警告は0件。Win64 SDK 10.0.22621.0はVALID。これら環境出力の解消は未実施。
+- ログは`Saved/Logs/M07Build.log`、`M07Tests.log`、結果は`Saved/Automation/M07/index.json`（Git除外）。コード6ファイル追加・既存5ファイル変更、GAME_DESIGN/FISHING_SYSTEM/ROADMAP更新。Config・Content・Build.cs・Target.cs・TRBaseは変更なし。
+- M07は合格、M08へ進める状態。M08〜M18は未着手。F02/F12のライン制約はM08、斜面の統合シナリオはM16に残す。描画ActorはNullRHIで座標を検証し、PIEの目視・Windowsパッケージは未実施。D番号の製品仕様・後続受入基準は変更していない。
 
 ## 4. 受入シナリオ
 

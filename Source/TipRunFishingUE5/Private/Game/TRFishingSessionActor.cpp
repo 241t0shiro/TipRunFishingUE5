@@ -1,5 +1,8 @@
 #include "Game/TRFishingSessionActor.h"
 #include "Fishing/TRFishingComponent.h"
+#include "Fishing/TREgiSimulationComponent.h"
+#include "Fishing/TREgiActor.h"
+#include "Engine/StaticMesh.h"
 #include "Ocean/TROceanWorldSubsystem.h"
 #include "Engine/World.h"
 
@@ -7,6 +10,7 @@ ATRFishingSessionActor::ATRFishingSessionActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	Fishing = CreateDefaultSubobject<UTRFishingComponent>(TEXT("Fishing"));
+	EgiSimulation = CreateDefaultSubobject<UTREgiSimulationComponent>(TEXT("EgiSimulation"));
 }
 bool ATRFishingSessionActor::Initialize(UTRSimulationWorldSubsystem* Simulation, FTRActorSimId InBoatId,
 	UDataTable* Egis, UDataTable* Sinkers, UTRFishingTuningDataAsset* Tuning, FName InitialSinkerId, TArray<FText>& Errors)
@@ -84,7 +88,11 @@ ETRCommandResult ATRFishingSessionActor::StartFishing(TArray<FText>& Errors)
 	FTREquipmentSnapshot Candidate;
 	if (!TREquipment::TryBuildSnapshot(EgiTable, SinkerTable, FishingTuning, SelectedEquipment.EgiId,
 		SelectedEquipment.SinkerId, Coordinator->GetSimulationTime().StepSeconds, Candidate, Errors)) { return ETRCommandResult::RejectedMissingData; }
+	const FTREgiSpecRow* Row = EgiTable->FindRow<FTREgiSpecRow>(Candidate.EgiId, TEXT("Session visual preparation"), false);
+	UStaticMesh* Mesh = Row ? Row->Mesh.LoadSynchronous() : nullptr;
+	if (!IsValid(Mesh)) { return ETRCommandResult::RejectedMissingData; }
 	if (!Register()) { return ETRCommandResult::RejectedInvalidState; }
+	LockedEgiMesh = Mesh; // Retain the resolved visual; no synchronous loading in fixed steps.
 	LockedEquipment = Candidate; bEquipmentLocked = true; bHasResult = false; LastResult = {};
 	Fishing->Prepare(); Phase = ETRSessionPhase::Ready;
 	return ETRCommandResult::Accepted;
@@ -128,20 +136,40 @@ void ATRFishingSessionActor::HandleCommand(const FTRFishingCommand& Command)
 }
 void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSimTime& Time)
 {
+	if (StepPhase == ETRSimulationPhase::Publish && bCastActive && !IsActorBeingDestroyed())
+	{
+		Fishing->PublishStateChanges(); return;
+	}
 	if (StepPhase != ETRSimulationPhase::Fishing || !bCastActive || IsActorBeingDestroyed()) { return; }
 	FTRBoatSnapshot Boat; FTROceanSample Ocean;
 	if (!ReadEnvironment(Boat, Ocean)) { AbortInternal(); return; }
 	if (Fishing->GetState() == ETRFishingState::Deploying)
 	{
 		if (!Fishing->CompleteDeployment(Boat, Ocean, Time.TickIndex)) { AbortInternal(); return; }
+		TArray<FText> Errors;
+		if (!EgiSimulation->InitializeCast(Fishing->GetSnapshot(), LockedEquipment, Ocean, Errors)) { AbortInternal(); return; }
+		FActorSpawnParameters SpawnParameters; SpawnParameters.Owner = this;
+		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ActiveEgi = GetWorld()->SpawnActor<ATREgiActor>(ATREgiActor::StaticClass(), FTransform::Identity, SpawnParameters);
+		if (!IsValid(ActiveEgi) || !ActiveEgi->InitializeVisual(CurrentCastId, LockedEgiMesh) ||
+			!ActiveEgi->ApplySimulationSnapshot(Fishing->GetSnapshot(), Ocean.SurfaceZ_M)) { AbortInternal(); return; }
 		Phase = ETRSessionPhase::Fishing;
+		return; // Preserve deployment tick at depth zero. Integration starts next fixed tick.
 	}
-	// M07 will own Egi integration. Never move the deployment snapshot here.
+	if (!IsValid(ActiveEgi) || ActiveEgi->IsActorBeingDestroyed()) { AbortInternal(); return; }
+	const FTREgiSnapshot Before = EgiSimulation->BuildSnapshot(Fishing->GetState());
+	FTROceanQuery Query; Query.PositionXYM = Before.PositionXYM; Query.DepthM = Before.DepthM; Query.SimTick = Time.TickIndex;
+	Ocean = GetWorld()->GetSubsystem<UTROceanWorldSubsystem>()->SampleOcean(Query);
+	const ETREgiStepEvent Event = EgiSimulation->StepEgi(CurrentCastId, Time, Ocean, Boat, Fishing->GetAction());
+	if (Event == ETREgiStepEvent::EnvironmentInvalid) { AbortInternal(); return; }
+	Fishing->ApplyEgiStep(EgiSimulation->BuildSnapshot(Fishing->GetState()), Event);
+	if (!ActiveEgi->ApplySimulationSnapshot(Fishing->GetSnapshot(), Ocean.SurfaceZ_M)) { AbortInternal(); }
 }
 void ATRFishingSessionActor::AbortInternal()
 {
 	if (!bCastActive) { return; }
 	bCastActive = false; bHasResult = true;
+	ReleaseEgi();
 	LastResult = {}; LastResult.CastId = CurrentCastId;
 	LastResult.EgiId = LockedEquipment.EgiId; LastResult.SinkerId = LockedEquipment.SinkerId;
 	LastResult.Outcome = ETRCastOutcome::Aborted;
@@ -173,6 +201,7 @@ void ATRFishingSessionActor::EndFishing()
 	if (bCastActive) { AbortInternal(); }
 	Unregister();
 	bEquipmentLocked = false; LockedEquipment = {};
+	ReleaseEgi(); LockedEgiMesh = nullptr;
 	Fishing->Stop(); Phase = bInitialized ? ETRSessionPhase::Ready : ETRSessionPhase::Initializing;
 }
 void ATRFishingSessionActor::ReleaseSession()
@@ -181,6 +210,13 @@ void ATRFishingSessionActor::ReleaseSession()
 	bInitialized = false;
 	Coordinator.Reset(); BoatId = {};
 	EgiTable = nullptr; SinkerTable = nullptr; FishingTuning = nullptr;
+	Fishing->OnFishingStateChanged.Clear();
+}
+void ATRFishingSessionActor::ReleaseEgi()
+{
+	EgiSimulation->Reset();
+	ATREgiActor* Previous = ActiveEgi.Get(); ActiveEgi = nullptr;
+	if (IsValid(Previous) && !Previous->IsActorBeingDestroyed()) { Previous->Destroy(); }
 }
 void ATRFishingSessionActor::EndPlay(const EEndPlayReason::Type Reason)
 {

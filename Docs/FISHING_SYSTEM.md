@@ -112,6 +112,18 @@ Stay中のStayは冪等でLastActionTickも更新しない。Retrieving中のRet
 
 ## 4. エギ・ラインの軽量シミュレーション案
 
+### M07の鉛直落下・着底実装（2026-09-13）
+
+- `UTREgiSimulationComponent`をSessionの所有Componentとして追加。数値正本は`FTREgiSnapshot`、装備はM02の`FTREquipmentSnapshot`のコピーを一投中保持する。M06の投入Tickは深度0・速度0のまま維持し、次の固定Tickから落下する。下記の全体積分案のうち、今回は鉛直FreeFallと海底制約だけを実装した。
+- 落下速度は`min(SinkSpeedMps * FreeFallSinkScale, MaxEgiSpeedMps)`。SinkSpeedMpsはM02の総重量（エギ＋シンカー）による曲線評価済み値で、シンカー0gも正常値。係数は既存FishingTuningを使用し、新しい製品バランス値は追加しない。Prototype曲線を用いたゲーム近似であり、実測モデルではない。
+- 試行深度は`DepthM + SpeedMps * StepSeconds`、結果を海面0〜M03のBottomDepthMに制限する。深度は下向き正、SnapshotのZ速度はUE座標の上向き正とし、海底補正後の実移動量を固定ステップで割って求める。着底後は深度を保持し、次Tickの速度は0になる。
+- SessionがM04のFishingフェーズで最新M05 BoatSnapshotとエギXY位置のOceanSampleを渡す。計算器はBoatの値契約を受け取るが、水平移動・船追従にはまだ使用しない。Ocean無効・非有限値・不正ステップは数値へ反映せず、Sessionは既存のAborted経路で安全中断する。
+- `ReachedBottom`を受けたFishingだけがFreeFall→BottomContactへ遷移する。確定したSnapshotを保持した後、同TickのPublishフェーズで`OnFishingStateChanged`を一度だけ配送する。M07で追加する通知はこの着底遷移に限定する。
+- CastId不一致、重複/過去Tick、Reset後・破棄中のSession所有Componentへの更新を拒否する。中断・終了・Session破棄で数値をResetし、所有EgiActorを破棄する。BeginPlay前の破棄もM06のDestroyed経路で解放する。
+- `ATREgiActor`は衝突/物理/独立Tickを使わず、同CastIdのSnapshotと海面高さからcm座標を適用する。M02装備行のMeshを釣り開始時に解決・保持し、固定Tickで同期ロードしない。Actor位置を変更しても計算へ戻さない。
+- M08の水平潮応答、ライン長の更新・球面制約、船追従には未着手。XY・ライン長・ライン角は投入時の値を保持するため、M07だけではラインの幾何的整合を保証しない。F02/F12は鉛直部分、F03は異なる平底水深で検証し、ライン関連はM08、斜面シナリオはM16で扱う。
+- M07 Automation 6件成功。30/35/40g＋0g、0.1/3/30m着底、0.25秒固定ステップ、遷移一度、ポーズ、30/60/120fps一致、旧CastId・Session破棄、不正値と環境喪失を確認。NullRHIで描画Actorの座標・物理無効も確認したが、PIEでの見た目確認は未実施。
+
 ### 正本と座標
 
 海面Zを `z_s`、エギ水平位置を `x`、深度を `d` とする。世界位置mは `e=(x.x,x.y,z_s-d)`。`d` はfloatの正本。描画Actorに物理シミュレーションを有効化しない。毎ステップ移動先のOceanを再取得し、海底と海面を検証する。

@@ -1,7 +1,7 @@
 #include "Fishing/TRFishingComponent.h"
 
 UTRFishingComponent::UTRFishingComponent() { PrimaryComponentTick.bCanEverTick = false; }
-void UTRFishingComponent::Prepare() { State = ETRFishingState::Ready; Snapshot = {}; Snapshot.FishingState = State; }
+void UTRFishingComponent::Prepare() { bPendingBottomNotification = false; State = ETRFishingState::Ready; Snapshot = {}; Snapshot.FishingState = State; }
 void UTRFishingComponent::BeginCast(FTRCastId Id, int64 Tick, const FTREquipmentSnapshot& Equipment)
 {
 	CastEquipment = Equipment;
@@ -24,8 +24,26 @@ bool UTRFishingComponent::CompleteDeployment(const FTRBoatSnapshot& Boat, const 
 	Snapshot.FishingState = State;
 	return true;
 }
-void UTRFishingComponent::FinishCast() { State = ETRFishingState::Result; Snapshot.FishingState = State; }
-void UTRFishingComponent::Stop() { State = ETRFishingState::Inactive; Snapshot = {}; CastEquipment = {}; }
+void UTRFishingComponent::FinishCast() { bPendingBottomNotification = false; State = ETRFishingState::Result; Snapshot.FishingState = State; }
+void UTRFishingComponent::Stop() { bPendingBottomNotification = false; State = ETRFishingState::Inactive; Snapshot = {}; CastEquipment = {}; }
+void UTRFishingComponent::ApplyEgiStep(const FTREgiSnapshot& Updated, ETREgiStepEvent Event)
+{
+	if (Updated.CastId != Snapshot.CastId || Updated.Tick <= Snapshot.Tick ||
+		(State != ETRFishingState::FreeFall && State != ETRFishingState::BottomContact)) { return; }
+	if (Event == ETREgiStepEvent::ReachedBottom && State == ETRFishingState::FreeFall)
+	{
+		State = ETRFishingState::BottomContact;
+		bPendingBottomNotification = true;
+	}
+	Snapshot = Updated;
+	Snapshot.FishingState = State;
+}
+void UTRFishingComponent::PublishStateChanges()
+{
+	if (!bPendingBottomNotification) { return; }
+	bPendingBottomNotification = false;
+	OnFishingStateChanged.Broadcast(ETRFishingState::FreeFall, ETRFishingState::BottomContact);
+}
 FTREgiAction UTRFishingComponent::GetAction() const
 {
 	FTREgiAction Action;
