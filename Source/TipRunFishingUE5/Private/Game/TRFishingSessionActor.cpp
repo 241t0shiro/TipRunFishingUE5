@@ -160,10 +160,16 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 	const FTREgiSnapshot Before = EgiSimulation->BuildSnapshot(Fishing->GetState());
 	FTROceanQuery Query; Query.PositionXYM = Before.PositionXYM; Query.DepthM = Before.DepthM; Query.SimTick = Time.TickIndex;
 	Ocean = GetWorld()->GetSubsystem<UTROceanWorldSubsystem>()->SampleOcean(Query);
-	const ETREgiStepEvent Event = EgiSimulation->StepEgi(CurrentCastId, Time, Ocean, Boat, Fishing->GetAction());
+	FTROceanSample DestinationOcean = Ocean;
+	const ETREgiStepEvent Event = EgiSimulation->StepEgi(CurrentCastId, Time, Ocean, Boat, Fishing->GetAction(),
+		[this, &DestinationOcean](const FTROceanQuery& DestinationQuery)
+		{
+			DestinationOcean = GetWorld()->GetSubsystem<UTROceanWorldSubsystem>()->SampleOcean(DestinationQuery);
+			return DestinationOcean;
+		});
 	if (Event == ETREgiStepEvent::EnvironmentInvalid) { AbortInternal(); return; }
 	Fishing->ApplyEgiStep(EgiSimulation->BuildSnapshot(Fishing->GetState()), Event);
-	if (!ActiveEgi->ApplySimulationSnapshot(Fishing->GetSnapshot(), Ocean.SurfaceZ_M)) { AbortInternal(); }
+	if (!ActiveEgi->ApplySimulationSnapshot(Fishing->GetSnapshot(), DestinationOcean.SurfaceZ_M)) { AbortInternal(); }
 }
 void ATRFishingSessionActor::AbortInternal()
 {

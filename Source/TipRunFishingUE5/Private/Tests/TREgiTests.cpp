@@ -15,6 +15,7 @@ bool FTREgiWeightFallTest::RunTest(const FString& Parameters)
 	for (int32 I = 0; I < 3; ++I)
 	{
 		FTRTestSession F;
+		F.Area->Settings.CurrentMps = FVector::ZeroVector; // F02/M07 isolates vertical motion.
 		if (!F.Initialize(*this)) { return false; }
 		TArray<FText> Errors;
 		TestTrue(TEXT("Select actual M02 equipment"), F.Session->TrySetEquipment(FName(Ids[I]), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::Accepted);
@@ -32,7 +33,7 @@ bool FTREgiWeightFallTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("F02 depth = test speed * one second"), FMath::IsNearlyEqual(Snapshot.DepthM, ExpectedDepth, 1.e-5f));
 		TestTrue(TEXT("Larger mass falls further with this test profile"), Snapshot.DepthM > PreviousDepth);
 		TestTrue(TEXT("World Z velocity is negative downward"), FMath::IsNearlyEqual(Snapshot.VelocityMps.Z, -double(ExpectedDepth), 1.e-5));
-		TestTrue(TEXT("M08 current/boat following not implemented"), Snapshot.PositionXYM.Equals(InitialXY, 0.0));
+		TestTrue(TEXT("Static ocean and boat preserve horizontal position"), Snapshot.PositionXYM.Equals(InitialXY, 0.0));
 		TestTrue(TEXT("No horizontal velocity"), Snapshot.VelocityMps.X == 0.0 && Snapshot.VelocityMps.Y == 0.0);
 		PreviousDepth = Snapshot.DepthM;
 	}
@@ -46,6 +47,7 @@ bool FTREgiBottomTest::RunTest(const FString& Parameters)
 	for (float Depth : {0.1f, 3.0f, 30.0f})
 	{
 		FTRTestSession F;
+		F.Area->Settings.CurrentMps = FVector::ZeroVector; // F02/M07 isolates vertical motion.
 		F.Area->Settings.FlatDepthM = Depth;
 		if (!F.Start(*this)) { return false; }
 		int32 BottomTransitions = 0;
@@ -87,6 +89,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTREgiLargeStepTest, "TipRun.M07.LargeFixedStep
 bool FTREgiLargeStepTest::RunTest(const FString& Parameters)
 {
 	FTRTestSession F;
+	F.Area->Settings.CurrentMps = FVector::ZeroVector; // F02/M07 isolates vertical motion.
 	F.Clock->StepSeconds = 0.25; // 15 times the normal technical-proposal step; hook window remains representable.
 	F.Area->Settings.FlatDepthM = 0.01f;
 	if (!F.Start(*this)) { return false; }
@@ -111,6 +114,7 @@ bool FTREgiFramePauseTest::RunTest(const FString& Parameters)
 	for (int32 FPS : {30, 60, 120})
 	{
 		FTRTestSession F;
+		F.Area->Settings.CurrentMps = FVector::ZeroVector; // F02/M07 isolates vertical motion.
 		F.Area->Settings.FlatDepthM = 2.0f;
 		if (!F.Start(*this)) { return false; }
 		int64 BottomTick = -1;
@@ -148,6 +152,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTREgiLifetimeTest, "TipRun.M07.CastAndSessionL
 bool FTREgiLifetimeTest::RunTest(const FString& Parameters)
 {
 	FTRTestSession F;
+	F.Area->Settings.CurrentMps = FVector::ZeroVector; // F02/M07 isolates vertical motion.
 	if (!F.Start(*this)) { return false; }
 	F.Deploy(); F.Step(5);
 	const FTREgiSnapshot Old = F.Session->Fishing->GetSnapshot();
@@ -161,7 +166,7 @@ bool FTREgiLifetimeTest::RunTest(const FString& Parameters)
 	FTROceanSample Ocean = F.World->GetSubsystem<UTROceanWorldSubsystem>()->SampleOcean(Query);
 	FTRBoatSnapshot Boat = F.Boat->GetBoatSnapshot(); Boat.Tick = Time.TickIndex;
 	const FTREgiAction Action = F.Session->Fishing->GetAction();
-	TestTrue(TEXT("Old cast cannot step new simulation"), F.Session->EgiSimulation->StepEgi(Old.CastId, Time, Ocean, Boat, Action) == ETREgiStepEvent::None);
+	TestTrue(TEXT("Old cast cannot step new simulation"), F.Session->EgiSimulation->StepEgi(Old.CastId, Time, Ocean, Boat, Action, [&Ocean](const FTROceanQuery&) { return Ocean; }) == ETREgiStepEvent::None);
 	TestEqual(TEXT("Rejected old cast does not mutate tick"), F.Session->EgiSimulation->BuildSnapshot(ETRFishingState::FreeFall).Tick, Current.Tick);
 	TestFalse(TEXT("Old cast cannot reposition new visual"), F.Session->GetEgiActor()->ApplySimulationSnapshot(Old, Ocean.SurfaceZ_M));
 	TStrongObjectPtr<UTREgiSimulationComponent> Retained(F.Session->EgiSimulation.Get());
@@ -169,7 +174,7 @@ bool FTREgiLifetimeTest::RunTest(const FString& Parameters)
 	F.World->DestroyActor(F.Session.Get());
 	TestTrue(TEXT("Session destruction destroys visual"), !Visual.IsValid() || Visual->IsActorBeingDestroyed());
 	F.Step(20);
-	TestTrue(TEXT("Destroyed session cannot advance retained component"), Retained->StepEgi(Current.CastId, Time, Ocean, Boat, Action) == ETREgiStepEvent::None);
+	TestTrue(TEXT("Destroyed session cannot advance retained component"), Retained->StepEgi(Current.CastId, Time, Ocean, Boat, Action, [&Ocean](const FTROceanQuery&) { return Ocean; }) == ETREgiStepEvent::None);
 	TestFalse(TEXT("Destroyed session clears active cast"), Retained->BuildSnapshot(ETRFishingState::Inactive).CastId.IsValid());
 	return true;
 }
@@ -179,6 +184,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTREgiInvalidTest, "TipRun.M07.F12InvalidDataAn
 bool FTREgiInvalidTest::RunTest(const FString& Parameters)
 {
 	FTRTestSession F;
+	F.Area->Settings.CurrentMps = FVector::ZeroVector; // F02/M07 isolates vertical motion.
 	if (!F.Start(*this)) { return false; }
 	F.Deploy();
 	const FTREgiSnapshot Initial = F.Session->Fishing->GetSnapshot();
@@ -188,21 +194,22 @@ bool FTREgiInvalidTest::RunTest(const FString& Parameters)
 	FTROceanSample Ocean = F.World->GetSubsystem<UTROceanWorldSubsystem>()->SampleOcean(Query);
 	const FTREgiAction Action = F.Session->Fishing->GetAction();
 	FTROceanSample BadOcean = Ocean; BadOcean.BottomDepthM = std::numeric_limits<float>::quiet_NaN();
-	TestTrue(TEXT("NaN water depth rejected"), F.Session->EgiSimulation->StepEgi(Initial.CastId, Time, BadOcean, Boat, Action) == ETREgiStepEvent::EnvironmentInvalid);
+	TestTrue(TEXT("NaN water depth rejected"), F.Session->EgiSimulation->StepEgi(Initial.CastId, Time, BadOcean, Boat, Action, [&Ocean](const FTROceanQuery&) { return Ocean; }) == ETREgiStepEvent::EnvironmentInvalid);
 	TestEqual(TEXT("Invalid sample never commits depth"), F.Session->EgiSimulation->BuildSnapshot(ETRFishingState::FreeFall).DepthM, Initial.DepthM);
 	FTRSimTime BadTime = Time; BadTime.StepSeconds = 0.0;
-	TestTrue(TEXT("Zero dt rejected without division"), F.Session->EgiSimulation->StepEgi(Initial.CastId, BadTime, Ocean, Boat, Action) == ETREgiStepEvent::EnvironmentInvalid);
+	TestTrue(TEXT("Zero dt rejected without division"), F.Session->EgiSimulation->StepEgi(Initial.CastId, BadTime, Ocean, Boat, Action, [&Ocean](const FTROceanQuery&) { return Ocean; }) == ETREgiStepEvent::EnvironmentInvalid);
 	TStrongObjectPtr<UTREgiSimulationComponent> Isolated(NewObject<UTREgiSimulationComponent>());
 	FTREquipmentSnapshot Invalid = F.Session->GetEquipmentSnapshot(); Invalid.SinkSpeedMps = std::numeric_limits<float>::infinity();
 	TArray<FText> Errors;
 	Ocean.SampleTick = Initial.Tick;
 	TestFalse(TEXT("Infinite sink coefficient rejected at initialization"), Isolated->InitializeCast(Initial, Invalid, Ocean, Errors));
 	FTREgiSnapshot ZeroLine = Initial; ZeroLine.LineLengthM = 0.0f;
-	TestTrue(TEXT("Zero line does not divide in vertical-only M07"), Isolated->InitializeCast(ZeroLine, F.Session->GetEquipmentSnapshot(), Ocean, Errors));
+	TestFalse(TEXT("M08 rejects line below configured minimum"), Isolated->InitializeCast(ZeroLine, F.Session->GetEquipmentSnapshot(), Ocean, Errors));
+	TestTrue(TEXT("Valid line initializes"), Isolated->InitializeCast(Initial, F.Session->GetEquipmentSnapshot(), Ocean, Errors));
 	Ocean.SampleTick = Time.TickIndex;
-	TestTrue(TEXT("Finite vertical update with zero line placeholder"), Isolated->StepEgi(Initial.CastId, Time, Ocean, Boat, Action) == ETREgiStepEvent::None);
+	TestTrue(TEXT("Finite vertical update with valid line"), Isolated->StepEgi(Initial.CastId, Time, Ocean, Boat, Action, [&Ocean](const FTROceanQuery&) { return Ocean; }) == ETREgiStepEvent::None);
 	const FTREgiSnapshot Once = Isolated->BuildSnapshot(ETRFishingState::FreeFall);
-	Isolated->StepEgi(Initial.CastId, Time, Ocean, Boat, Action);
+	Isolated->StepEgi(Initial.CastId, Time, Ocean, Boat, Action, [&Ocean](const FTROceanQuery&) { return Ocean; });
 	TestEqual(TEXT("Duplicate tick cannot integrate twice"), Isolated->BuildSnapshot(ETRFishingState::FreeFall).DepthM, Once.DepthM);
 	F.World->DestroyActor(F.Provider.Get()); F.Step();
 	TestTrue(TEXT("Invalid environment aborts instead of false bottom"), F.Session->GetSessionPhase() == ETRSessionPhase::Result && F.Session->GetLastResult().Outcome == ETRCastOutcome::Aborted);

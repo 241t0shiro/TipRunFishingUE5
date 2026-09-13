@@ -2,10 +2,10 @@
 
 2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
 
-2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。文書のみの変更で、M08以降は未実装。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況は下記とROADMAPを参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
 
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M07は完了。M07の鉛直FreeFall・着底・描画用EgiActorはUHT生成/C++コンパイル/Development Editor Win64ビルド成功済み。2026-09-13のM07試験6件と必要な既存回帰8件が成功、各試験の警告・エラー0件。M08以降は未着手。**
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M08は完了。M08の水平潮応答・船追従・ライン制約はUHT処理/C++コンパイル/Development Editor Win64ビルド成功済み。M08最終7試験と依存回帰14件が成功、各試験の警告・エラー0件。M09以降は未着手。D04/D07/D08改訂の操作・評価・装備ロック移行はM10以降の範囲。**
 
 ## 1. 文書の効力と読み方
 
@@ -130,6 +130,8 @@ CoordinatorがAIスコア、沈下、フッキング成否、ファイト進捗�
 以下は旧D08のM06実装記録であり、一投単位ロックへの移行はM10で行う。M06で`ATRFishingSessionActor`と最小の`UTRFishingComponent`を実装済み。Sessionは釣り開始からEndFishingまで装備をロックし、単調増加CastIdとSessionPhaseを保持する。M04入力にExpectedCastIdを追加して古い投を拒否し、M05 Boat更新後に竿先直下の海面へ投入Snapshotを作る。M06ではFreeFallのPayout指示までを実装した。明示中断・次投Ready・終了は装備ロックと寿命を検証する最小経路で、結果UI・釣果イベント配送は先行実装していない。詳細はFISHING_SYSTEM第3節のM06契約を参照。
 
 M07で`UTREgiSimulationComponent`の鉛直落下・海底制約と、数値Snapshotを表示する`ATREgiActor`を追加。M02の凍結した重量由来落下速度と調整係数を使用し、M03のエギ位置の海面/水深を問い合わせ、M04のFishingフェーズでBoat更新後に一度だけ進める。着底によるBottomContact遷移はFishingが所有し、Publishフェーズで一度だけ通知する。描画・Chaosから数値へ逆流させない。水平潮応答・船追従・ライン繰出し/球面制約はM08に残し、M07のライン項目は投入時の仮値を維持する。詳細・検証限界はFISHING_SYSTEM第4節のM07契約とROADMAP完了記録を参照。
+
+M08でEgiSimulationの水平潮応答・ライン長更新・竿先を中心とした球面制約を追加。Gameから移動先Ocean問い合わせを渡し、両制約が成立した数値だけを確定する。牽引で離底した際はFishingがTensionFallへ移す。上記M07のライン仮値という記録は実装履歴として残す。計算・試験・レンジ評価へ渡す情報と後続範囲はFISHING_SYSTEM第4節のM08記録を参照。改訂D08の一投単位ロックはM10で移行し、M08では旧M06の寿命契約を維持する。
 
 M05で`UTRSimulationWorldSubsystem::RegisterBoat`と船Snapshotの読取APIを追加済み。GameがM03 Oceanから値を取得し、M04のBoatフェーズで`ATRBoatPawn`→`UTRBoatDriftComponent`を一度だけ進める。船は共通SimId・弱参照で登録し、EndPlay/Unregister/World終了で登録とバインドを解除する。船の計算、調整値の凍結、無効環境への技術防御、試験と未検証項目は[BOAT_SYSTEM](BOAT_SYSTEM.md)第6節を参照。M06のSessionActor、自由操船、風・波の物理は追加していない。
 

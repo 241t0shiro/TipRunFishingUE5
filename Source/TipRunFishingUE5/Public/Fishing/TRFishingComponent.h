@@ -28,7 +28,8 @@ private:
 	void Stop();
 	void ApplyEgiStep(const FTREgiSnapshot& Updated, ETREgiStepEvent Event);
 	void PublishStateChanges();
-	bool bPendingBottomNotification = false;
+	bool bPendingStateNotification = false;
+	ETRFishingState PendingStateFrom = ETRFishingState::Inactive;
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Fishing", meta = (AllowPrivateAccess = "true"))
 	ETRFishingState State = ETRFishingState::Inactive;
 	FTREgiSnapshot Snapshot;

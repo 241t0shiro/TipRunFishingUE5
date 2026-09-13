@@ -2,9 +2,9 @@
 
 2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
 
-2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。文書のみの変更で、M08以降は未実装。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。当改訂時点では文書のみの変更。現在の実装状況は下記完了記録を参照。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M07は完了済み。M08〜M18は未着手。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M08は完了済み。M09〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
 
@@ -39,7 +39,7 @@
 | 06 M05（完了） | 仮BoatPawnと一定水平潮ドリフト、RodAnchor、Snapshot接続 | M03/04、D15決定済み | B01/B02/B03/B05を含む6試験成功、30/60/120fps・pause・無効値も確認。UHT/C++ビルド成功、下記記録参照 |
 | 07 M06（完了） | SessionActor、装備ロック、キャストなし投入、最小遷移 | M02/04、D01/D02/D08 | CastId増加、不正入力拒否、F16全境界を含む5試験と必要な既存回帰6件成功。UHT/C++ビルド成功、下記記録参照 |
 | 08 M07（完了） | EgiSimulationの鉛直落下と海底制約、描画用EgiActor | M03/05/06 | F02/F03/F12のM07範囲を含む6試験と依存回帰8件成功。仮エギの着底座標、UHT/C++ビルド成功。範囲・未検証は下記記録参照 |
-| 09 M08 | 水平潮応答、ライン長/球面制約、船追従 | M07、D02/D05 | F04/F05/B07。重量・潮・船を一変数ずつ比較 |
+| 09 M08（完了） | 水平潮応答、ライン長/球面制約、船追従 | M07、D02/D05 | F04/F05/B07を含む7試験と依存回帰14件成功、UHT/C++ビルド成功。制御入力による検証範囲は下記参照 |
 | 10 M09 | Enhanced Input接続と最小デバッグHUD（状態/深度/装備） | M06/07、D12 | U02、入力が各1回、数値とSnapshot一致 |
 | 11 M10 | 連続シャクリと一連回数、Shakuri→TensionFall→Stay、再Fall、回収、一投単位の装備ロック/次投変更、レンジ評価用Snapshot、旧タイマー/設定/テスト撤去 | M08/09、D03/D04/D08/D13 | F06/F07/F08/F16/F17/F18/F19、処理終了で即Stay、上昇/下降でも移行、上限なし、回数保持/新しい一連リセット |
 | 12 M11 | テストイカ1体、3段階活性、距離/RangeError/RangeStability/RangeHoldScore/Exposure/STAY時間、評価用DataAsset | M10、D01/D07 | S01/S13/S14/S19、維持指標検証、季節データ不要 |
@@ -126,6 +126,18 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 - 残存ビルド警告は既存のMSVC 14.51.36257推奨範囲外とUnreal5_6互換include順序。試験開始前のEngine起動には既知のCondition failed 19件、Editorレイアウト警告1件、対象外プラットフォームSDK不足の出力がある。試験World/各試験に由来する警告は0件。Win64 SDK 10.0.22621.0はVALID。これら環境出力の解消は未実施。
 - ログは`Saved/Logs/M07Build.log`、`M07Tests.log`、結果は`Saved/Automation/M07/index.json`（Git除外）。コード6ファイル追加・既存5ファイル変更、GAME_DESIGN/FISHING_SYSTEM/ROADMAP更新。Config・Content・Build.cs・Target.cs・TRBaseは変更なし。
 - M07は合格、M08へ進める状態。M08〜M18は未着手。F02/F12のライン制約はM08、斜面の統合シナリオはM16に残す。描画ActorはNullRHIで座標を検証し、PIEの目視・Windowsパッケージは未実施。D番号の製品仕様・後続受入基準は変更していない。
+
+### M08完了記録（2026-09-13）
+
+- EgiSimulationの水平指数応答、重量沈下とライン投影、移動先Ocean再照会、長さ/角度/張力代理値を実装。Sessionは問い合わせと描画へ渡す最終海面を接続し、Fishingは接触/離底イベントを所有する。新クラス/共通型/調整DataAssetは追加せず、既存の凍結データを使用。数値式とM10以降に保持する契約はFISHING_SYSTEM第4節のM08記録を参照。
+- 初回Development Editor Win64ビルド成功（終了コード0、11.80秒、9アクション）。Internal UHTを実行（約1.86秒、反射宣言の変更がないため生成ファイルの書換え0件）。変更したEgiSimulation/Fishing/Session、M07/M08試験、ModuleのC++実コンパイルとDLLリンクを確認した。最新判定だけではない。
+- 初回Automationは20件中19件成功。B07の試験用Session登録に必須の入力callbackがなく、登録拒否で1件失敗した。試験に空の有効callbackを設定し、離底と移動先海域外によるSession中断も追加。試験コード再コンパイル・DLLリンク成功（終了コード0、6.26秒、4アクション）。Runtimeのエラー隠蔽や警告抑制は行っていない。
+- 最終`TipRun.M08`7件（F04CurrentAndWeight、F05WeightDriftBalance、F12LineBoundsAndLargeStep、DestinationAndInvalidValues、B07FixedBoatIntegration、SessionLifetimeAndDestination、BottomContactAndRelease）すべて成功。各試験の警告・エラー0、プロセス終了コード0。
+- 回帰14件は初回で全件成功・警告/エラー0（M07全6件、旧M06全5件、M02.F01Combinations、M03.O03DepthQueries、M05.B05RodAnchorAndSnapshotOrder）。その後の変更はM08試験だけのため、成功済み回帰は再実行していない。M04固定更新はM08のB07試験で実際のBoatと接続し、Pause・30/60/120fps一致を確認した。
+- 重量比較はPrototype/Testのゲーム近似。35/80gの1秒後沈下/水平応答を比較し、同一の張ったラインと船速では1/60秒後に30gが約0.001065m上昇、35gがほぼ変化なし、80gが約0.009569m下降した。これは局所的な釣合い応答の検証で、長時間の製品バランス・BITE評価・実測校正ではない。2秒固定ステップと最短/最大ライン、ゼロ距離、不正値/解なし、旧CastId/破棄も確認。
+- ビルドの既存MSVC 14.51.36257推奨範囲外・Unreal5_6互換include順序の警告は残る。Engine起動時の既知のCondition failed 19件、Editorレイアウト警告1件、対象外SDK不足の出力と、各試験の警告0件を区別する。Win64 SDK 10.0.22621.0はVALID。M08由来の残存警告なし。
+- ログは`Saved/Logs/M08Build.log`、`M08BuildFinal.log`、`M08Tests.log`、`M08TestsFinal.log`。回帰結果は`Saved/Automation/M08/index.json`、最終M08は`Saved/Automation/M08Final/index.json`（Git除外）。コード1ファイル追加・6ファイル変更、GAME_DESIGN/FISHING_SYSTEM/ROADMAP更新。既存未追跡のequipment_revision.patchを保持。Config/Content・Build.cs/Target.cs・M03/M05実装は変更なし。
+- M08は合格、M09へ進める状態。M09〜M18には未着手。D04/D07/D08の最新仕様を維持し、旧AutoStay設定撤去・Shakuri/Stay操作・Retrieveと一投ごとの装備変更・深度速度/接触Snapshot公開はM10、レンジ評価はM11、BITE倍率はM12に残す。NullRHIによる数値/Actor検証であり、PIE目視・入力HUD・パッケージ起動は未実施。
 
 ## 4. 受入シナリオ
 

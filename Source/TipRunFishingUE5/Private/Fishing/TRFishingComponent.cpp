@@ -1,7 +1,7 @@
 #include "Fishing/TRFishingComponent.h"
 
 UTRFishingComponent::UTRFishingComponent() { PrimaryComponentTick.bCanEverTick = false; }
-void UTRFishingComponent::Prepare() { bPendingBottomNotification = false; State = ETRFishingState::Ready; Snapshot = {}; Snapshot.FishingState = State; }
+void UTRFishingComponent::Prepare() { bPendingStateNotification = false; State = ETRFishingState::Ready; Snapshot = {}; Snapshot.FishingState = State; }
 void UTRFishingComponent::BeginCast(FTRCastId Id, int64 Tick, const FTREquipmentSnapshot& Equipment)
 {
 	CastEquipment = Equipment;
@@ -24,25 +24,32 @@ bool UTRFishingComponent::CompleteDeployment(const FTRBoatSnapshot& Boat, const 
 	Snapshot.FishingState = State;
 	return true;
 }
-void UTRFishingComponent::FinishCast() { bPendingBottomNotification = false; State = ETRFishingState::Result; Snapshot.FishingState = State; }
-void UTRFishingComponent::Stop() { bPendingBottomNotification = false; State = ETRFishingState::Inactive; Snapshot = {}; CastEquipment = {}; }
+void UTRFishingComponent::FinishCast() { bPendingStateNotification = false; State = ETRFishingState::Result; Snapshot.FishingState = State; }
+void UTRFishingComponent::Stop() { bPendingStateNotification = false; State = ETRFishingState::Inactive; Snapshot = {}; CastEquipment = {}; }
 void UTRFishingComponent::ApplyEgiStep(const FTREgiSnapshot& Updated, ETREgiStepEvent Event)
 {
 	if (Updated.CastId != Snapshot.CastId || Updated.Tick <= Snapshot.Tick ||
-		(State != ETRFishingState::FreeFall && State != ETRFishingState::BottomContact)) { return; }
-	if (Event == ETREgiStepEvent::ReachedBottom && State == ETRFishingState::FreeFall)
+		(State != ETRFishingState::FreeFall && State != ETRFishingState::BottomContact && State != ETRFishingState::TensionFall)) { return; }
+	if (Event == ETREgiStepEvent::ReachedBottom && State != ETRFishingState::BottomContact)
 	{
+		PendingStateFrom = State;
 		State = ETRFishingState::BottomContact;
-		bPendingBottomNotification = true;
+		bPendingStateNotification = true;
+	}
+	if (Event == ETREgiStepEvent::LeftBottom && State == ETRFishingState::BottomContact)
+	{
+		PendingStateFrom = State;
+		State = GetAction().LineMode == ETRLineMode::Payout ? ETRFishingState::FreeFall : ETRFishingState::TensionFall;
+		bPendingStateNotification = true;
 	}
 	Snapshot = Updated;
 	Snapshot.FishingState = State;
 }
 void UTRFishingComponent::PublishStateChanges()
 {
-	if (!bPendingBottomNotification) { return; }
-	bPendingBottomNotification = false;
-	OnFishingStateChanged.Broadcast(ETRFishingState::FreeFall, ETRFishingState::BottomContact);
+	if (!bPendingStateNotification) { return; }
+	bPendingStateNotification = false;
+	OnFishingStateChanged.Broadcast(PendingStateFrom, State);
 }
 FTREgiAction UTRFishingComponent::GetAction() const
 {
@@ -52,6 +59,11 @@ FTREgiAction UTRFishingComponent::GetAction() const
 	{
 		Action.LineMode = ETRLineMode::Payout;
 		Action.SinkScale = CastEquipment.Parameters.FreeFallSinkScale;
+	}
+	else if (State == ETRFishingState::BottomContact || State == ETRFishingState::TensionFall)
+	{
+		Action.LineMode = State == ETRFishingState::BottomContact ? ETRLineMode::Locked : ETRLineMode::ControlledPayout;
+		Action.SinkScale = CastEquipment.Parameters.TensionFallSinkScale;
 	}
 	return Action;
 }
