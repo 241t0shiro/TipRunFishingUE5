@@ -1,5 +1,7 @@
 # アオリイカAI・BITE技術設計
 
+2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。文書のみの変更で、M08以降は未実装。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+
 関連: [全体正本](GAME_DESIGN.md)、[釣り](FISHING_SYSTEM.md)。生態の厳密な再現モデルではなく、校正可能な行動近似を設計する。活性・季節・重量分布を科学的な既知値として固定しない。
 
 更新: v0.2 / 2026-09-12。D07の活性3段階/距離/レンジ差/STAY時間、D06の受付初期値、D03補足の10回超BITE減衰を適用。D10/D11はMVP暫定仕様、製品仕様はAlpha前に再決定。
@@ -50,15 +52,28 @@ MVPでは**FreeFallとTensionFallを含め、Stay以外でBiteを承認しない
 
 `RangeScore = clamp(1 - abs(d-PreferredDepthM)/RangeHalfWidthM, 0, 1)`
 
-Stay中の維持を評価する指数移動平均:
+TensionFall/Stay中の好適レンジ滞在履歴を評価する指数移動平均:
 
 `Exposure += (RangeScore-Exposure) * (1-exp(-dt/ExposureTimeS))`
 
-Stay以外では `Exposure *= exp(-dt/ExposureDecayS)`。時定数は正。ターゲットCastIdが変わったらExposure=0。短い通過とレンジ維持を区別する。Exposureはエギが好適レンジにいる履歴であり、イカが現在エギと同じ深度にいることとは別。
+TensionFall/Stay以外では `Exposure *= exp(-dt/ExposureDecayS)`。時定数は正。ターゲットCastIdが変わったらExposure=0。短い通過とレンジ維持を区別する。Exposureはエギが好適レンジにいる履歴であり、イカが現在エギと同じ深度にいることとは別。
 
 距離 `R` は水平と深度を合わせた3D距離m。`DistanceScore = clamp(1-R/DetectRadiusM,0,1)`。活性は `ETRSquidActivityLevel { Low, Medium, High }` の3段階で、SquidTuningの段階別Interest/Attack/BiteRateScaleを読む。任意のActivity01を製品入力として併用しない。係数は0以上、Low<=Medium<=Highで検証する。MVPでは季節IDから補正を引かず、季節設定がなくても起動・反応する。
 
-`StayElapsedS`は対象の連続Stay時間。Stay進入で0、Stay離脱で0、対象CastId変更で0。`StayTimeScore=clamp(StayElapsedS/StayBuildUpS,0,1)`、StayBuildUpS>0。レンジ履歴Exposureと区別する。AutoStayでも明示Stayでも同じ時計を使う。Stay重複入力でリセットしない。
+`StayElapsedS`は対象の連続Stay時間。Stay進入で0、Stay離脱で0、対象CastId変更で0。`StayTimeScore=clamp(StayElapsedS/StayBuildUpS,0,1)`、StayBuildUpS>0。レンジ履歴Exposureと区別する。過渡処理終了によるStay進入から測定し、状態を継続評価するだけではリセットしない。StayBuildUpSは反応の評価時定数であり、Stay移行待ち時間ではない。
+
+### 釣合いによるレンジ維持評価（技術設計、製品係数未確定）
+
+MVPの評価基準となる狙いレンジは対象イカのPreferredDepthMとする技術案。Stay進入時のエギ深度で毎回目標を上書きしない。プレイヤーの目標レンジ入力UIは追加しない。実行時指標と調整データを分離する。
+
+- `RangeErrorM = d - PreferredDepthM`（下向き正）。上昇/下降の方向はEgiSnapshotの`DepthVelocityMps`で読む。小さい誤差が好ましく、従来のRangeScoreが現在の近さを担う。
+- `RangeStability01`はTensionFall/Stay中の深度変化速度の絶対値を平滑化して評価する。技術式は `SpeedEMA += (abs(DepthVelocityMps)-SpeedEMA)*(1-exp(-dt/RangeStabilityTimeS))`、`RangeStability01=clamp(1-SpeedEMA/RangeStableSpeedMps,0,1)`。上昇と下降で同じ尺度を使い、上下振動が相殺されて高評価にならないよう符号付き平均は使わない。
+- `RangeHoldScore = RangeScore * RangeStability01`。好適レンジ外の静止や好適レンジを速く通過する状態より、好適レンジを維持した状態を高く評価する。海底/海面の制約で静止しているTickは釣合い維持とみなさずRangeHoldScore=0とする。
+- `RangeHoldBiteMultiplier = RangeHoldBiteScaleByScore(RangeHoldScore)`。曲線は0..1の有限値・単調非減少、最高スコアで最大倍率。上昇/下降を表す比較用スコアでは理想維持より厳密に低い倍率とし、定数曲線は受け入れない。倍率の製品値は未指定。
+
+RangeStabilityTimeS>0、RangeStableSpeedMps>0、RangeHalfWidthM>0、RangeHoldBiteScaleByScoreはSquidTuning DataAssetへ置き、IsDataValidで有限数/正の許容幅・時定数/曲線域と単調性を検証する。設定はセッション開始時に凍結する。指標そのものを固定値として保存しない。TensionFall→Stayでは履歴を保持し、両状態からの離脱・対象CastId変更・対象喪失でSpeedEMAの履歴を破棄、次の有効サンプルの絶対速度で初期化する。未計測時はRangeStability01=0。Pause中は更新しない。Exposureの減衰は上記の別契約を維持する。
+
+レンジ評価は釣り状態を変更しない。TensionFall中に高得点でもBITEは承認しない。活性・距離・Exposure・Stay時間・シャクリ回数を揃えた比較で、釣合い維持が上昇/下降より高いBITE確率になることを保証する。理想維持でも必中ではなく、既存の距離/Stay/対象/受付条件と10回超減衰を維持する。
 
 ### フレームレート非依存の確率
 
@@ -74,7 +89,7 @@ Stay以外では `Exposure *= exp(-dt/ExposureDecayS)`。時定数は正。タ�
 
 Fishingの `StayPenaltyJerkCount=N` を使用し、`Excess=max(0,N-10)`。N<=10なら倍率1。N>=11では `BiteProbabilityScaleByExcessJerks` 曲線（横軸=超過回数、縦軸=0..1）から、回数に応じて極端に小さくなる倍率を取得する。1回超過で大きく低下し、以降は単調非増加。定義域外は末尾の小さい値に固定し、外挿で回復させない。これは回数制限ではなく確率の減衰である。
 
-倍率はハザード自体ではなく基礎成功確率へ適用する: `pBiteBase=1-exp(-lambdaBite*dt)`、`pBite=pBiteBase*JerkBiteMultiplier`。これにより高λでも「極端に低下」が消えない。判定は1回だけ乱数を引く。基礎ハザード方式と固定Tickは維持するが、刻みを変更する場合は減衰後の時間当たり確率を再校正する。
+倍率はハザード自体ではなく基礎成功確率へ適用する: `pBiteBase=1-exp(-lambdaBite*dt)`、`pBite=pBiteBase*RangeHoldBiteMultiplier*JerkBiteMultiplier`。これにより高λでも「極端に低下」が消えない。判定は1回だけ乱数を引く。基礎ハザード方式と固定Tickは維持するが、刻みを変更する場合は減衰後の時間当たり確率を再校正する。
 
 係数の製品初期値は未指定。**試験用曲線例**は超過0→1、1→0.1、2→0.01、3→0.001、10→0.000001、以降末尾固定、区間は線形補間とする。10回/11回/12回/13回/20回で倍率1/0.1/0.01/0.001/0.000001を確認する。実際のMVP調整では「11回以上が明確に極端な低下」であることを比率ログとプレイ試験で確認し、任意の緩い曲線へ置き換えない。
 
@@ -129,11 +144,11 @@ Cueは表示要求でありBITE判定の入力ではない。描画が遅延し�
 
 ## 7. 設定とBlueprint
 
-DataAsset: DetectRadiusM、AttackDistanceM、BiteDistanceM（Bite<=Attack<=Detect）、ApproachSpeedMps、AttackSpeedMps、InterestedDurationS、AttackDurationS、AttackMaxDurationS、BaseInterest/Attack/BiteRatePerS、3段階ActivityProfiles、BehaviorInterestScoreByFishingState、RangeHalfWidthM、ExposureTimeS/DecayS、StayBuildUpS、CautionDurationS、CooldownDurationS、BiteProbabilityScaleByExcessJerks。季節補正データはMVP必須項目に含めない。無減衰の境界10回は確定ルール、曲線の倍率が調整対象。
+DataAsset: DetectRadiusM、AttackDistanceM、BiteDistanceM（Bite<=Attack<=Detect）、ApproachSpeedMps、AttackSpeedMps、InterestedDurationS、AttackDurationS、AttackMaxDurationS、BaseInterest/Attack/BiteRatePerS、3段階ActivityProfiles、BehaviorInterestScoreByFishingState、RangeHalfWidthM、RangeStabilityTimeS、RangeStableSpeedMps、RangeHoldBiteScaleByScore、ExposureTimeS/DecayS、StayBuildUpS、CautionDurationS、CooldownDurationS、BiteProbabilityScaleByExcessJerks。季節補正データはMVP必須項目に含めない。無減衰の境界10回は確定ルール、曲線の倍率が調整対象。
 
 個体の初期深度・固定重量・3段階活性はテストシナリオ/配置データ。テスト用イカは1体、重量は個体生成から釣果まで固定。量産用重量分布はAlpha前のD10再決定まで保留。Hook受付値はFishingTuningにのみ置く。
 
-BlueprintReadOnly: AIState、WeightKg、Position、ActivityLevel、Cue。Exposure/StayElapsedS/λ/StayPenaltyJerkCount/JerkBiteMultiplier/Token期限は開発HUD専用。BlueprintCallable: 読取のみ。攻撃強制・重さ書換え・HIT強制は製品公開しない。テストの強制BITEは開発用C++試験APIで、Stay/対象/Token制約を迂回しない。
+BlueprintReadOnly: AIState、WeightKg、Position、ActivityLevel、Cue。RangeErrorM/RangeStability01/RangeHoldScore/RangeHoldBiteMultiplier/Exposure/StayElapsedS/λ/StayPenaltyJerkCount/JerkBiteMultiplier/Token期限は開発HUD専用。BlueprintCallable: 読取のみ。攻撃強制・重さ書換え・HIT強制は製品公開しない。テストの強制BITEは開発用C++試験APIで、Stay/対象/Token制約を迂回しない。
 
 ## 8. テスト
 
@@ -142,7 +157,7 @@ BlueprintReadOnly: AIState、WeightKg、Position、ActivityLevel、Cue。Exposur
 | S01 | 全AI状態の遷移と禁止遷移 | 許可した遷移のみ、Idleから瞬間Biteなし |
 | S02 | FreeFall / TensionFall / Jerkingで高λ | BITE数0。Stayだけ承認可能 |
 | S03 | 範囲中心/範囲外で同じ入力とseed群 | 範囲外λBite=0、中心・維持で高い反応率 |
-| S04 | λ=2/s、適格状態1秒、独立seed 10,000試行 | 理論 `1-exp(-2)` と事前設定許容差±0.02内 |
+| S04 | λ=2/s、維持倍率とシャクリ倍率を1に固定、適格状態1秒、独立seed 10,000試行 | 理論 `1-exp(-2)` と事前設定許容差±0.02内 |
 | S05 | 初期0.10/0.55秒、Tick105/106/132/133を独立試験 | Early/Hit/Hit/Late、133で無入力はExpired。開閉設定変更時も対応する境界で一致 |
 | S06 | 早合わせ後に窓内で連打 | 同じTokenでHITに覆らない |
 | S07 | 二個体が同Tickで要求 | 距離→IDで1件承認、他はCaution |
@@ -152,10 +167,12 @@ BlueprintReadOnly: AIState、WeightKg、Position、ActivityLevel、Cue。Exposur
 | S11 | Bite生成と同TickにHookコマンド | NoBite扱いで新規要求抑止、未来のBiteで成功しない |
 | S12 | ゲームポーズで受付期間を跨ぐ実時間待機 | sim期限不変、再開直後の保留入力なし |
 | S13 | Low/Medium/High、同距離/レンジ/STAY時間 | 設定段階に応じAttack/Bite率が非減少、季節データなしで動作 |
-| S14 | 同じ条件で距離/レンジ差/STAY時間だけ変更 | 各要素が式に反映。Stay再入力で時間リセットなし、Fall離脱で0 |
-| S15 | テスト曲線、10/11/12/13/20回、同じ基礎λ | pBite比が1/0.1/0.01/0.001/0.000001、Attack率は不変、20回超も入力可 |
+| S14 | 同じ条件で距離/レンジ差/STAY時間だけ変更 | 各要素が式に反映。Stay継続評価で時間リセットなし、Fall離脱で0 |
+| S15 | テスト曲線、10/11/12/13/20回、同じ基礎λ・維持倍率 | pBite比が1/0.1/0.01/0.001/0.000001、Attack率は不変、20回超も入力可 |
 | S16 | 11回Stay→Fall→Stay、MISS/再取得 | 減衰保持。新しい一連のJerk後のStayでのみ新しい回数へ更新 |
 | S17 | 曲線範囲外/負倍率/増加曲線、λ極大 | 範囲外は末尾固定、不正曲線拒否、高λでも減衰倍率維持 |
 | S18 | MVPの複数BITE通知、固定重量の捕獲/バラシ | CueはPrototypeのみ、重量再抽選なし、バラシでCautionへ |
+| S19 | M11: 同レンジで維持/上昇/下降/上下振動、範囲外静止、境界静止、TF→Stay、Pause、対象変更 | 誤差と絶対速度履歴を反映、維持が最高。境界静止は維持加点なし。TF→Stayで履歴保持、未計測/リセット/凍結/不正設定を検証 |
+| S20 | M12: 他条件を揃え、理想維持/上昇/下降の計算確率とDataAsset変更を比較 | 理想維持のpBiteが最大、上昇/下降で低下。非Stayは0、10回超減衰と両立。単発の乱数結果ではなく式と多数試行で検証 |
 
 確率試験は分布用の隔離された計算器で実行し、接近移動やCooldownによる有効時間短縮を混ぜない。統合試験では自然反応と試験要求の両方を使い、強制成功だけでAI完成としない。

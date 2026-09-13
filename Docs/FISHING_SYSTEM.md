@@ -1,5 +1,9 @@
 # 釣りシステム技術設計
 
+2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
+
+2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。文書のみの変更で、M08以降は未実装。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+
 関連: [全体正本・要決定事項](GAME_DESIGN.md)、[BITE・AI](SQUID_AI.md)。本書の数式と未指定操作は技術提案/暫定案。実測の釣りモデルと称さない。
 
 更新: v0.2 / 2026-09-12。D01〜D09/D13/D15のMVP決定、D10〜D12のMVP暫定仕様を反映。数値式の詳細は技術設計であり、未指定の調整係数はDataAssetで校正する。
@@ -8,7 +12,7 @@
 
 | クラス / 継承元 | 責務・主要Component | 主要変数 | 主要関数 |
 |---|---|---|---|
-| `UTRFishingComponent : UActorComponent` | 操作状態の唯一の所有者。Sessionに配置 | `State: ETRFishingState`、CastId、StateEnteredTick、LastActionTick、JerkCount（投内合計）、SeriesJerkCount、StayPenaltyJerkCount、bSeriesClosed、PendingJerkCount、AutoStayDeadlineTick、bHadMiss、bHadEscape、ActiveCommand | `HandleCommand(const FTRFishingCommand&) -> ETRCommandResult`、`Step(float)`、`BeginCast()`、`TransitionTo()`、`AbortCast()`、`GetSnapshot()` |
+| `UTRFishingComponent : UActorComponent` | 操作状態の唯一の所有者。Sessionに配置 | `State: ETRFishingState`、CastId、StateEnteredTick、LastActionTick、JerkCount（投内合計）、SeriesJerkCount、StayPenaltyJerkCount、bSeriesClosed、PendingJerkCount、bHadMiss、bHadEscape、ActiveCommand | `HandleCommand(const FTRFishingCommand&) -> ETRCommandResult`、`Step(float)`、`BeginCast()`、`TransitionTo()`、`AbortCast()`、`GetSnapshot()` |
 | `UTREgiSimulationComponent : UActorComponent` | 深度・水平位置・ライン近似の唯一の所有者。Sessionに配置 | DepthM:float、PositionXYM:FVector2D、VelocityMps:FVector、LineLengthM:float、LineAngleRad:float、Tension01:float、TotalMassG:float | `InitializeCast()`、`StepEgi(dt,Ocean,Boat,Action)`、`ApplyJerk()`、`SetLineMode()`、`GetSnapshot()`、`Reset()` |
 | `ATREgiActor : AActor` | 結果の描画専用。SceneRoot、StaticMesh。任意で表示用ライン | Previous/CurrentSnapshot、Mesh参照 | `ApplySimulationSnapshot()`、`UpdateVisualInterpolation()` |
 | `UTRHookComponent : UActorComponent` | BITEトークン・受付・合わせの唯一の判定者。Sessionに配置 | ActiveToken、TargetSimId、BiteStartTick、OpenTick、CloseTick、Resolved | `TryOpenBite()`、`EvaluateHook()`、`ExpireBite()`、`CancelBite()`、`Reset()` |
@@ -31,12 +35,16 @@
 
 `FTREquipmentSnapshot`: EgiId、SinkerId、BaseMassG、SinkerMassG、TotalMassG、凍結した関連係数。`TotalMassG = BaseMassG + SinkerMassG`。組合せは3×9=27通り、総重量30〜90g。初期エギは `Egi_3_5`（35g）、初期シンカーは未指定のため試験構成では `Sinker_None` を使い35gとする。同総重量でも形状プロファイルが異なってよい。係数比較試験では形状曲線を揃える。
 
-`StartFishing()`で装備をロックし、MVPの装備変更はその前だけ許す。Deploy前Ready、MISS後、次投Readyでも同じ釣りセッション中は変更不可。EndFishingでロック解除。一投ごとの凍結とは別にセッションロックを持ち、Ready判定だけで装備変更を許さない。
+装備変更の許可条件は「エギが船上」「現在のCastが終了済み」「初投/次投の準備状態」をすべて満たすこと。初投前は活動中Castがないことを確認する。`StartFishing()`だけでは装備をロックせず、`Deploy`受理時に選択済みエギ・シンカーと総重量・係数のSnapshotを凍結し、一投中は変更を禁止する。Readyという状態名だけで許可しない。
+
+Retrieve完了でCastを終了し、エギの船上帰還を論理状態として確定する。その後の次投準備では、同じ釣りセッションのままエギ・シンカーを変更できる。回収中、MISS後、BITE/Fight中は変更不可。Caught/Abort/EndFishing等でCastだけ終了しても、船上帰還が未確認なら変更不可。船上判定はGame/Sessionの正本で持ち、メッシュの表示/非表示や座標だけから推測しない。
+
+装備変更時にM02の検証と必要なアセット解決を固定更新の外で行い、次投用候補を準備する。Deploy時は候補の有効性と変更許可条件を再検査して、受理とロック/凍結を一体で確定する。同Tickに後着した装備変更は拒否し、進行中Castと過去の結果Snapshotは書き換えない。次投では更新後の総重量・係数・メッシュを使用する。未準備/不正な装備では投入を受理しない。
 
 ### M02のデータ実装（2026-09-12）
 
 - `TREquipmentData.h/.cpp`に装備行、`FTREquipmentSnapshot`、`TREquipment::ValidateTables/TryBuildSnapshot`を実装。初期エギIDは`InitialEgiId()`、0g専用IDは`NoSinkerId()`で取得。初期シンカーを製品設定として固定する処理や装備ロック処理は追加せず、ロックはM06で実装する。
-- `TRFishingTuningDataAsset.h/.cpp`に`UTRFishingTuningDataAsset`、`FTRFishingParameters`、`FTREgiSimulationProfile`を実装。Fishingの数値設定を保持し、AIのBITE減衰曲線、海・船・入力のDataAsset、表示補間設定はそれぞれの後続タスクで追加する。承認済みのAutoStay 0.8秒、Hook 0.10/0.55秒以外の未指定係数は未設定値として初期化し、必要値を欠く設定は検証を通さない。
+- `TRFishingTuningDataAsset.h/.cpp`に`UTRFishingTuningDataAsset`、`FTRFishingParameters`、`FTREgiSimulationProfile`を実装。Fishingの数値設定を保持し、AIのBITE減衰曲線、海・船・入力のDataAsset、表示補間設定はそれぞれの後続タスクで追加する。当時の旧Stay遅延設定とHook 0.10/0.55秒以外の未指定係数は未設定値として初期化し、必要値を欠く設定は検証を通さない。
 - M02の重量曲線は、30〜90gを覆う2点以上のキー、有限数、厳密に昇順の横軸、正の縦軸、線形補間を要求する技術実装。未検証のスプラインの負値・オーバーシュートを避ける。Snapshotには総重量で評価済みの沈下速度・水平応答係数と釣り設定を値コピーし、元の曲線・DataAssetへの参照を残さない。
 - 行とTuningの`IsDataValid`に加え、`ValidateTables`でテーブル型、論理ID重複、行名とIDの一致、プロファイル参照、全装備の曲線定義域を検証する。エギおよび非0gシンカーのメッシュ参照を必須とし、0gのVisualMeshだけは空を許す。検証は参照メッシュを同期ロードする場合があるため、設定確認時に実行しTickから呼ばない。`TryBuildSnapshot`は固定刻みでの受付窓縮退・時間変換不正も拒否し、失敗時に出力を変更しない。
 - `Content/TipRun/Prototype/Data`に`DT_TR_Egi_Prototype`、`DT_TR_Sinker_Prototype`、`DA_TR_FishingTuning_Prototype`をUEのSavePackageで作成済み。装備重量は本書の確定値、メッシュはEngineの仮Cube。係数は`TREquipmentDataTests.cpp`内で明示した試験用のゲーム近似であり、実測値・製品バランスではない。設定は同一形状用TestProfileの曲線を使用する。
@@ -44,7 +52,9 @@
 
 ## 3. 操作状態
 
-### M06のSession・最小操作状態（2026-09-13）
+### M06のSession・最小操作状態（2026-09-13、旧D08の実装履歴）
+
+以下のセッション全体ロック・EndFishing限定解除と旧F16合格は当時の記録。現行D08は第2節を正本とし、M10で一投単位のロックへ移行する。M06で新仕様が実装・検証済みという意味ではない。
 
 - `ATRFishingSessionActor`と`UTRFishingComponent`を追加。SessionはComponentをCreateDefaultSubobjectで所有し、装備・設定参照をUPROPERTY、Coordinatorを弱参照、船をCoordinatorの登録IDで保持する。Fishingが操作状態を所有し、SessionがSessionPhase・CastId採番・装備ロックを所有する。両者の独立Tickはない。EgiSimulation/Hook/FightのComponentと描画EgiActorは、それぞれの後続タスクで追加する。
 - `Initialize`へ同一Worldの設定済Coordinator、登録済BoatId、エギ/シンカーDataTable、FishingTuning、明示的な初期シンカーIDを渡す。初期エギはM02の`InitialEgiId()`（3.5号35g）。初期シンカー未指定を0gへ補完しない。設定・選択・竿先位置の海を検証し、成功時はSessionPhase=Ready、FishingState=Inactive。失敗時は理由を返し、有効な設定で再試行できる。
@@ -55,6 +65,8 @@
 - Abort/次投リセットではCoordinator登録を更新して旧登録IDの入力を無効化し、EndFishing/EndPlayで登録とキューを解除する。BeginPlay前の破棄ではEndPlayが呼ばれないためDestroyedでも同じ冪等な解放を行う。登録delegateは弱いUObjectバインドで、終了時は設定参照も解放する。船やOcean自体はSession終了で停止/破棄しない。活動中に船/Oceanの有効性を失った場合はAbortedへ進め、装備ロックは明示終了まで維持する。
 - `TipRun.M06`の5試験でF16全境界、初期35g/明示0g、CastId増加・不正入力、Boat更新後の投入、設定凍結、旧入力破棄、未来入力順、ポーズ、環境喪失、BeginPlay前後の破棄を確認。試験の次投は明示中断経由であり、M10以降の回収やM15の結果UI完成を意味しない。Content/Config・保存アセットは変更していない。
 
+STAYは「竿をあおるシャクリ動作をしていない通常の釣り状態」。FreeFall・着底・回収・Fight等まで無入力だけでStayに分類しない。原則の遷移は `Shakuri -> TensionFall -> Stay`。本書のShakuriは既存enumのJerkingに対応し、今回enumの改名は行わない。
+
 `ETRFishingState`:
 `Inactive, Ready, Deploying, FreeFall, BottomContact, Jerking, TensionFall, Stay, Retrieving, Fighting, Landing, Result`
 
@@ -63,39 +75,38 @@
 | 現在 | トリガーと条件 | 次 | 副作用 |
 |---|---|---|---|
 | Inactive | 釣り開始・環境有効 | Ready | 設定検証、入力接続 |
-| Ready | Deploy | Deploying | CastId増加、エギ生成、装備固定 |
+| Ready | Deploy | Deploying | 船上/活動中Castなし/準備済み装備を検査し、受理と同時にCastId増加、エギ生成、装備固定 |
 | Deploying | 配置成功 | FreeFall | キャストなしで竿先付近の海面へ投入、自動繰出し。アニメ終了を待たない |
 | FreeFall | 海底に到達 | BottomContact | 深度を海底へ制限、着底通知を1回 |
-| FreeFall | Jerk / TensionFall / Stay要求 | 対応状態 | D02/D03の途中操作を許す暫定案 |
+| FreeFall | Jerk / TensionFall要求 | Jerking / TensionFall | 途中操作を許す暫定案。ライン制御へ戻した後は過渡処理終了でStay |
 | BottomContact | Jerk | Jerking | 浮上動作を1回開始 |
-| BottomContact | Stay / TensionFall | 同名状態 | 海底制約は継続 |
+| BottomContact | TensionFall | TensionFall | 海底制約は継続、海底接触を優先 |
 | Jerking | 動作時間満了 | TensionFall | 動作分の巻取り完了。連続入力の処理はD03の下記契約 |
 | Jerking | Jerk入力 | Jerking | PendingJerkCountへ予約、並列実行しない |
-| Jerking | 明示Fall / Stay | 同名状態 | 現動作を中止して予約取消。開始済動作の回数は保持 |
-| TensionFall | Stay | Stay | ライン固定モードへ |
+| Jerking | 明示Fall | FreeFall | 現動作を中止して予約取消。開始済動作の回数は保持 |
+| TensionFall | シャクリ直後の過渡処理終了、予約Jerkなし | Stay | 同じ固定Tickで移行、ライン長を維持して固定。レンジ安定の成否は問わない |
 | TensionFall | 海底に到達 | BottomContact | 着底通知 |
 | Stay / TensionFall | Jerk | Jerking | 1受理入力につき1動作、回数上限なし。後続Stay用の回数を更新 |
 | Stay / TensionFall | Fall | FreeFall | 再フォール。BITE予約/受付を取り消す |
-| TensionFall | 無入力時間がAutoStayDelaySに到達 | Stay | 初期値0.8秒、DataAssetで調整。MVPで自動移行を採用 |
 | FreeFall / BottomContact / Jerking / TensionFall / Stay | Retrieve開始 | Retrieving | BITE取消、回収用巻取り |
 | Stay | 有効なHook入力でHit | Fighting | ラインモデルの所有を簡易ファイトへ切替 |
 | Stay等 | Hook入力がEarly/Late/NoBite | 元の状態 | MISS通知と機会消費。詳細SQUID_AI |
-| Retrieving | ライン回収閾値到達 | Result | Caughtにはしない。Escaped / Missed / Retrievedを履歴で選ぶ |
+| Retrieving | ライン回収閾値到達 | Result | Cast終了と船上帰還を確定。Caughtにはしない。Escaped / Missed / Retrievedを履歴で選ぶ |
 | Fighting | ファイト成功 | Landing | Caught候補を固定 |
 | Fighting | 過大テンションが規定時間継続 | Stay | バラシ通知、bHadEscape=true、対象解放。投は回収まで継続する技術案 |
 | Landing | 論理的取り込み完了 | Result | Caughtを一度だけ確定。演出完了依存にしない |
-| Result | 次投 | Ready | 結果解除、Cast固有状態リセット |
+| Result | 次投 | Ready | 結果Snapshotを確定保持、Cast固有状態リセット。船上かつCast終了済みなら装備変更可 |
 | 任意の活動状態 | 終了・環境無効・対象喪失 | ResultまたはInactive | Aborted、全受付無効。画面動線はD13 |
 
 表にない入力は `RejectedInvalidState`。不正遷移は状態を変えず、開発ビルドで理由を記録する。BottomContactは観測状態でありプレイヤーの「着底ボタン」は設けない。BottomContact中に船の移動でエギが浮いた場合、開いたラインならFreeFall、固定ラインならTensionFallへ戻す。
 
-`FTRFishingCommand`: Type、TargetTick、Sequence、AxisValue。TypeはDeploy / Fall / Jerk / TensionFall / Stay / Hook / RetrieveStarted / RetrieveStopped / EndFishing / NextCast。キー割当はD12。
+`FTRFishingCommand`: Type、TargetTick、Sequence、AxisValue。TypeはDeploy / Fall / Jerk / TensionFall / Hook / RetrieveStarted / RetrieveStopped / EndFishing / NextCast。キー割当はD12。
 
 釣りセッション開始はGame側の `StartFishing()` 要求でInactive→Readyへ入り、投入とは分ける。`ETRCommandResult` は Accepted / RejectedInvalidState / RejectedBusy / RejectedInvalidEnvironment / RejectedMissingData。戻り値だけでUIが先行遷移せず、状態変更通知を待つ。
 
 `FTREgiAction`はFishingからEgiSimulationへ渡す値型で、FishingState、`ETRLineMode`（Payout / ControlledPayout / Locked / ReelIn）、SinkScale、LiftMps、ReelMpsを含む。EgiSimulationが入力やAI状態を再解釈しない。`StepEgi`はSnapshotと `ETREgiStepEvent`（None / ReachedBottom / LeftBottom / Retrieved / EnvironmentInvalid）を返し、Fishingだけが操作状態を遷移させる。
 
-**D03（同日補足を反映）**: シャクリ回数は上限なし。1入力1動作で連続入力可能、各終了後TensionFallへ移る。Jerking中の入力はPendingJerkCountへ数え、TensionFallで次の1件を取り出してJerkingへ進む。動作を並列実行/合成しない。明示Fall/Stay/回収/中断では未実行の予約を取消す。実行前の予約をシャクリ回数に算入しない。カウンタはint64、ゲーム上の回数制限としてオーバーフローを利用しない。
+**D03（同日補足を反映）**: シャクリ回数は上限なし。1入力1動作で連続入力可能、各終了後TensionFallへ移る。Jerking中の入力はPendingJerkCountへ数え、TensionFallで次の1件を取り出してJerkingへ進む。動作を並列実行/合成しない。明示Fall/回収/中断では未実行の予約を取消す。実行前の予約をシャクリ回数に算入しない。カウンタはint64、ゲーム上の回数制限としてオーバーフローを利用しない。
 
 **一連の回数と後続STAYの契約（技術設計）**:
 
@@ -106,9 +117,9 @@
 - 投終了/新Cast開始で全回数をリセット。イカのCaution/Cooldownは別所有でありリセットしない。新しい一連が始まっても、Stayに入るまではBITE不可。
 - AI用FTREgiSnapshotにStayPenaltyJerkCountを追加。Fishingが回数を所有し、AIが減衰倍率を計算する。回数により強制Stayや入力拒否を起こさない。
 
-**D04の時間契約**: TensionFallへ入ったTickから `ceil(AutoStayDelayS/StepSeconds)` Tick後を期限にする（共通換算の整数近傍補正を適用）。その状態で受理した新たな操作で期限を再設定する。既にTensionFallであるだけの重複コマンド、拒否入力、HUD操作は期限を延長しない。Jerkが受理されればJerkingへ移り、次のTensionFall進入時に0.8秒を計り直す。未処理のシャクリ入力があればAutoStayより先に処理する。自動移行はFreeFall/Jerking/Fighting/BottomContactでは発火しない。60Hz・初期値なら48Tick、同Tickの有効入力を期限処理より優先する。
+**D04の状態判定契約**: TensionFallはシャクリ直後の残留リフト・姿勢/ライン制御の過渡処理を担う内部状態。その処理が終了した固定TickでStayへ移行し、無入力待ち時間を追加しない。完了はシミュレーション側の処理完了をFishingへ通知する設計とし、アニメーション終了や壁時計で判定しない。過渡処理の具体的な収束判定・係数はM10で調整可能にするが、鉛直速度ゼロ、RangeError低下、RangeStability達成は完了条件にしない。軽すぎて上昇・重すぎて下降していてもStayへ進む。同Tickの有効なFall/回収/終了/Jerkと予約Jerkを状態確定前に処理し、一瞬Stayを挟んでBITEを許可しない。AutoStayDelayS、期限Tick、残り秒、再計時は設計から撤去する。Stayは専用入力で実行する操作ではなく、旧Stayコマンドを前提にした経路・テストはM10で置換する。
 
-Stay中のStayは冪等でLastActionTickも更新しない。Retrieving中のRetrieveStoppedはStayへ戻す技術案。Fighting中のRetrieveStarted/Stoppedは状態遷移でなく巻きフラグに変換する。
+Stayの継続評価だけではLastActionTickやStay進入時刻を更新しない。Retrieving中のRetrieveStoppedはStayへ戻す技術案。Fighting中のRetrieveStarted/Stoppedは状態遷移でなく巻きフラグに変換する。
 
 ## 4. エギ・ラインの軽量シミュレーション案
 
@@ -144,7 +155,17 @@ Stay中のStayは冪等でLastActionTickも更新しない。Retrieving中のRet
 
 `Tension01 = clamp(CorrectionDistanceM / TensionReferenceM,0,1)` は表示・挙動調整用の代理値でありニュートンではない。ケーブルの張力、糸伸び、抗力分布、弛んだライン形状は解かない。`TensionReferenceM>0`、補正量は固定刻み基準で調整する。
 
-投入時は海面上の竿先からエギ初期位置までの距離以上にLを初期化する。海中モデルで竿先そのものまで回収しようとすると海面制約と矛盾するため、回収終点は「竿先直下の海面近傍、水平距離と深度がRetrievalToleranceM以内」とする技術案。到達時にRetrievedを返し、海中モデルを終了してエギを非表示/装備表示へ切り替える。回収中の最小長は竿先の海面上高さ以上とし、上空まで海中エギを引き上げない。演出と許容距離はD02/D13で調整する。
+投入時は海面上の竿先からエギ初期位置までの距離以上にLを初期化する。海中モデルで竿先そのものまで回収しようとすると海面制約と矛盾するため、回収終点は「竿先直下の海面近傍、水平距離と深度がRetrievalToleranceM以内」とする技術案。到達時にRetrievedを返し、海中モデルを終了する。SessionはCast終了と論理的な船上帰還を確定してエギを非表示/装備表示へ切り替える。表示切替だけでは装備変更を許可しない。回収中の最小長は竿先の海面上高さ以上とし、上空まで海中エギを引き上げない。演出と許容距離はD02/D13で調整する。
+
+### レンジ維持と重量判断（D04/D07）
+
+TensionFall/Stay中は、船ドリフトで竿先が移動し、張ったラインがエギを上へ引く作用と、エギ＋シンカー総重量による沈下作用との釣合いをゲーム近似で表す。上記ライン投影が上向き作用を担い、船速由来の追加リフトを二重加算しない。深度を目標へ固定・自動補正して安定を作らない。
+
+理想は狙いレンジ付近を安定維持する状態。ドリフト過大/軽すぎによる上昇、重すぎによる下降の双方でBITE評価を低下させる。同じ深度を一瞬通過しただけの状態より、釣合いによって維持できた状態を高く評価する。Stayの状態判定とレンジ維持の良否は別であり、TensionFall中にも維持評価を蓄積するがBITE承認はStayのみ。
+
+エギ重量・シンカー重量を選び、狙いレンジを安定維持することを主要な判断要素とする。プレイヤーは直前の投で観測したレンジ上昇・下降、潮流、船ドリフトを基に、Retrieve完了→Cast終了・船上帰還→次投準備で総重量を調整→再投入を繰り返す。一投ごとの調整がレンジ安定化と釣果向上につながるよう設計し、EndFishingを毎投要求しない。
+
+EgiSimulationは補正後のDepthMと深度変化速度（下向き正、DepthVelocityMps）をSnapshotへ提供する設計。AIが対象レンジに対するRangeErrorM、RangeStability01、RangeHoldScoreを計算する（正本はSQUID_AI第3節）。指標は実行時の値、許容幅・評価時定数・BITE倍率曲線はSquidTuning DataAssetの調整値として区別する。境界に押し付けられた静止を釣合いと誤認しないよう海底/海面接触も渡す。具体的な係数はPrototype/Testで検証し、製品値は固定しない。
 
 ### 総重量が与える4つの影響
 
@@ -183,9 +204,9 @@ Hookの時刻契約、BITE成立条件、Cautionは [SQUID_AI](SQUID_AI.md) が�
 
 ## 6. 設定・Blueprint公開
 
-DataAsset項目: ProfileId別SinkSpeedByTotalMass/HorizontalResponseByTotalMass曲線、最大ライン長、PayoutMps、TensionPayoutMps、MinLineM、ReelMps、状態別SinkScale、JerkDurationS/LiftMps/ReelMps、`AutoStayDelayS=0.8`、TensionReferenceM、MaxEgiSpeedMps、`HookOpenDelayS=0.10`、`HookCloseDelayS=0.55`、上記Fight調整値、回収閾値、VisualInterpolation設定。D03のBITE減衰曲線はSquidTuningにのみ置く。固定ステップはSession側。初期値指定のない項目に製品確定値を捏造しない。
+DataAsset項目: ProfileId別SinkSpeedByTotalMass/HorizontalResponseByTotalMass曲線、最大ライン長、PayoutMps、TensionPayoutMps、MinLineM、ReelMps、状態別SinkScale、JerkDurationS/LiftMps/ReelMps、TensionReferenceM、MaxEgiSpeedMps、`HookOpenDelayS=0.10`、`HookCloseDelayS=0.55`、上記Fight調整値、回収閾値、VisualInterpolation設定。D03のBITE減衰曲線はSquidTuningにのみ置く。固定ステップはSession側。初期値指定のない項目に製品確定値を捏造しない。
 
-BlueprintReadOnly: State、DepthM、JerkCount、SeriesJerkCount、StayPenaltyJerkCount、PendingJerkCount、AutoStay残り秒、装備ロック/ID/総重量、ライン角度、エギ張力代理値、FightTension01、OverTensionTicks、FightProgress、CatchResult。
+BlueprintReadOnly: State、DepthM、JerkCount、SeriesJerkCount、StayPenaltyJerkCount、PendingJerkCount、装備ロック/ID/総重量、ライン角度、エギ張力代理値、FightTension01、OverTensionTicks、FightProgress、CatchResult。
 BlueprintCallable: Controller経由のコマンド送信、読取スナップショット取得。`SetDepth` / `SetState` / `ForceHit` は製品BPに公開しない。
 BlueprintAssignable: OnFishingStateChanged、OnBottomContact、OnHookResolved、OnCastCompleted。描画ActorはSnapshot適用APIのみ。
 
@@ -199,8 +220,8 @@ BlueprintAssignable: OnFishingStateChanged、OnBottomContact、OnHookResolved、
 | F04 | 同じ形状曲線、35g/80g、潮と船速度一定 | 重量による沈下/水平応答/追従差が記録される |
 | F05 | Stay・固定Lで船のみ移動 | 水平位置とレンジが変化、L不変 |
 | F06 | 1/10/11/20回、動作中の連続入力、予約取消 | 回数上限なし、受理入力を逐次実行。取消済予約は回数に含めない、強制Stayなし |
-| F07 | Stay→Fall→着底→Jerk→Stay | 再フォール成立、旧BITE無効 |
-| F08 | TensionFall開始T、60Hz、初期0.8秒 | T+47はTF、T+48でStay。期限TickのJerk優先、再TFで再計時。調整値変更でも対応Tick一致 |
+| F07 | Stay→Fall→着底→Jerk→TensionFall→Stay | 再フォール成立、旧BITE無効 |
+| F08 | Shakuri→TensionFallの過渡処理未完了/完了、予約Jerk、同TickのJerk/Fall/回収/終了 | 未完了はTF、完了TickでStay。固定待ちなし、入力優先で一瞬のStay/BITEなし。上昇中/下降中でも完了でStay |
 | F09 | 同じ完了イベント2回、Result中に古いHook | 結果1件、釣果重複なし |
 | F10 | Fightで安全な巻き/休止を反復 | 巻きでテンション/進捗増加、休止でテンション低下/進捗維持、成功1回、重量固定 |
 | F11 | 中断・エギ破棄・次投100回 | CastId増加、古い参照・タイマー・delegate残存なし |
@@ -208,8 +229,9 @@ BlueprintAssignable: OnFishingStateChanged、OnBottomContact、OnHookResolved、
 | F13 | 過大テンションが閾値以下/継続必要Tickの1つ前/到達 | 閾値以下で連続時間0、必要Tickでバラシ1回。短い超過の合算ではバラシにならない |
 | F14 | 同Tickでバラシ条件と進捗完了 | バラシ優先、Caughtなし、回収までは同CastId維持 |
 | F15 | MISS→Stay→Fall→再誘い→回収 | MISSでは結果なし、CastId維持、回収完了で初めて結果1件 |
-| F16 | 釣り開始前/開始後Ready/投中/次投Ready/EndFishing後で装備変更 | 前と終了後だけ許可。投間も装備ロック継続 |
-| F17 | FreeFall/Jerking/Fightingで0.8秒待機、Pause/再開 | 無関係状態のAutoStayなし、Pause中に期限が進まない |
+| F16 | 初投準備/Deploy直前・直後/投中/MISS/回収中/Retrieve完了後の次投Ready、Cast終了だが船上未確認で装備変更 | 船上かつ活動中Castなしの準備状態だけエギ・シンカー変更可。Retrieve後はEndFishing不要。投中・回収中・船上未確認は拒否。次投に新重量/係数/メッシュ、前投の結果に旧装備を保持。同TickのDeploy受理後は変更拒否 |
+| F17 | 無入力のFreeFall/BottomContact/Jerking/Fighting、Pause/再開、30/60/120fps | 無入力だけではStay化しない。Pause中は過渡処理・評価履歴停止、同じ固定Tick入力で遷移一致 |
 | F18 | 11回→Stay→Fall→Stay、MISS、次に1回Jerk→Stay | 切替/MISSだけでは減衰回数11を保持、新しい一連のJerk後は1へ更新。新Castで0 |
+| F19 | 同じ狙いレンジ付近で釣合い維持/上昇/下降を比較（M10） | 補正後深度速度と接触状態を正しく出力、全ケースが過渡処理完了後Stayへ進む。維持指標/BITE率の比較はS19/S20で検証 |
 
 数値許容誤差は試験側で明示（例: 静水直線積分0.001m）。ラインと海底の両制約に解がない試験も含める。確率試験と操作試験の乱数を混在させない。

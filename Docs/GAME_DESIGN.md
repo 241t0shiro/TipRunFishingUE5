@@ -1,5 +1,9 @@
 # TipRun Fishing — 全体技術設計の正本
 
+2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
+
+2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。文書のみの変更で、M08以降は未実装。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+
 設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
 対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M07は完了。M07の鉛直FreeFall・着底・描画用EgiActorはUHT生成/C++コンパイル/Development Editor Win64ビルド成功済み。2026-09-13のM07試験6件と必要な既存回帰8件が成功、各試験の警告・エラー0件。M08以降は未着手。**
 
@@ -26,8 +30,8 @@
 MVPの成立条件:
 
 1. 仮の海・船・エギ・イカ・HUDで1投を開始できる。
-2. シャクリは1入力1動作で連続入力可能、回数上限なし。10回を超える一連のシャクリは、後続STAYのBITE確率を回数に応じて極端に低下させる。終了後はテンションフォールに入り、約0.8秒の無入力で自動STAY。STAY後にも自分で再フォールできる。
-3. STAY中にも深度が変わり、イカのレンジとの重なりが反応に影響する。
+2. シャクリは1入力1動作で連続入力可能、回数上限なし。10回を超える一連のシャクリは、後続STAYのBITE確率を回数に応じて極端に低下させる。STAYは竿をあおるシャクリ動作をしていない通常の釣り状態。Shakuri（既存enum名Jerking）→TensionFall→Stayとし、シャクリ直後の過渡処理終了で即時移行する。無入力タイマーは使用しない。STAY後にも自分で再フォールできる。
+3. TensionFall/Stay中、船ドリフトによるラインの上向き作用とエギ＋シンカー総重量による沈下作用が釣り合い、狙いレンジを安定維持できる状態を最もBITEにつながりやすい理想状態とする。ドリフト過大/軽すぎによる上昇、重すぎによる下降はともに評価を下げる。重量選択が最重要判断であり、直前の投のレンジ上昇・下降、潮流、船ドリフトを観測し、D08に沿いRetrieve完了後の次投準備で総重量を調整する。一投ごとの重量調整をレンジ安定化と釣果向上につなげる。レンジ安定はStay進入条件ではなくBITE確率の評価要素。BITE承認は原則Stayのみ。RangeError/RangeStabilityの許容幅・時定数・倍率曲線はDataAsset化し、製品値は未確定とする。詳細はFISHING_SYSTEM第4節とSQUID_AI第3節。
 4. Approach、Attack、Biteを区別し、早い・適正・遅い合わせを判定できる。
 5. HIT後は簡易テンションと巻上げ進捗を扱い、過大テンションの継続でバラシになる。取り込み成功時は固定テスト重量を含む結果を一度だけ生成する。
 6. MISSでは投を終了せず、STAY継続または再フォールが可能。通常の未釣獲の投はプレイヤーの回収完了で終える。バラシはFightを終了してStayへ戻す技術設計で、回収時の結果理由に残す。釣獲・明示中断は別の投終了経路とし、古いBITEが次の投に持ち越されない。
@@ -64,7 +68,7 @@ FishingとSquidは互いのActor/Componentを直接操作しない。`Game` が�
 | `FTRActorSimId` | Coordinatorが登録順に付与する安定ID。Actorアドレスを並び順に使わない |
 | `FTROceanSample` | 有効性、海面Z、海底深度、潮流m/s、風m/s、環境ID。詳細はOCEAN |
 | `FTRBoatSnapshot` | Tick、位置m、竿先m、速度m/s、向き。読取専用コピー |
-| `FTREgiSnapshot` | CastId、Tick、XYm、DepthM、速度m/s、ライン長m、角度rad、張力代理値0..1、釣り状態、StayPenaltyJerkCount:int64 |
+| `FTREgiSnapshot` | CastId、Tick、XYm、DepthM、速度m/s、DepthVelocityMps（下向き正）/海底・海面接触（M10で追加）、ライン長m、角度rad、張力代理値0..1、釣り状態、StayPenaltyJerkCount:int64 |
 | `FTRSquidSnapshot` | SimId、位置m、深度m、AI状態、ActivityLevel（Low/Medium/High）、重量kg |
 | `FTRBiteRequest` | CastId、SimId、要求Tick。承認前の要求にすぎない |
 | `FTRCatchResult` | CastId、SimId、Outcome、重量kg、装備ID、所要sim秒。釣果確定時にコピーして保持 |
@@ -76,7 +80,7 @@ M01の共通型は `Public/Data` に実装。IDは別々のstructで保持し、
 
 イベント契約はFishingCommand、EgiAction、BiteRequest、BiteCue、CatchResultとnative delegateのシグネチャのみ。合わせ結果の理由をETRHookReasonで表し、対象喪失/Stay解除/投終了はTargetLost/StayReleased/CastEndedに対応させる。ETRSampleErrorのNoneはエラーなしを表す。M01で先送りした装備行・FishingTuning・装備係数SnapshotはM02で追加済み。HUD集約型、BITE仲裁処理は各後続タスクで導入する。
 
-秒設定はdoubleで保持し、共通の秒→Tick換算で `ceil(DurationS/StepSeconds)` を用いる。ただし比が整数から1e-6 Tick以内なら先にその整数へ丸め、表現誤差で1Tick延びることを防ぐ。Hook、AutoStay、Cooldown、Fight継続時間で同じ換算を使う。60HzのMVP初期値0.10/0.55/0.8秒は6/33/48Tick。
+秒設定はdoubleで保持し、共通の秒→Tick換算で `ceil(DurationS/StepSeconds)` を用いる。ただし比が整数から1e-6 Tick以内なら先にその整数へ丸め、表現誤差で1Tick延びることを防ぐ。Hook、Cooldown、Fight継続時間で同じ換算を使う。60HzのHook初期値0.10/0.55秒は6/33Tick。Stay進入には秒→Tickの待機設定を使わない。
 
 固定刻み60Hz、最大catch-up 8ステップ/描画フレームを**初期技術案**とする。超過した実時間は積み残さず、診断カウンタを増加させる。低負荷時と同じ実時間進行を保証せず、sim時間と入力判定の一貫性を優先する。高負荷時の体感は要検証。乱数は `FRandomStream` を用途別に分離し、SessionSeed + SimId + 用途IDから安定した整数演算でseedを生成する。同じビルド・同じ入力Tick列で再現できることを目標とし、CPU/バージョンを跨ぐbit一致は保証しない。
 
@@ -123,7 +127,7 @@ CoordinatorがAIスコア、沈下、フッキング成否、ファイト進捗�
 
 ## 6. 所有・イベント・Blueprint
 
-M06で`ATRFishingSessionActor`と最小の`UTRFishingComponent`を実装済み。Sessionは釣り開始からEndFishingまで装備をロックし、単調増加CastIdとSessionPhaseを保持する。M04入力にExpectedCastIdを追加して古い投を拒否し、M05 Boat更新後に竿先直下の海面へ投入Snapshotを作る。M06ではFreeFallのPayout指示までを実装した。明示中断・次投Ready・終了は装備ロックと寿命を検証する最小経路で、結果UI・釣果イベント配送は先行実装していない。詳細はFISHING_SYSTEM第3節のM06契約を参照。
+以下は旧D08のM06実装記録であり、一投単位ロックへの移行はM10で行う。M06で`ATRFishingSessionActor`と最小の`UTRFishingComponent`を実装済み。Sessionは釣り開始からEndFishingまで装備をロックし、単調増加CastIdとSessionPhaseを保持する。M04入力にExpectedCastIdを追加して古い投を拒否し、M05 Boat更新後に竿先直下の海面へ投入Snapshotを作る。M06ではFreeFallのPayout指示までを実装した。明示中断・次投Ready・終了は装備ロックと寿命を検証する最小経路で、結果UI・釣果イベント配送は先行実装していない。詳細はFISHING_SYSTEM第3節のM06契約を参照。
 
 M07で`UTREgiSimulationComponent`の鉛直落下・海底制約と、数値Snapshotを表示する`ATREgiActor`を追加。M02の凍結した重量由来落下速度と調整係数を使用し、M03のエギ位置の海面/水深を問い合わせ、M04のFishingフェーズでBoat更新後に一度だけ進める。着底によるBottomContact遷移はFishingが所有し、Publishフェーズで一度だけ通知する。描画・Chaosから数値へ逆流させない。水平潮応答・船追従・ライン繰出し/球面制約はM08に残し、M07のライン項目は投入時の仮値を維持する。詳細・検証限界はFISHING_SYSTEM第4節のM07契約とROADMAP完了記録を参照。
 
@@ -140,7 +144,7 @@ M05で`UTRSimulationWorldSubsystem::RegisterBoat`と船Snapshotの読取APIを�
 
 設定DataAssetは `UTRSessionConfigDataAsset`、`UTRFishingTuningDataAsset`、`UTRSquidTuningDataAsset`、`UTRBoatTuningDataAsset`、`UTROceanAreaDataAsset`、`UTRInputConfigDataAsset`。MVPは `UDataAsset` で十分。エリアの非同期ロードが必要になった段階で `UPrimaryDataAsset` / Asset Manager導入を検討する。[Epic: Data Assets](https://dev.epicgames.com/documentation/en-us/unreal-engine/data-assets-in-unreal-engine)
 
-反復する商品行は `FTREgiSpecRow : FTableRowBase`、`FTRSinkerSpecRow : FTableRowBase`。文字列の表示名で識別せずFName IDを使う。初期エギは3.5号35g、シンカー無し0gを正式に許可（D08）。装備変更は釣り開始前だけとし、`StartFishing()`で装備をロックする。Deploy待ちのReadyや次投Readyも釣り開始後なら変更不可。ロックは明示的なEndFishing/セッション終了で解除する。一投開始時にはロック済み装備をスナップショット化する。初期シンカー選択値は未指定で、試験構成では0gを使用する。
+反復する商品行は `FTREgiSpecRow : FTableRowBase`、`FTRSinkerSpecRow : FTableRowBase`。文字列の表示名で識別せずFName IDを使う。初期エギは3.5号35g、シンカー無し0gを正式に許可（D08）。装備変更はエギが船上にあり、現在のCastが終了済みの準備状態でのみ許可する（初投前は活動中Castなし）。Deploy受理時に装備をロック/スナップショット化し、一投中のエギ・シンカー変更は禁止。Retrieve完了によるCast終了と船上帰還の確定後、次投準備で再選択できる。EndFishingは必須ではなく、Cast終了だけ/Readyだけで船上条件を代用しない。前投の釣果Snapshotは維持する。初期シンカー選択値は未指定で、試験構成では0gを使用する。
 
 必須バリデーション: エギ/総重量>0、シンカー重量>=0（0gは無しの専用ID）、深度>=0、時間>=0、有限数、曲線の定義域、OpenDelay<CloseDelay、速度上限>0、ID一意、設定参照の存在。値が欠落した場合に黙って製品用既定値を補わない。
 
@@ -157,11 +161,11 @@ M03でOceanAreaDataAsset、平底SeabedProvider、OceanWorldSubsystemを追加�
 | D01 | MVP決定 | ローカル1人、テスト用イカ1体 | 配置は試験設定、製品の個体群はAlpha以降 |
 | D02 | MVP決定 | キャストなし、竿先付近投入、FreeFall自動繰出し | 繰出し速度等は調整値。ライン近似はFISHINGの技術設計 |
 | D03 | MVP決定 | 1入力1シャクリ、連続入力可能、**回数上限なし**、終了後TensionFall。**10回超で、その後のStayのBITE確率を回数に応じ極端に低下** | 同日のユーザー補足で「上限あり」を置換。低下曲線はDataAsset。回数の区切り・保持はFISHING、確率式はSQUID_AI |
-| D04 | MVP決定 | TensionFall後、約0.8秒無入力で自動Stay | `AutoStayDelayS=0.8`をDataAsset初期値とし調整可能 |
+| D04 | MVP決定（2026-09-13改訂） | STAYはシャクリ動作をしていない通常の釣り状態。Shakuri→TensionFall→Stay | 過渡処理終了で即移行。AutoStayDelay/無入力タイマー廃止。上昇/下降中もStay可、レンジ安定度と状態判定を分離 |
 | D05 | MVP決定 | Chaos完全依存を避け、Depth/Velocity/LineAngle/Current/BoatDrift/Weightで数値シミュレーション | 係数はDataAsset、実測校正は別途 |
 | D06 | MVP決定 | BITE開始から0.10秒で受付開始、0.55秒で終了。早合わせ/時間切れはMISS | 開閉値は調整可能。区間は `[0.10,0.55)` |
-| D07 | MVP決定 | 活性3段階、距離、レンジ差、STAY時間でATTACK/BITE判定 | 係数は調整値、季節補正は後回し |
-| D08 | MVP決定 | 初期エギ3.5号35g、シンカー無し0g正式許可、装備変更は釣り開始前のみ | 初期シンカー選択は未指定。試験では0g |
+| D07 | MVP決定（2026-09-13補足） | 活性3段階、距離、レンジ差、STAY時間に加え、ドリフトと総重量の釣合いによるレンジ維持をBITE評価 | RangeError/RangeStabilityによる維持良好ほどBITE高確率、上昇/下降で低下。許容幅・時定数・曲線はDataAsset調整、製品値未確定。季節補正は後回し |
+| D08 | MVP決定（2026-09-13改訂） | 初期エギ3.5号35g、シンカー無し0g正式許可。船上かつCast終了済みの準備状態のみ装備変更可。一投中は禁止、Retrieve完了後の次投準備で変更可 | 直前の投のレンジ上昇/下降・潮流・船ドリフトから次投総重量を調整。初投前は活動中Castなし。初期シンカー選択は未指定、試験では0g |
 | D09 | MVP決定 | 簡易テンション＋巻上げ進捗、過大テンション継続でバラシ | 上昇/回復率・閾値・継続秒数はDataAsset調整値 |
 | D10 | 保留 | MVP暫定: 固定重量テストイカ。重量分布は実装しない | 固定kg値は試験設定。製品仕様はAlpha前に再決定 |
 | D11 | 保留 | MVP暫定: 仮BITE Cue 1種類、3種へ拡張可能な型 | 3種演出・大型との相関等、製品仕様はAlpha前に再決定 |

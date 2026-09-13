@@ -1,5 +1,9 @@
 # UI・入力接続技術設計
 
+2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
+
+2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。文書のみの変更で、M08以降は未実装。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+
 関連: [全体正本](GAME_DESIGN.md)、[操作](FISHING_SYSTEM.md)、[BITE](SQUID_AI.md)。MVPのデバッグ表示と製品のプレイヤー向け情報を区別する。
 
 更新: v0.2 / 2026-09-12。D10〜D12は保留（MVP暫定仕様あり）。MVPでは固定重量・仮Cue1種・内部情報HUDを使い、製品仕様はAlpha前に再決定。
@@ -28,7 +32,7 @@ MVP暫定仕様（使用承認済み）:
 
 UI状態はGameのSessionPhaseとFishingStateから導出する。別のゲーム進行ステートマシンをWidgetに持たせない。PauseとErrorの表示状態だけUIが保持する。D13によりMISSでResultへ移らずFishingHUDを維持する。回収完了/釣獲/明示中断でResultへ移る技術設計。バラシは仮通知を出して釣りHUDへ戻り、その後の回収結果に理由を残す。
 
-D08の装備変更UIは釣り開始前だけ有効。開始後のReadyや次投Readyでは表示だけとし、EndFishingで準備へ戻ってから変更する。初期エギ3.5号35g、シンカー選択肢に「無し（0g）」を表示。ショップ購入処理は含めない。
+D08の装備変更UIは、エギが船上かつ現在Cast終了済み（初投前は活動中Castなし）の準備状態だけ有効。Retrieve完了後、次投Readyでエギ・シンカーを変更でき、EndFishingを要求しない。投中/回収中/船上未確認は無効。UIと変更APIが同じ許可条件を使用する。直前の投で観測した上昇/下降・潮流・船ドリフトを基に次投総重量を調整する。既存の深度/潮流/船速表示を観測に用い、自動重量選択は追加しない。初期エギ3.5号35g、シンカー選択肢「無し（0g）」を表示。ショップ購入処理は含めない。
 
 ## 2. クラスと責務
 
@@ -58,7 +62,7 @@ Blueprintで上記UUserWidgetの派生Widgetを作り、配置・色・文字・
 | ライン長m、角度degree、張力代理値 | 試験用表示 | 実在の計器として扱わない |
 | 船速、潮流 | 試験用ベクトル/数値。風・波の物理表示なし | 表示方法未決 |
 | イカAI状態・深度・3段階活性・Exposure・STAY時間 | 開発専用 | 製品表示範囲はAlpha前に再決定 |
-| AutoStay残り秒、10回超BITE減衰倍率 | 開発専用、DataAsset調整結果を確認 | 製品表示範囲はAlpha前に再決定 |
+| RangeErrorM、RangeStability01、RangeHoldScore、維持倍率、10回超BITE減衰倍率 | 開発専用、DataAsset調整結果を確認 | 製品表示範囲はAlpha前に再決定 |
 | Attack / Bite、Open/CloseTick、残り秒 | 開発専用 | 受付窓を表示するかは未決 |
 | アタリCue | Prototypeの仮表示1種類 | 3種類をロッド演出へ接続、Alpha前に再決定 |
 | HIT / MISSと理由 | 試験用表示 | 言葉・音・時間は未決 |
@@ -78,11 +82,12 @@ Enhanced Inputを使用し、キーそのものと意味上のコマンドを分
 | IA_TR_Fall | Bool / Started | Fall |
 | IA_TR_Jerk | Bool / Started | Jerk |
 | IA_TR_TensionFall | Bool / Started | TensionFall |
-| IA_TR_Stay | Bool / Started | Stay |
 | IA_TR_Hook | Bool / Started | Hook |
 | IA_TR_Retrieve | Bool / Started、Completed、Canceled | RetrieveStarted/Stopped |
 | IA_TR_EndFishing | Bool / Started | EndFishing |
 | IA_TR_Pause | Bool / Started | Gameのポーズ要求 |
+
+STAY専用ボタンは設けず、シャクリ直後の過渡処理終了後の通常状態として表示する。残り待機秒は表示しない。TensionFall入力はライン制御への要求でありSTAY実行ボタンではない。
 
 Hook/JerkをTriggeredの毎フレームイベントから送らない。巻き入力のCompletedだけでなくCanceledでも停止する。Result移行・フォーカス喪失・Pause時は保持入力を0にし、キュー済みゲーム入力を破棄する。
 
@@ -110,7 +115,7 @@ UIContextとFishingContextは同じ入力を二重消費しないよう切替。
 | U08 | デバッグパネル非表示 | AI/受付窓が漏れず、釣りロジックは同じ |
 | U09 | MISS→Stay継続→Fall→回収 | MISSではHUD維持、回収完了で結果1回 |
 | U10 | Fightで巻く/離す/過大テンション継続 | 進捗とテンションを区別、バラシをHIT/MISSと混同しない |
-| U11 | 開始前/次投Readyで装備UI操作 | 釣り開始前のみ変更可能、0g選択可能、UI以外のAPIも同じ制限 |
-| U12 | 10/11/20回→AutoStay | 回数上限なし、適用回数と減衰倍率一致、0.8秒の残り表示と実遷移一致 |
+| U11 | 初投準備/投中/回収中/Retrieve後の次投Ready/終了済みだが船上未確認で装備UIとAPIを操作 | 船上かつCast終了済みの準備状態だけ変更可、0g選択可。Retrieve後にEndFishing不要、次投の重量/メッシュ更新、前投の結果装備は不変 |
+| U12 | 10/11/20回→TensionFall→過渡処理終了でStay、維持/上昇/下降 | 回数上限なし、適用回数と減衰倍率一致。STAY専用入力/待機秒なし、レンジ維持指標がSnapshotと一致 |
 
 MVPではFunctional Testと目視で十分なレイアウト確認を行い、Widgetの内部構造をそのまま写した大量の単体テストは不要。

@@ -1,5 +1,9 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-09-13 D08追加改訂: 装備変更はエギが船上にあり、現在のCastが終了している準備状態でのみ許可。一投中はロックし、Retrieve完了後の次投準備で変更できる。M06/M07の実装記録は旧仕様の履歴であり、新仕様へのコード移行・試験は未実施。
+
+2026-09-13設計改訂: D04のSTAY定義とD07のレンジ維持評価を更新。文書のみの変更で、M08以降は未実装。旧AutoStay用タイマー・設定・試験の実コード/保存アセットの撤去はM10実装時に行う。製品バランス値は未確定。
+
 関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M07は完了済み。M08〜M18は未着手。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10〜D12はMVP暫定仕様を使い製品仕様をAlpha前に再決定、D14/D16〜D18はMVP非ブロック。
@@ -8,7 +12,7 @@
 
 | フェーズ | 実装範囲 | 完了条件 | 持ち込まないもの |
 |---|---|---|---|
-| MVP | 仮船/一定水平潮/1投、上限なしシャクリと10回超減衰、自動Stay、3段階活性AI、0.10〜0.55秒受付、テンション/進捗ファイト、固定重量結果 | Windowsで自然な1投と境界・バラシ・回収試験が再現できる | SHOP、自由操船、風/波の物理、季節補正、高度描画、Steam実績 |
+| MVP | 仮船/一定水平潮/1投、上限なしシャクリと10回超減衰、非シャクリ状態のStayとレンジ維持評価、3段階活性AI、0.10〜0.55秒受付、テンション/進捗ファイト、固定重量結果 | Windowsで自然な1投と境界・バラシ・回収試験が再現できる | SHOP、自由操船、風/波の物理、季節補正、高度描画、Steam実績 |
 | Alpha | 自由操船、ポイント探索、地形差、複数エリア、潮の差、ロッドCue改善、実測調整 | エリア選択から釣果まで反復して遊べる | 未決の経済・大会を先行実装しない |
 | 将来版 | 季節/天候、SHOP/装備、詳細ファイト/取り込み、セーブ、Steam配布/実績、大会 | 各仕様決定後の個別受入基準 | オンラインや大会形式を推測で追加しない |
 
@@ -37,9 +41,9 @@
 | 08 M07（完了） | EgiSimulationの鉛直落下と海底制約、描画用EgiActor | M03/05/06 | F02/F03/F12のM07範囲を含む6試験と依存回帰8件成功。仮エギの着底座標、UHT/C++ビルド成功。範囲・未検証は下記記録参照 |
 | 09 M08 | 水平潮応答、ライン長/球面制約、船追従 | M07、D02/D05 | F04/F05/B07。重量・潮・船を一変数ずつ比較 |
 | 10 M09 | Enhanced Input接続と最小デバッグHUD（状態/深度/装備） | M06/07、D12 | U02、入力が各1回、数値とSnapshot一致 |
-| 11 M10 | 連続シャクリと一連回数、0.8秒AutoStay、再Fall、回収 | M08/09、D03/D04/D13 | F06/F07/F08/F17/F18、上限なし、回数保持/新しい一連リセット |
-| 12 M11 | テストイカ1体、3段階活性、距離/レンジ/Exposure/STAY時間 | M10、D01/D07 | S01/S13/S14、季節データ不要 |
-| 13 M12 | Attack/Bite、10回超減衰、Caution/Cooldown、仲裁、Hook最小API | M11、D03/D07 | S02〜S04/S07/S08/S15〜S17。非StayのBITEゼロ、回数に応じ強い減衰 |
+| 11 M10 | 連続シャクリと一連回数、Shakuri→TensionFall→Stay、再Fall、回収、一投単位の装備ロック/次投変更、レンジ評価用Snapshot、旧タイマー/設定/テスト撤去 | M08/09、D03/D04/D08/D13 | F06/F07/F08/F16/F17/F18/F19、処理終了で即Stay、上昇/下降でも移行、上限なし、回数保持/新しい一連リセット |
+| 12 M11 | テストイカ1体、3段階活性、距離/RangeError/RangeStability/RangeHoldScore/Exposure/STAY時間、評価用DataAsset | M10、D01/D07 | S01/S13/S14/S19、維持指標検証、季節データ不要 |
+| 13 M12 | Attack/Bite、10回超減衰、Caution/Cooldown、仲裁、Hook最小API | M11、D03/D07 | S02〜S04/S07/S08/S15〜S17/S20。非StayのBITEゼロ、維持良好ほど高確率、回数に応じ強い減衰 |
 | 14 M13 | Hook受付初期0.10/0.55秒、早/適正/遅判定、仮Cue1種 | M12、D06、D11暫定 | S05/S06/S09/S11/S12、S18のCue部分。HIT/MISS重複なし |
 | 15 M14 | Fightテンション/進捗、継続超過バラシ、対象解放、Landing、固定重量 | M13、D09、D10暫定 | F10/F13/F14/S18、安全な巻きとバラシ、二重結果なし |
 | 16 M15 | 内部HUD、Result/次投、MISS継続、回収終了、入力解除/破棄 | M14、D13、D12暫定 | F09/F11/F15/U01/U03/U04/U06/U09〜U12 |
@@ -47,7 +51,7 @@
 | 18 M17 | 自然AIでの1投統合、制御入力による各結末のFunctional Test | M16 | 下記MVP受入シナリオをすべて実行 |
 | 19 M18 | Windows Developmentパッケージ、起動/入力/結果/再投確認 | M17 | Editor非依存の起動、30/60/120fps比較、ログに致命的エラーなし |
 
-AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、無効サンプルへの技術防御だけ検証する。Steam SDK・配信アップロードはM18に含まない。既存プロジェクトへ適用する場合はM00を環境/構成確認に読み替え、既存コードを作り直さない。
+M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テストの撤去/置換を含む。M02由来の型/検証/Prototype保存アセットに残る旧設定の移行と必要最小限の回帰確認もM10の範囲。D08改訂に従いM06のセッション全体ロックを一投単位へ移行し、Retrieve後の船上帰還/次投変更、Snapshot・メッシュの更新と旧F16期待値の置換を検証する。汎用時刻換算試験は維持する。レンジ指標の評価とDataAssetはM11、BITE倍率への接続はM12の将来タスクとし、今回の文書更新では実装しない。D14の境界ゲーム仕様はM16に含めず、無効サンプルへの技術防御だけ検証する。Steam SDK・配信アップロードはM18に含まない。既存プロジェクトへ適用する場合はM00を環境/構成確認に読み替え、既存コードを作り直さない。
 
 ### M00完了記録（2026-09-12）
 
@@ -62,7 +66,7 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 
 - 追加: 共通enum 15種、値struct 14種、native delegate 4種、m/cm換算、共通秒→Tick換算。値型の詳細表現はGAME_DESIGN第4節を参照。DataAsset・装備行・Actor/Component・状態遷移は追加していない。既存TRBase、Build.cs、Target.cs、Config、Contentは変更なし。
 - Development Editor Win64通常ビルド成功（終了コード0、約22.8秒、9アクション）。Internal UnrealHeaderToolが新規ヘッダを処理し11生成ファイルを書き出した。TRSimulationTypes.cpp、TRCommonTypesTests.cpp、Module.TipRunFishingUE5.gen.cpp等のコンパイルとDLLリンクを確認。最新判定だけの確認ではない。
-- NullRHIのUnrealEditor-Cmdで `TipRun.M01` を実行。Units、Identifiers、TimeConversion、Reflectionの4件すべて成功、各試験の警告・エラー0件、プロセス終了コード0。100cm/1m、ID無効値・Token同一性、0.10/0.55/0.8秒→6/33/48Tick、丸め境界・不正値・オーバーフロー、反射登録・Blueprint読取専用を確認。
+- NullRHIのUnrealEditor-Cmdで `TipRun.M01` を実行。Units、Identifiers、TimeConversion、Reflectionの4件すべて成功、各試験の警告・エラー0件、プロセス終了コード0。100cm/1m、ID無効値・Token同一性、0.10/0.55/0.8秒→6/33/48Tick（当時の汎用換算試験記録であり、現行Stay遅延の要件ではない）、丸め境界・不正値・オーバーフロー、反射登録・Blueprint読取専用を確認。
 - ビルド警告: MSVC 14.51.36257が推奨範囲より新しいこと、既存IncludeOrderVersionがUnreal5_6互換であること。試験開始前のEngine起動ログにはCondition failed等のエラー出力とレイアウト警告もあるが、M01試験結果には記録されていない。起動ログの原因調査は未実施。M01のコード修正を要するビルド・試験エラーはなかった。
 - 検証記録: `Saved/Logs/M01Build.log`、`Saved/Logs/M01Tests.log`、`Saved/Automation/M01/index.json`（いずれもGit除外）。M02へ進める状態。M02〜M18は未着手。今回の文書更新は実装・検証範囲の記録であり、D番号のゲーム仕様と後続タスクの受入条件は変更しない。
 
@@ -103,6 +107,8 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 
 ### M06完了記録（2026-09-13）
 
+以下は旧D08（セッション全体ロック）の実装・検証履歴。新D08の一投ごとの装備変更は未実装で、M10/F16およびM15/U11で検証する。過去の合格を新仕様の合格に読み替えない。
+
 - SessionActor/FishingComponentとM06試験を追加。M04の入力型/受付APIへExpectedCastIdを渡し、Session側で現在IDとTick/Sequence順を検証。開始前限定の装備変更、釣りセッション中の設定凍結、Boat更新後の海面投入、FreeFall/Payout指示、明示中断→次投Ready、終了/破棄時の解除を実装。詳細はFISHING_SYSTEM第3節を参照。M07の積分・EgiActorと後続のゲーム処理は追加していない。
 - Development Editor Win64通常ビルドは成功（終了コード0、約23.5秒、10アクション）。Internal UnrealHeaderToolが7生成ファイルを書き出し、新規FishingComponent・SessionActor・SessionTests、更新したCoordinator、生成コードを含むモジュールの実コンパイルとDLLリンクを確認した。
 - 初回M06試験は4/5成功。寿命試験のActor初期化不足によりEndPlay経路へ入らず、破棄直後のキュー件数が1件残る検証が失敗した。試験Worldで通常のActor初期化を行い、加えてBeginPlay前の破棄もDestroyedで即時解放する実装・試験を追加。未来Tickの予約が受付Sequenceだけで拒否されないようSessionの順序判定をTick→Sequenceへ修正した。修正後の再ビルド成功（終了コード0、約8.6秒、6アクション）。
@@ -125,7 +131,7 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 
 ### A: 成功する1投
 
-平底・テストイカ1体・初期エギ3.5号35g（試験シンカー0g）で開始 → 竿先付近投入 → 自動FreeFall → 着底 → 3回シャクリ → TensionFall → 無入力0.8秒でAutoStay → 自然AIでApproach/Attack/Bite → 0.10秒以上0.55秒未満でHook → テンションを休止で下げつつ巻く → Landing → Caughtと固定重量表示 → 次投。3回は試験入力例でありゲームの固定回数/上限ではない。
+平底・テストイカ1体・初期エギ3.5号35g（試験シンカー0g）で開始 → 竿先付近投入 → 自動FreeFall → 着底 → 3回シャクリ → TensionFall → 過渡処理終了でStay・狙いレンジ維持 → 自然AIでApproach/Attack/Bite → 0.10秒以上0.55秒未満でHook → テンションを休止で下げつつ巻く → Landing → Caughtと固定重量表示 → 次投。3回は試験入力例でありゲームの固定回数/上限ではない。
 
 自然AIシナリオにはseedと最大sim実行時間を記録する。自然乱数が失敗した試行を隠さず、別の制御シナリオでフック成功経路を確実に検証する。成功するseedだけを使った試験を確率バランス評価と呼ばない。
 
@@ -135,9 +141,9 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 
 ### C: レンジと再フォール
 
-同じ海で重量・潮・船速度をそれぞれ変更 → 深度、角度、好適レンジ滞在時間を比較 → StayからFall → 着底 → 再度誘い。旧BITEが復活しない。
+同じ海で重量・潮・船速度をそれぞれ変更（重量はRetrieve完了・Cast終了・船上帰還後の次投準備で調整）→ 釣合い維持/上昇/下降の深度、角度、RangeError/RangeStability、BITE計算確率を比較。他の確率要素を揃え、維持が最良、上昇/下降が低下することを確認。直前の投の観測を基にエギ/シンカーを調整して次投のレンジ安定化を比較する → StayからFall → 着底 → 再度誘い。旧BITEが復活しない。
 
-10/11/12/20回のシャクリを全て受理し、後続StayでBITE確率倍率を比較する。11回から極端に低下し、回数が増えて回復しない。Fall/Stay切替だけでは減衰が消えず、新たな一連のシャクリ後はその回数に更新される。活性3段階、距離、レンジ差、Stay時間を同じにして比較する。
+10/11/12/20回のシャクリを全て受理し、後続StayでBITE確率倍率を比較する。11回から極端に低下し、回数が増えて回復しない。Fall/Stay切替だけでは減衰が消えず、新たな一連のシャクリ後はその回数に更新される。活性3段階、距離、レンジ差、RangeStability、Exposure、Stay時間を同じにして比較する。
 
 ### D: 終了と障害
 
@@ -151,7 +157,7 @@ AutoStayはM10の必須項目。D14の境界ゲーム仕様はM16に含めず、
 
 ## 5. 実装時ログと完了報告
 
-開発ログはCastId、SimTick、StateFrom/To、CommandResult、EgiDepthM、LineAngle、JerkCount/SeriesJerkCount/StayPenaltyJerkCount、JerkBiteMultiplier、AutoStayDeadline、SquidId/State/ActivityLevel、RangeScore/Exposure/StayElapsedS、BiteToken、HookReason、FightTension/OverTensionTicks/Progress、Outcomeを追跡できるようにする。毎Tick出力は明示した試験記録時のみ。
+開発ログはCastId、SimTick、StateFrom/To、CommandResult、EgiDepthM、LineAngle、JerkCount/SeriesJerkCount/StayPenaltyJerkCount、JerkBiteMultiplier、DepthVelocityMps/境界接触、RangeErrorM/RangeStability01/RangeHoldScore/RangeHoldBiteMultiplier、SquidId/State/ActivityLevel、RangeScore/Exposure/StayElapsedS、BiteToken、HookReason、FightTension/OverTensionTicks/Progress、Outcomeを追跡できるようにする。毎Tick出力は明示した試験記録時のみ。
 
 各タスクの完了時に「変更内容・実施した試験・結果・未実施の理由・残るD番号」を報告する。ビルドできない環境でコンパイル済みと書かない。設計変更が必要なら対応する文書も同じ変更単位で修正する。
 
