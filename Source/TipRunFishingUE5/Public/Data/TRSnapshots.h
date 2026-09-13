@@ -91,6 +91,25 @@ struct TIPRUNFISHINGUE5_API FTRBoatSnapshot
 
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	float HeadingRad = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
+	int32 ModelRevision = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
+	double SpeedMps = 0.0;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
+	FVector ForwardVector = FVector::ForwardVector;
+	// Environmental inputs sampled at the start position of this integration tick.
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
+	FVector2D WindMps = FVector2D::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
+	FVector SurfaceCurrentMps = FVector::ZeroVector;
+	// Revision 2 integrated contributions over this step, in m/s (not target velocities).
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
+	FVector WindDeltaVelocityMps = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
+	FVector CurrentDeltaVelocityMps = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
+	FVector DragDeltaVelocityMps = FVector::ZeroVector;
 };
 
 USTRUCT(BlueprintType)

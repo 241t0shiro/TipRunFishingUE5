@@ -1,5 +1,7 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-09-14 M10.5-B完了: 風/表層潮を別々に評価する船体方向別応答、抗力/慣性、解析的な固定更新とBoat Snapshot拡張を実装。UHT生成・実C++・Development Editor Win64成功、B 5件＋A/M03/M04/M05/M08回帰26件成功、各試験エラー/警告0。旧保存設定はModelRevision=1で互換維持、新モデルは明示revision 2。保存Prototypeの移行/PIE再評価は未実施。C〜HおよびM11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA完了/設計のみの記録は履歴。
+
 2026-09-14 M10.5-A完了: 環境の風/表層潮/深度別潮、位置依存評価口、knot換算を実装。UHT生成・C++実コンパイル・Development Editor Win64成功、A 5件＋M03/M05/M08回帰20件成功、各試験エラー/警告0。B〜HおよびM11以降は未着手。M10.5全体のPIE品質ゲートは未合格。下の2026-09-13設計のみの記録は履歴。
 
 2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
@@ -7,7 +9,7 @@
 
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA実装完了・B〜H未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA/B実装完了・C〜H未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10/D11とD12の未指定部分はMVP暫定仕様を使い、残る製品仕様をAlpha前に再決定（マウス基本操作はM10.5で決定済み）、D14/D16〜D18はMVP非ブロック。
 
@@ -277,7 +279,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 | ID | 小タスク・追加/変更予定 | 依存 | 単独受入 |
 |---|---|---|---|
 | M10.5-A（完了） | Data/TRSnapshots、TROceanAreaDataAsset、Ocean/TROceanWorldSubsystem。風/表層潮/深度Profile、単位/設定リビジョン/コピー契約、環境純粋試験 | M01〜M03 | R01。Constantと層別場の独立評価、既存無効海/寿命回帰 |
-| M10.5-B | Data/TRBoatTuningDataAsset、Boat/TRBoatDriftComponent/TRBoatPawn。風＋表層潮応答、抗力/慣性、取付Transform | A、M04/M05 | R02。解析応答と同/逆/直交、Boat固定更新回帰 |
+| M10.5-B（完了） | Data/TRBoatTuningDataAsset、Boat/TRBoatDriftComponent/TRBoatPawn。風＋表層潮応答、抗力/慣性、取付Transform | A、M04/M05 | R02。解析応答と同/逆/直交、Boat固定更新回帰 |
 | M10.5-C | Data/TRSnapshots/TRFishingTuningDataAsset、Fishing/TREgiSimulationComponent/TREgiActor、Session接続。WorldPosition正本、需要繰出し、ライン抗力/制約、水平距離、旧値の読取互換 | A/B、M07/M08 | R03/R04/R05。30m着底・27装備・空間レンジの純粋/Session試験、描画座標回帰 |
 | M10.5-D | Fishing/TRRodControlComponent（予定新規）、Data/TRRodTuningDataAsset（予定新規）、TRInputConfigDataAsset、Game/TRPlayerController/TRFishingSessionActor/TRSimulationWorldSubsystem。Axis2Dキュー、RodSnapshot、Pitch/Yaw/あおり、一入力一動作 | B/C、M09/M10 | R06/R11。旧Boolean固定数検証を意味/型別へ移行、入力/寿命/回数回帰 |
 | M10.5-E | Data/TRTypes/TREvents等の該当共通コマンド/イベント型、Fishing/TRFishingComponent/TREgiSimulationComponent、Game/TRFishingSessionActor、操作Tuning。通常解放→Stay、Quick状態/期限、両回収後Ready | C/D、M06/M10 | R07/R08/R09。旧Result→N必須/解放後Retrieving期待を新契約へ置換 |
@@ -348,3 +350,15 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 - Docs/GAME_DESIGN.md
 - Docs/OCEAN_SYSTEM.md
 - Docs/ROADMAP.md
+
+### M10.5-B完了記録（2026-09-14）
+
+- B合格。Aの環境APIを変更せず、船体軸ごとに風/表層潮を別評価する応答、方向別受風倍率、慣性/抗力、速度と位置の同一解による固定更新を実装した。HeadingとVelocityは独立。C向けには既存RodTipと拡張Boat Snapshotを供給する。具体式・単位・互換revisionはBOAT_SYSTEM第8節を正本とする。
+- ModelRevision=2は明示選択、新係数は未校正のTest値。既存保存Prototypeはrevision 1の旧モデルを維持し、単位の異なる旧係数を暗黙変換しない。Content/Config/Ocean/Fishing/Egi/Input/UIは変更なし。保存資産の移行とPIE再評価はG/Hへ残す。速度上限は新モデルの候補拒否・停止用であり、過剰速度をclampして合格にしない。
+- B Automation 5件成功: AnalyticResponseAndContributions、WindCurrentHeadingAndRepresentativeSpeeds、InertiaChangesAndNumericalGuards、ValidationSerializationAndFrozenTuning、FixedFramesRodAndSessionLifetime。R02とB依存範囲の固定更新・寿命・M08接続を確認。3代表潮速はAのknot変換を利用、風/潮同・逆・直交とHeading依存を比較した。
+- 回帰26件成功: M10.5-A 5、M03 7、M04 6、M05 6、M08 2（B07FixedBoatIntegration、SessionLifetimeAndDestination）。旧モデルの互換回帰に加え、新Bモデルを実Sessionへ接続し、Boat→Egiの同Tick/ライン長整合を検証した。M08の計算式・期待値は変更していない。
+- 最終31件すべて成功、失敗/未実行0、各試験errors/warnings=0、プロセス終了コード0。初回の30成功/1失敗はテストWorld破棄直後のGC前に弱参照無効化を期待していた寿命試験に起因。DestroyWorld後のGCを実行し、Actorへの残存参照が回収を妨げないことを確認するよう修正した。数値の合否線は変更していない。
+- UE5.8.2 / Visual Studio 2026 Community / MSVC14.51.36257 / Windows SDK10.0.22621.0（Win64 VALID）。通常UHTは9生成ファイルを書き出し、Boat/Data/新規試験/Moduleの4実C++コンパイル＋LIB/DLL/metadata、計7アクション成功。寿命試験修正後も試験C++実コンパイル＋リンクを成功確認。up-to-date確認のみではない。
+- B由来の残存警告0。既存のMSVC推奨版との差、Unreal5_6互換include順序、Engine試験開始前のCondition failed（Error表記）19件、Editorレイアウト警告1件、Win64以外のSDK不足は残る。試験結果内のエラー/警告0とは区別する。
+- 証跡（Git除外）: Saved/Logs/M105BBuild.log、M105BBuildFinal.log、M105BTests.log（初回）、M105BTestsFinal.log、Saved/Automation/M105BFinal/index.json。PIE/実測/パッケージ未実施。Cへ進めるBoat側APIは揃ったが、C〜H・M11以降は未着手、M10.5全体品質ゲートとM11進行保留を維持する。
+- 変更ファイル: Source/TipRunFishingUE5/Public/Data/TRBoatTuningDataAsset.h、Public/Data/TRSnapshots.h、Private/Data/TRBoatTuningDataAsset.cpp、Private/Boat/TRBoatDriftComponent.cpp、Private/Tests/TRBoatWindTests.cpp（新規）、AGENTS.md、Docs/BOAT_SYSTEM.md、Docs/GAME_DESIGN.md、Docs/ROADMAP.md。
