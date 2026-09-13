@@ -1,8 +1,10 @@
 # 船・ドリフト技術設計
 
+2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
+
 関連: [全体正本](GAME_DESIGN.md)、[海](OCEAN_SYSTEM.md)、[エギ](FISHING_SYSTEM.md)。MVPはプレイヤー自由操船を実装せず、将来も同じBoatSnapshotを釣り側へ供給する。
 
-更新: v0.2 / 2026-09-12。D15のMVP決定により一定水平潮だけがドリフトに寄与する。風・波の物理影響はMVP対象外。D14/D16は保留、MVP非ブロック。
+更新: v0.2 / 2026-09-12。D15改訂によりM10.5で風＋表層潮に船体応答を導入する。第2節の旧式とM05記録は移行前の履歴。波物理は対象外。D14/D16は保留、MVP非ブロック。
 
 ## 1. 責務とクラス
 
@@ -17,7 +19,7 @@ MVPの主要ComponentにBoatMovementは含めない。Physics Buoyancy、Chaos�
 
 依存はOceanの値型とDataだけ。釣り・イカ・HUDを参照しない。Coordinatorが更新後SnapshotをFishingへ渡す。カメラは表示のみで竿先の判定位置を変更しない。
 
-## 2. ドリフト近似
+## 2. M05までのドリフト近似（M10.5で置換）
 
 MVPは海面で取得した一定水平潮 `u_xy` だけを使う。風の入力・応答係数はMVPの計算と必須DataAsset項目から外す。
 
@@ -57,7 +59,7 @@ BoatTuningを船ごとに差し替えられるようにする。MVPに価格、�
 
 BlueprintReadOnly: BoatMode、速度、竿先位置、Snapshot。EditDefaultsOnly: Tuning、メッシュ、カメラ、RodAnchor相対設定。BlueprintCallableはSnapshot取得のみ。将来の操船入力はController経由に限定。BlueprintでDrift式を上書きしない。
 
-## 5. テスト
+## 5. M05までのテスト（風非寄与B03はM10.5で置換）
 
 | ID | 条件 | 期待 |
 |---|---|---|
@@ -83,3 +85,19 @@ MVPでは静水/一定潮の方向・速度別シナリオで船速とレンジ�
 - Gameが船のOnEndPlayを登録し、EndPlay・明示Unregister・Subsystem終了で対応するバインドと登録を解除する。破棄検査はM04の弱参照管理も併用する。船はEndPlayでDriftと自分の異常通知delegateを解除する。二重登録を拒否し、再登録でもSimIdとWorld時計をリセットしない。
 - `TipRun.M05`の6試験がすべて成功、警告/エラー0、終了コード0。B01/B03静水・表示用風非寄与、B02方向・解析的速度・上限、B04の30/60/120fps一致と明示/Engine pause、B05の竿先変換・Snapshot配送順・表示編集の非逆流、B08の不正設定、Provider破棄と解除を確認した。通常試験の移動は有効範囲内。極小海域の試験は無効な移動候補を確定しない技術防御だけで、M16の境界シナリオ完成を意味しない。
 - 試験値は一時的なTestデータ（例：潮応答0.5、応答率2/s、速度上限3m/s、船体offset0.5m、竿先offset(2,1,1)m）。製品既定値ではなく、Content/Configへの保存や製品メッシュ・マップの作成は行っていない。Editor表示用にはBoatPawn派生BlueprintでBoatMesh/Cameraを設定し、BoatTuningを割り当てる。起動接続側はOceanと固定時計を初期化後に`RegisterBoat`へ明示XY/方位を渡す。今回の検証はNullRHIのC++試験で、PIE目視・船カメラ調整・Windowsパッケージは未実施。
+
+## 7. M10.5の船体応答（未実装）
+
+船を「前へ流す」のではなく、世界座標の風/表層潮に応じて横流しする。Prototypeでは釣り人が概ね風上を向き、船体に横風を受ける初期方位を試験設定する。船首方位、釣り人/竿の基準方位、風の移動方向、船速度は別値。船首を毎Tick速度方向へ自動回転させず、自由操船や自動風上追従は追加しない。
+
+既存UTRBoatDriftComponentがBoat Position/Velocityを一度だけ更新する。風wと表層潮u、現在船速度vに対する技術案は線形抗力のゲーム近似:
+
+`I * dv/dt = Kw*(w-v) + Kc*(u-v) - Kd*v`
+
+Kw=BoatWindResponse、Kc=BoatCurrentResponse、Kd=BoatDragは非負の有効係数[kg/s]、I=BoatInertiaは正の有効慣性[kg]。実船の質量/実測抗力と同一視しない。K=Kw+Kc+Kd>0、vTarget=(Kw*w+Kc*u)/K、tau=I/Kとし、一定サンプルの1ステップを`vNext=vTarget+(v-vTarget)*exp(-dt/tau)`で解く。位置は同じ解の積分`deltaX=vTarget*dt+(v-vTarget)*tau*(1-exp(-dt/tau))`を使う技術案。小さいdtの減算誤差を避ける。速度防御上限を使う場合は位置/公開速度の整合を試験し、上限で過剰風速設定を隠さない。
+
+全係数をUTRBoatTuningDataAssetへ分離、初期化時に凍結。旧CurrentResponse01/VelocityResponsePerSから単位の異なる係数へ暗黙換算せず、Prototype設定リビジョンを移行し再校正する。初期船速0でも第1Tickに風/潮速度へ瞬間一致しない。無風/無潮では初速0を保持し、初速ありなら減衰。同方向/逆方向/直交の合成、慣性増加による応答遅延を解析解と比較する。
+
+船のZは固定海面＋船体offset、方位は試験配置値。既存RodAnchorは取付基準のTransformとしてBoatSnapshotへ公開し、可動Rod TipはFishing/RodControlがこの基準から作る。Boatはマウス入力を直接読まない。旧RodTipM読取は移行期間の固定基準としてのみ扱い、Egiは新しい同TickのRodSnapshotを参照する。
+
+風の描画から数値へ逆流させないが、Oceanの風データは実際にドリフトへ寄与する。旧B03の「風非寄与」を廃止し、波の表示非寄与だけ維持する。R02で解析応答、方向合成、速度上限/大dt、無効環境、Pause、固定更新再現性を確認する。

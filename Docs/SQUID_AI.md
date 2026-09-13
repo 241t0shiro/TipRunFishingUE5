@@ -1,5 +1,7 @@
 # アオリイカAI・BITE技術設計
 
+2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
+
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
 関連: [全体正本](GAME_DESIGN.md)、[釣り](FISHING_SYSTEM.md)。生態の厳密な再現モデルではなく、校正可能な行動近似を設計する。活性・季節・重量分布を科学的な既知値として固定しない。
@@ -176,3 +178,9 @@ BlueprintReadOnly: AIState、WeightKg、Position、ActivityLevel、Cue。RangeEr
 | S20 | M12: 他条件を揃え、理想維持/上昇/下降の計算確率とDataAsset変更を比較 | 理想維持のpBiteが最大、上昇/下降で低下。非Stayは0、10回超減衰と両立。単発の乱数結果ではなく式と多数試行で検証 |
 
 確率試験は分布用の隔離された計算器で実行し、接近移動やCooldownによる有効時間短縮を混ぜない。統合試験では自然反応と試験要求の両方を使い、強制成功だけでAI完成としない。
+
+## M10.5との接続境界（設計のみ、M11以降未着手）
+
+M10.5品質ゲート合格をM11開始条件とする。Egi World Positionから導出したDepthM/DepthVelocityMps、同Tickの水平位置、海底/海面接触、状態/観測有効性、CastIdを読む。旧DepthM正本への書戻しを要求しない。RangeError/RangeStability/RangeHoldScoreとBITE確率の本評価は既存M11/M12に残す。
+
+QuickRetrieving中は水中評価対象無効、Attack/Bite/Hook不可。開始時に既存の対象/要求/Tokenが存在する後続実装では解除し、完了/Readyや新Castで復活させない。M10.5はこの入力/状態契約と不適格性の試験だけを用意し、AI/Token処理そのものを先行実装しない。海底/海面静止をレンジ安定の加点にしない従来条件は維持する。

@@ -1,10 +1,12 @@
 # TipRun Fishing — 全体技術設計の正本
 
+2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
+
 
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
-設計版: 0.2 / 作成・更新日: 2026-09-12 / 対象リポジトリ: `TipRunFishingUE5`
-対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M10は完了。M10操作・一投単位の装備ロック・観測Snapshot・旧AutoStay撤去を実装し、UHT生成/C++/Development Editor Win64ビルド成功。M10 8件・必要回帰32件成功、各試験のエラー・警告0件。M11以降は未着手。PIE目視・実機入力は未検証。**
+設計版: 0.3 / 作成日: 2026-09-12 / 更新日: 2026-09-13（M10.5） / 対象リポジトリ: `TipRunFishingUE5`
+対象: Unreal Engine 5.8.2、C++、Windows / Steam。**M00〜M10は完了。M10操作・一投単位の装備ロック・観測Snapshot・旧AutoStay撤去を実装し、UHT生成/C++/Development Editor Win64ビルド成功。M10 8件・必要回帰32件成功、各試験のエラー・警告0件。M11以降は未着手。M10後のユーザーPIE評価は不合格。M10.5合格までM11へ進めない。**
 
 ## 1. 文書の効力と読み方
 
@@ -12,7 +14,7 @@
 - **技術設計**: 本書で提案する実装契約。クラス分割、単位、更新順、参照管理など。実装時の基準とする。
 - **暫定案**: ゲーム体験に影響する未承認仕様。実装を必要とする場合は後述の決定IDに紐付け、確認する。
 - **MVP決定**: 今回ユーザーが承認したMVP仕様。再承認を求めず実装時の基準とする。未指定の調整値まで確定した意味ではない。
-- **保留（MVP暫定仕様あり）**: D10〜D12。MVPでは記載の暫定仕様を使用してよい。製品仕様はAlpha前に再決定する。
+- **保留（MVP暫定仕様あり）**: D10/D11とD12の未指定部分。D12のマウス基本操作・日本語Prototype UIはM10.5で決定済み。残る製品仕様はAlpha前に再決定する。
 - **保留（MVP非ブロック）**: D14、D16〜D18。MVP対象外であり、決定を待ってMVP全体を止めない。
 - **テスト用値**: 自動試験の再現性を得るための人工的な値。製品のバランス値でも釣りの実測値でもない。
 
@@ -60,7 +62,7 @@ FishingとSquidは互いのActor/Componentを直接操作しない。`Game` が�
 | 型 / 項目 | 定義・所有者 |
 |---|---|
 | 座標 | UE境界はcm、+Z上。シミュレーションはm、s、g、kgを明記。変換は入出力境界で一度だけ |
-| `DepthM: float` | エギ深度の正本。当地の海面から下向き正。描画Zを深度へ逆流させない |
+| `DepthM: float` | M10.5ではWorldPositionMから導出する読取深度。当地の海面から下向き正。描画Zを深度へ逆流させない |
 | `FTRSimTime` | `int64 TickIndex` と固定刻み `StepSeconds: double`。世界ごとに所有し、投ごとにはリセットしない |
 | `FTRCastId` | セッション内単調増加 `int64`。無効値0。古い投の要求を拒否 |
 | `FTRBiteToken` | CastId + 単調増加Sequence。二重解決・期限後解決を防止 |
@@ -155,25 +157,25 @@ M03でOceanAreaDataAsset、平底SeabedProvider、OceanWorldSubsystemを追加�
 
 ## 8. 要決定事項の正本
 
-更新日・根拠: 2026-09-12、ユーザーによるD01〜D18の明示指定。D01〜D09/D13/D15はMVP決定、D10〜D12はMVP暫定仕様を承認、D14/D16〜D18はMVP非ブロックとして保留。v0.1の相反する暫定案を本表で置き換える。
+更新日・根拠: 2026-09-12、ユーザーによるD01〜D18の明示指定。D01〜D09/D13/D15はMVP決定、D10/D11とD12の未指定部分はMVP暫定仕様を承認。2026-09-13 M10.5でD02/D05/D08/D12/D13/D15を改訂し、D14/D16〜D18はMVP非ブロックとして保留。v0.1の相反する暫定案を本表で置き換える。
 
 | ID | 状態 | MVPで適用する仕様 | 残る詳細・再決定時期 |
 |---|---|---|---|
 | D01 | MVP決定 | ローカル1人、テスト用イカ1体 | 配置は試験設定、製品の個体群はAlpha以降 |
-| D02 | MVP決定 | キャストなし、竿先付近投入、FreeFall自動繰出し | 繰出し速度等は調整値。ライン近似はFISHINGの技術設計 |
+| D02 | MVP決定（M10.5改訂） | キャストなし、竿先付近投入、FreeFallは幾何需要に応じた自動繰出し | 繰出し速度等は調整値。ライン近似はFISHINGの技術設計 |
 | D03 | MVP決定 | 1入力1シャクリ、連続入力可能、**回数上限なし**、終了後TensionFall。**10回超で、その後のStayのBITE確率を回数に応じ極端に低下** | 同日のユーザー補足で「上限あり」を置換。低下曲線はDataAsset。回数の区切り・保持はFISHING、確率式はSQUID_AI |
 | D04 | MVP決定（2026-09-13改訂） | STAYはシャクリ動作をしていない通常の釣り状態。Shakuri→TensionFall→Stay | 過渡処理終了で即移行。AutoStayDelay/無入力タイマー廃止。上昇/下降中もStay可、レンジ安定度と状態判定を分離 |
-| D05 | MVP決定 | Chaos完全依存を避け、Depth/Velocity/LineAngle/Current/BoatDrift/Weightで数値シミュレーション | 係数はDataAsset、実測校正は別途 |
+| D05 | MVP決定（M10.5改訂） | Egi World Positionを正本に竿先・船/エギ相対移動・ライン・重量を固定更新で解く。Chaos完全依存なし | 係数はDataAsset、実測校正は別途 |
 | D06 | MVP決定 | BITE開始から0.10秒で受付開始、0.55秒で終了。早合わせ/時間切れはMISS | 開閉値は調整可能。区間は `[0.10,0.55)` |
 | D07 | MVP決定（2026-09-13補足） | 活性3段階、距離、レンジ差、STAY時間に加え、ドリフトと総重量の釣合いによるレンジ維持をBITE評価 | RangeError/RangeStabilityによる維持良好ほどBITE高確率、上昇/下降で低下。許容幅・時定数・曲線はDataAsset調整、製品値未確定。季節補正は後回し |
 | D08 | MVP決定（2026-09-13改訂） | 初期エギ3.5号35g、シンカー無し0g正式許可。船上かつCast終了済みの準備状態のみ装備変更可。一投中は禁止、Retrieve完了後の次投準備で変更可 | 直前の投のレンジ上昇/下降・潮流・船ドリフトから次投総重量を調整。初投前は活動中Castなし。初期シンカー選択は未指定、試験では0g |
 | D09 | MVP決定 | 簡易テンション＋巻上げ進捗、過大テンション継続でバラシ | 上昇/回復率・閾値・継続秒数はDataAsset調整値 |
 | D10 | 保留 | MVP暫定: 固定重量テストイカ。重量分布は実装しない | 固定kg値は試験設定。製品仕様はAlpha前に再決定 |
 | D11 | 保留 | MVP暫定: 仮BITE Cue 1種類、3種へ拡張可能な型 | 3種演出・大型との相関等、製品仕様はAlpha前に再決定 |
-| D12 | 保留 | MVP暫定: 開発HUDに内部情報を表示 | キーは試験割当。製品HUD/入力仕様はAlpha前に再決定 |
-| D13 | MVP決定 | MISSで投を終了せずStayまたは再Fall。プレイヤー回収で投終了 | 釣獲/バラシ/明示中断の終端処理はFISHING参照 |
+| D12 | 基本操作決定（M10.5改訂） | マウス竿操作、右クリックShakuri、左保持通常回収、F再Fall、Q Quick Retrieve、Enter投入。日本語Prototype HUD・装備UI | マウス中心は製品基本方針。感度/可動域/演出/製品レイアウト・パッド最終配置は未確定 |
+| D13 | MVP決定（M10.5改訂） | MISSで投を終了せずStayまたは再Fall。通常回収と中途停止不可のQuick Retrieveを分離、回収完了後Ready/装備変更可 | 釣獲/バラシ/明示中断の終端処理はFISHING参照 |
 | D14 | 保留 | MVP非対象・非ブロック。境界/岸/根掛かりゲーム仕様を追加しない | Alpha以降。無効データ防御は技術処理として維持 |
-| D15 | MVP決定 | 一定水平潮流。風・波の物理影響なし | 風/波/鉛直潮/変動潮はAlpha以降 |
+| D15 | MVP決定（M10.5改訂） | 風・表層潮・深度別水平潮を分離。船へ風/表層潮、エギと海中ラインへ深度別潮。一定場と層別場を検証 | 地形/位置に応じたCurrent/Wind Fieldへ拡張可能。波物理/CFD/鉛直潮/実海域場は後続の別設計 |
 | D16 | 保留 | MVP非対象・非ブロック: 自由操船等 | Alpha以降 |
 | D17 | 保留 | MVP非対象・非ブロック: SHOP/経済/セーブ | Alpha以降 |
 | D18 | 保留 | MVP非対象・非ブロック: Steam連携/実績/大会等 | Alpha以降 |
@@ -205,3 +207,47 @@ Fishingが入力受理、シャクリ予約/一連の回数、Shakuri→TensionF
 Sessionは次投候補の準備とDeployでの凍結、RetrieveでのCast終了・船上帰還、NextCastでのReady/装備ロック解除を管理する。EndFishingなしで次投重量を変更でき、旧Cast・過去の結果/装備コピーは更新しない。Abortだけでは船上帰還を作らない。M06当時のセッション全体ロックの記録を現行仕様と読み替えない。
 
 SnapshotのDepthVelocityMps/境界接触/状態開始Tick/連続TF・Stay観測時間を後続へ公開した。RangeObservationSecondsは安定時間ではなく、安定履歴の評価はM11、BITEへの倍率接続はM12に残す。旧AutoStayの宣言・検証・Prototype保存項目を撤去し、汎用時計の試験は維持。検証・変更一覧はROADMAPのM10記録、仮入力と次投装備変更の手順はUI_SPEC第8節を参照。
+
+## 10. M10.5 Prototype Realism Revision（設計改訂・実装未着手）
+
+### 品質判断と根拠
+
+2026-09-13ユーザーのPIE報告を受理した。FreeFall→BottomContact、Shakuri、Re-Fall、通常Retrieve自体は動作。一方、30m着底まで80m以上のライン、Stayの沈み続け、回収停止後の不自然さ、水平相対移動の分かりにくさ、装備コマンド利用不能、英語HUDと操作導線不足により、ティップラン再現性・操作性は不合格。装備ロック/次投反映の実機確認は未確認であり、失敗と成功のどちらにも読み替えない。今回CodexがPIEを再現実行したという記録ではない。
+
+| 問題 | コード確認で分かった構造 | 判断・改訂先 |
+|---|---|---|
+| 過大ライン | StepEgiは必要距離や弛みと無関係にPayoutMps×dtを加算。旧Prototype潮流1m/sは約1.944 knotで、今回の代表範囲より速い | 原因候補を特定。報告の80mケースの入力履歴/ログは未再現。幾何需要・繰出し上限・実潮流単位を分離して再試験 |
+| ドリフトとStay沈下 | BoatはCurrentResponse×Currentへ応答しWindMpsは0。Egiは毎Tick Z速度を重量沈下値へ設定、ライン球を超えた時だけ牽引補正 | 風の寄与と連続した3D速度/ライン応答が不足。重量による下降自体は禁止せず、軽量/釣合い/重量過多の比較を必須化 |
+| 水平運動が不明瞭 | M08にはXY積分が既にある。正本はXY＋Depth、HUDに水平距離なし、竿先は固定offset | 「水平計算が存在しない」とはしない。世界位置正本・可動竿先・相対距離/方向の表示へ移行 |
+| Retrieve解放 | bReelingをfalseにするだけでRetrievingに留まり、同状態の沈下係数を継続 | 同じ位置/速度/ラインからStay相当へ戻す状態契約に変更 |
+| 装備操作不能 | TRSetEquipmentはフォーカス/Session無効時に無言returnし、他の拒否理由はOutput Logのみ。UI導線なし | 実機の失敗理由は未特定。フォーカス、実行先Controller、Ready/船上/Pause、IDを切り分ける。日本語UIと拒否理由を必須化 |
+| 操作案内/HUD | 仮キー9種、全Boolean検証、英語の単一TextBlock、案内はsee assigned InputConfig | マウスAxis2D/意味コマンド、日本語ラベルと値の分離、装備パネル、保存済み検証Levelを設計 |
+
+### 改訂する決定と範囲
+
+ユーザー依頼を根拠にD02（繰出し）、D05（世界位置正本）、D08（装備導線）、D12（マウス基本操作/日本語UI）、D13（Quick Retrieve）、D15（風＋表層潮＋深度別潮）を改訂する。D03/D04の1入力1シャクリ、Shakuri→TensionFall→Stay、AutoStay廃止は維持。D12のマウス基本配置は製品の基本方針として決定済みであり、Alpha前の再承認事項へ戻さない。感度・可動域・応答・演出・製品レイアウトの数値は未確定。
+
+M10.5では固定水平風、水平の一定潮/層別潮を用いた簡易場を実装する計画。波物理、鉛直流、完全CFD、地形から実流況を生成する機構、自由操船、SHOP、製品ロッドアニメーションは対象外。位置/深度/Tick問い合わせを維持し、将来の岸・岬・湾・ポイント差はField評価器の差替えで扱えるようにする。M11のRangeError/RangeStability/イカ、M12以降の確率・攻撃・Hookは未着手のまま。
+
+### 正本・責務・更新順
+
+- Data: 環境Field設定、Boat応答、Egi/Line/操作係数、Rod可動域、InputConfig、表示設定。設定は初期化/投開始時にコピーし、暗黙のEditor編集を反映しない。候補装備だけReadyで変更する。
+- Ocean: XY/深度/Tickに対する風と潮の値、海面/海底、有効性。船速度を作らない。SurfaceCurrentは同じ潮Fieldの深度0評価であり別の競合設定ではない。
+- Boat: 風/表層潮からWorld位置・速度・固定船首方位を更新。釣り人の向きと船首・ドリフト方向を区別する。竿の基準取付Transformを提供する。
+- Fishing: RodControl（予定UTRRodControlComponent）が竿Yaw/PitchとShakuriの一時オフセットを所有し、RodSnapshotを作る。EgiSimulationがWorldPositionM/VelocityMps/LineLengthMを唯一更新する。FishingComponentは操作状態、Sessionは装備/投寿命/終端を所有。
+- Game: Input Queue → 既存Timers → Ocean → Boat → RodControl → Egi積分/状態確定 → Publish。将来のAI/Bite/Fightフェーズ位置は既存順序を維持。Coordinatorへ物理式を移さず、Rod更新は既存Fishingフェーズ内でEgiより先に接続する。
+- UI/描画: Snapshotを読む。カメラ移動、ロッドメッシュ/アニメーション、Widgetから正本へ逆流させない。Shakuriによる数値作用をRod移動と追加リフトで二重適用しない。
+
+WorldPositionM（m、+Z上）を唯一の位置正本とし、PositionXYM/DepthMは同一確定位置から導出する互換読取値。DepthM=SurfaceZ_M-WorldPositionM.Z、DepthVelocityMps=深度差/固定dt（下向き正）。既存CastId/Tick/状態/接触/回数/RangeObservationSecondsを保持し、Snapshot取得で進行させない。Rodの位置/回転、Boatからの水平offset/距離、竿先との距離、風/表層潮/エギ深度潮を同じTickで対応付ける。RangeObservationSecondsを安定達成時間へ読み替えない。
+
+### 回収と次投
+
+通常回収解放は中途終了ではなく、同Castの水中運動へ復帰。QuickRetrieveはQuickRetrievingへ入り、途中停止不可・攻撃/合わせ不可・固定sim所要時間で船上帰還する別経路。両回収完了は一度だけRetrieved（重量付き釣果なし）と前投装備を保存してCast終了・船上帰還を確定し、Readyへ進む技術契約とする。M10のResult→N必須経路は通常回収でも簡略化し、結果は非モーダル通知で保持する。Quick完了後にNを要求しない。Caught/Abort等の後続結果経路は変更せず、AbortやActor破棄で帰還を捏造しない。
+
+Readyかつ船上・活動Castなし・非Pauseで装備変更を許可。次のDeployが新CastIdと装備凍結を原子的に確定する。UIと公開APIが同じ条件を確認し、古いReady画面や旧CastIdによる変更を拒否する。
+
+### 未確定の調整と検証の境界
+
+ユーザーの0.4〜1.0 knotは今回の想定範囲として採用し、実海域全般の実測値とは記載しない。1 knot=1852/3600 m/sより0.4/0.7/1.0 knotは約0.205778/0.360111/0.514444 m/s。内部SI、表示でknotを併記する。風速は独立したm/s設定。
+
+船の風/潮応答・抗力/慣性、エギ/ライン抗力・沈下曲線、繰出し余長、Rod感度/可動域、Quick所要時間（1〜2秒程度の試験案）、安定観測幅は製品未確定。局所的技術選択は各節に案を示し、Prototype/Testで校正する。ROADMAPの受入値は試験用であり、製品バランスの確定ではない。M10.5設計完了を実装合格と称さない。

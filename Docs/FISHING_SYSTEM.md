@@ -1,5 +1,7 @@
 # 釣りシステム技術設計
 
+2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
+
 
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
@@ -12,7 +14,7 @@
 | クラス / 継承元 | 責務・主要Component | 主要変数 | 主要関数 |
 |---|---|---|---|
 | `UTRFishingComponent : UActorComponent` | 操作状態の唯一の所有者。Sessionに配置 | `State: ETRFishingState`、CastId、StateEnteredTick、LastActionTick、JerkCount（投内合計）、SeriesJerkCount、StayPenaltyJerkCount、bSeriesClosed、PendingJerkCount、bHadMiss、bHadEscape、ActiveCommand | `HandleCommand(const FTRFishingCommand&) -> ETRCommandResult`、`Step(float)`、`BeginCast()`、`TransitionTo()`、`AbortCast()`、`GetSnapshot()` |
-| `UTREgiSimulationComponent : UActorComponent` | 深度・水平位置・ライン近似の唯一の所有者。Sessionに配置 | DepthM:float、PositionXYM:FVector2D、VelocityMps:FVector、LineLengthM:float、LineAngleRad:float、Tension01:float、TotalMassG:float | `InitializeCast()`、`StepEgi(dt,Ocean,Boat,Action)`、`ApplyJerk()`、`SetLineMode()`、`GetSnapshot()`、`Reset()` |
+| `UTREgiSimulationComponent : UActorComponent` | 空間位置・ライン近似の唯一の所有者。Sessionに配置 | WorldPositionM:FVector（M10.5予定）、DepthM/PositionXYMは導出読取、VelocityMps:FVector、LineLengthM:float、LineAngleRad:float、Tension01:float、TotalMassG:float | `InitializeCast()`、`StepEgi(dt,Ocean,Boat,Action)`、`ApplyJerk()`、`SetLineMode()`、`GetSnapshot()`、`Reset()` |
 | `ATREgiActor : AActor` | 結果の描画専用。SceneRoot、StaticMesh。任意で表示用ライン | Previous/CurrentSnapshot、Mesh参照 | `ApplySimulationSnapshot()`、`UpdateVisualInterpolation()` |
 | `UTRHookComponent : UActorComponent` | BITEトークン・受付・合わせの唯一の判定者。Sessionに配置 | ActiveToken、TargetSimId、BiteStartTick、OpenTick、CloseTick、Resolved | `TryOpenBite()`、`EvaluateHook()`、`ExpireBite()`、`CancelBite()`、`Reset()` |
 | `UTRFightComponent : UActorComponent` | HIT後の簡易テンション/進捗。Sessionに配置 | FightState、Progress01、FightTension01、OverTensionTicks、ReelHeld、HookedSquidSnapshot、FightStartTick | `BeginFight()`、`SetReeling()`、`StepFight()`、`CompleteFight()`、`ResolveEscape()`、`AbortFight()` |
@@ -146,13 +148,13 @@ Stayの継続評価だけではLastActionTickやStay進入時刻を更新しな�
 - M08全7試験成功。静水、35/80gの潮応答/沈下差、同じライン/潮/船速で30g上昇・35g釣合い・80g下降、最短/最大長、2秒ステップ、解なし、移動先海域外、離底、M04/M05固定更新・ポーズ・30/60/120fps一致、旧CastId・破棄Sessionを検証。重量釣合い比較は同一初期状態から1固定ステップの局所応答であり、長時間の製品レンジ安定性や実測校正の完了を意味しない。M07鉛直回帰は無潮に明示固定し、旧ゼロライン仮値の受理を設定最小長未満の拒否へ更新した。
 - D04/D07/D08改訂を正本として認識し、AutoStayをM08で使用していない。旧設定の撤去、Retrieve/船上帰還と一投単位の装備変更へのコード移行はROADMAPどおりM10。現在の旧M06ロック試験合格を改訂D08の合格と称さない。入力/HUDはM09、斜面シナリオはM16、PIEの目視・パッケージ検証は未実施。
 
-### 正本と座標
+### M08までの正本と座標（M10.5で世界位置正本へ置換）
 
 海面Zを `z_s`、エギ水平位置を `x`、深度を `d` とする。世界位置mは `e=(x.x,x.y,z_s-d)`。`d` はfloatの正本。描画Actorに物理シミュレーションを有効化しない。毎ステップ移動先のOceanを再取得し、海底と海面を検証する。
 
 船の竿先 `r`、ライン長 `L`、竿先とエギの距離 `D=|e-r|`。角度は鉛直下向きから `atan2(水平距離, max(r.z-e.z,ε))`、表示はdegreeへ変換する。L>=0、`0<=d<=BottomDepthM`、有限数を不変条件とする。
 
-### 積分順と単位
+### M08までの積分順と単位（M10.5で繰出し・空間応答を置換）
 
 1. 総重量M[g]からエギの `SinkSpeedByTotalMass(M)` [m/s]、`HorizontalResponseByTotalMass(M)` [1/s]を読む。沈下は下向き正。沈下曲線は重量増で非減少を推奨するが、実測校正前のゲーム近似である。
 2. 当地の潮 `u` [m/s] に対し、水平速度を `v_xy += (u_xy-v_xy)*(1-exp(-k(M)*dt))` で応答させる。重量が増えるほど応答が鈍る曲線を仮定。船速度を潮へ加算しない。
@@ -249,7 +251,7 @@ BlueprintAssignable: OnFishingStateChanged、OnBottomContact、OnHookResolved、
 
 ## 8. M10の操作・装備・観測契約（2026-09-13）
 
-M10完了。第2〜4節の最新D03/D04/D08に移行した。M06〜M09の記録中にある全セッションロック、操作未対応、旧設定撤去予定は過去の履歴であり、本節が現在の実装を示す。
+M10の旧実装記録。第2〜4節の当時のD03/D04/D08に移行した。M10.5で通常回収停止/Ready接続・空間モデルを改訂する。M06〜M09の記録中にある全セッションロック、操作未対応、旧設定撤去予定は過去の履歴であり、本節が現在の実装を示す。
 
 - FishingComponentが操作と回数を所有し、Sessionの固定コマンド受理からHandleCommandへ渡す。入力→操作時間満了確認→既存Boat/Oceanを使ったEgi積分→状態確定→Publishの順。Shakuriのenum名はJerkingを維持する。
 - 1入力で1動作を開始。動作中のJerkはint64のPendingJerkCountへ予約し、動作終了後のTensionFallで次の1件を取り出す。予約の途中にStayを挟まない。JerkDurationSは既存の秒→整数Tick換算を使用し、開始から所定Tick数だけJerkLiftMps/JerkReelMpsを適用する。並列合成・固定回数の自動動作・瞬間リフトの二重加算はない。
@@ -274,3 +276,57 @@ RangeObservationSecondsは連続したTensionFall/Stayの観測時間であり�
 AutoStayDelaySを宣言・時刻換算・データ検証から削除し、旧前提の試験を置換した。汎用秒→Tick試験は維持。既存DA_TR_FishingTuning_PrototypeをUEで再保存し、未知の旧プロパティを除去、新係数だけを追加した。既存重量曲線・釣り設定は保持し、M02全6件と別プロセスの再読込で確認。Content内に旧項目名が残らないことも確認した。
 
 M10はF06/F07/F08/F16/F17/F18/F19と設定移行を含む8試験成功。1/10/11/20入力、予約取消、一連の保持/更新、無入力Bottom、同Tick入力優先、回収/解放/再開、0g/次投90g、同Tick装備変更拒否、次投メッシュ差替え、旧Cast、Pause/フォーカス、30/60/120fpsの状態列・結果時刻一致、深度速度・境界接触・読取非破壊を確認した。詳細な結果と回帰内訳はROADMAPを参照。M11以降のAI/確率/Hook/Fightは未実装、実測校正・PIE目視・実機入力・パッケージ起動も未実施。
+
+## 9. M10.5の空間エギ・ライン・操作（未実装）
+
+### 世界位置と相対幾何
+
+EgiSimulationのWorldPositionMを唯一の位置正本とし、同じ確定位置からPositionXYM、DepthM、Boatに対するHorizontalOffsetM/HorizontalDistanceM、竿先とのDistanceM、LineAngleを導出する。DepthMはfloatの読取値を維持するが積分しない。DepthVelocityMpsは補正後の深度差/固定dt。Boat Position/Velocity、Rod Tip Position/Rotation、CurrentAtEgiDepth、重量Snapshotは同Tickの値を用いる。世界座標mとUE描画cmの変換は描画境界だけ。
+
+ライン角は竿先→エギの直線を鉛直下向きから測る。HUDの「船との水平距離」とライン角に用いる「竿先との水平距離」は区別する。ラインが弛んでいる時の角度は端点間の幾何角であり、実際の曲線の竿先接線角ではない。Rod RotationはRod長/取付位置からTip位置を求めるために使う。ライン方向を竿の向きへ強制一致させない。
+
+`D=|EgiPosition-RodTip| <= L + epsilon`、`0<=DepthM<=WaterDepthM`、全値有限を不変条件とする。SlackM=max(0,L-D)。エギを毎Tick船の真下へ置かない。海面/海底補正後にライン条件を再検査し、固定の最大反復/内部サブステップ数を超えた失敗は最後の有効値を保持して既存の技術中断へ進める。80m clampによる見かけの合格は禁止。
+
+### 空間速度とライン応答の技術案
+
+1. 凍結した総重量MからM02の沈下曲線/応答係数を評価する。沈下終端速度を持つ3D速度応答とし、前Tickの鉛直速度を毎回定数で上書きしない。無潮・無風・十分な自由ラインでは重量曲線の終端沈下へ収束する。
+2. Oceanからエギ位置/深度の潮uを取得し、自由速度の目標を`u - Up*SinkSpeed(M)*StateSinkScale`として、正の応答率による指数応答で更新する技術案。Shakuriの入力作用と水中ライン抗力による速度変化を加える。重量を単なる表示値にしない。沈下速度や抗力はゲーム近似で製品値未確定。
+3. 海中ラインの潮流作用を最小の分布サンプルで近似する。水中にある竿先〜エギ区間の固定比率点で深度潮を読む（初期技術案3点）。空中区間へ水中抗力を掛けない。各点速度は端点速度の補間、相対流速はu(point)-v(point)。`Fline ~ LineDragPerM * WetLength * weightedRelativeFlow`とする線形抗力案。LineDragPerMは[kg/(m*s)]、エギへの伝達率は無次元、加速度への換算に有効質量[kg]を用いる。端点の潮応答とライン抗力を別係数にして二重計上を検査する。弛み時の風下牽引を捏造せず、張り/弛みに応じた伝達を設定化する。
+4. ライン長を下記の需要方式で更新し、試行世界位置を積分。動く竿先と有限ラインの引張制約を解く。ラインは押さない。張った時の相対速度の外向き成分も制約と整合させ、補正前の速度へ戻して次Tickに同じ貫通を反復しない。
+5. 海面/海底とラインを整合させて確定する。接触開始/離脱は一度だけ通知し、補正後位置・実移動速度・深度速度を公開する。速度上限のため公開速度だけを切って位置差と不整合にする方式は見直す。必要な防御は候補積分段階で適用する。
+
+ラインの完全なカテナリー、多数の物理リンク、Chaos/CFDは実装しない。上記の分布抗力は近似であり、実際のライン形状の再現を名乗らない。必要なら純粋な計算器へ分離するが、Coordinator/Widgetへ式を置かない。Tension01は引張制約/抗力の正規化代理値0〜1で、ニュートンやFightテンションと混同しない。旧補正距離/TensionReferenceMの依存試験は移行対象。
+
+### FreeFallとTensionFallの繰出し
+
+FreeFallは自動繰出しを維持するが、`L += 一定速度*dt`を無条件に行わない。候補距離Dtrialと試験余長SlackAllowanceMから`Lneeded=Dtrial+SlackAllowanceM`を求め、`deltaL=min(max(0,Lneeded-L), MaxPayoutMps*dt)`だけを繰り出す技術案。余長が十分なら追加しない。繰出し上限より需要が大きい時は実際のLで牽引を解き、黙ってラインを伸ばさない。FreeFallは巻取りをせず、着底後の無操作で繰出しを継続しない。
+
+TensionFallは原則既存Lを保持して過渡作用を解く。制御繰出しが必要な技術ケースは同じ需要方式と独立した上限/余長を用い、無条件のTensionPayoutによる余長蓄積は禁止する。StayはL固定。竿先移動や船ドリフトによる水平/鉛直作用とM02重量沈下を同時に計算する。
+
+30m・代表潮0.4/0.7/1.0 knot・27装備の検証をROADMAPのR03で行う。L/D/余長/ライン角、FreeFall時間、船とエギの移動距離/相対距離、風/表層潮/エギ潮、総重量を記録する。80m以上を不合格とするのは定義したPrototype標準条件であり、全環境での物理的上限を80mにする仕様ではない。
+
+### Shakuri / TensionFall / Stay
+
+1右クリック押下=1シャクリ。保持では増加しない。複数押下は既存Tick/Sequence順に予約し、固定回数の自動シャクリを作らない。受理時にRodControlへ一時あおりを要求し、完了後はその時点のマウス基準姿勢へ戻す。マウス基準姿勢を一時オフセットで上書きしない。動作は固定更新の有限時間で表現し、無限加速度の瞬間ワープはしない。
+
+技術案では数値竿先の一時移動をライン経由でエギへ伝え、旧JerkLiftを同じ量で重ねない。追加のゲーム用リフトが必要なら別寄与として明記/設定化し、1入力の作用量と単独/合成の試験を持つ。製品シャクリ量/速度/アニメーションは固定しない。
+
+基本遷移はJerking（表示シャクリ）→TensionFall→Stay。過渡作用の処理完了で即Stay、海底接触・予約/新入力の優先は維持。AutoStayDelay/無入力0.8秒/安定達成待ちは存在させない。軽量で上昇、重量過多で下降していてもStayへ進む。再右クリックでShakuri、FでFreeFallへ戻る。
+
+Stayでは船・竿先・エギ深度潮・ライン抗力/角度/長さと重量の釣合いでレンジを決める。全重量で沈むことも全重量で上がることも、条件を問わず強制してはならない。R04の同じ環境/初期幾何で軽量/適正/重量過多を比較する。境界静止は安定と数えず、DepthVelocity/接触/Tick/位置を後続へ渡す。RangeError/RangeStabilityは実行時評価値であり、調整するのは後続SquidTuningの閾値/時定数/曲線。M10.5ではBITE評価や安定スコアを追加しない。
+
+### 通常Retrieveと解放
+
+左押下でRetrieving/ReelIn、保持中だけLを巻き取る。左解放/取消は巻取り速度を0にし、同CastのStayへ戻す技術契約（海底接触中はBottomContact優先）。その入力境界でWorldPosition/Velocity/L/Angleを初期化せず、次の固定積分から潮・船・重量による運動を継続する。旧Retrievingのままの沈下係数は使わない。解放でFreeFall自動繰出しを開始せず、船直下スナップもしない。
+
+通常回収の完了条件は竿先直下の海面近傍（深度/水平距離が設定許容内）を維持し、海中モデルの外へ無理に引き上げない。Retrieved→船上帰還→ReadyをSessionが一度だけ確定し、装備UIを有効化する。旧Result→N必須を廃止する改訂技術契約。前投の結果・装備は保持する。
+
+### Quick Retrieve
+
+Q押下で新状態QuickRetrieving。活動中のFreeFall/Bottom/Jerking/TF/Stay/通常Retrievingから受理し、シャクリ予約/通常巻取り/入力保持を解除する。開始時のCastId/登録世代/開始Tick/所要Tickを凍結し、1〜2秒程度のQuickRetrieveDurationSをDataAssetの試験値として共通ceil換算する。ライン長に比例させず、80m/100mの試験でも同じ所要Tick。
+
+Quick中はQ再入力・左解放・F・シャクリ・Hook等を拒否し、途中停止しない。Attack/Bite適格性=falseをSnapshotの状態契約として後続へ渡す（AI本体を先行実装しない）。ロッド操作もQuick用演出を優先し、入力を完了後へ持ち越さない。Pauseは時計を停止、フォーカス喪失は保持を解除するが回収を取り消さない。Worldが動作中ならフォーカス喪失だけでsim時間を止める仕様は追加しない。
+
+Quickは通常水中物理を凍結するテンポ改善の回収経路。開始位置/ラインを保持した演出Snapshotから進捗を表示し、水中運動/Range観測の有効性をfalseとして区別する。描画だけの補間位置をWorldPosition正本やAI対象へ戻さない。演出終了コールバックでなく`Tick >= StartTick+DurationTicks`で帰還を確定する。完了時は一度だけRetrieved（必要なら終了方法Normal/Quickの値を付記、Caughtではない）→Cast終了→Egi Onboard→Ready→装備解除。古い終了通知の二重処理を拒否する。
+
+途中停止不可はプレイヤー釣り操作の条件。明示Session終了/World終了/対象破棄は安全中断を優先し、後からQuick完了や船上帰還を発行しない。終端CastIdを保持し、次Deployでだけ新IDを採番する。

@@ -1,11 +1,13 @@
 # UI・入力接続技術設計
 
+2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
+
 
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
 関連: [全体正本](GAME_DESIGN.md)、[操作](FISHING_SYSTEM.md)、[BITE](SQUID_AI.md)。MVPのデバッグ表示と製品のプレイヤー向け情報を区別する。
 
-更新: v0.2 / 2026-09-12。D10〜D12は保留（MVP暫定仕様あり）。MVPでは固定重量・仮Cue1種・内部情報HUDを使い、製品仕様はAlpha前に再決定。
+更新: v0.2 / 2026-09-12。D10/D11とD12の未指定部分は保留（MVP暫定仕様あり）。D12の基本操作はM10.5で決定済み。MVPでは固定重量・仮Cue1種・内部情報HUDを使い、製品仕様はAlpha前に再決定。
 
 ## 1. 画面遷移
 
@@ -71,7 +73,7 @@ Blueprintで上記UUserWidgetの派生Widgetを作り、配置・色・文字・
 
 結果: Caught時は重量kgと装備を表示。他Outcomeは「釣果なし」と終了理由を表示し、0kgの釣れたイカとして扱わない。結果の丸めはUIだけで行い、正本WeightKgを書き換えない。小数桁はD10。試験個体1.25kgなどはテストデータと明記する。
 
-## 4. 入力設計
+## 4. M09/M10までの入力設計（M10.5で更新）
 
 Enhanced Inputを使用し、キーそのものと意味上のコマンドを分離する。[Epic Enhanced Input](https://dev.epicgames.com/documentation/unreal-engine/enhanced-input-in-unreal-engine)
 
@@ -157,7 +159,7 @@ Deploy/NextCast/EndFishingは既存M06の状態条件に従う。CancelはSessio
 
 最終AutomationはM09 7件＋回帰13件成功、各試験のエラー・警告0件。U02はUEnhancedPlayerInputへ押下/解放を注入し、長押しと再Bindingでも1押下1コマンドを確認した。他にTick/Sequence順、30/60/120fps、古いCast/終了/破棄、Pause/フォーカス、読取非破壊性、不正起動、保存済み設定を検証した。NullRHI試験であり、PIEの目視、解像度/DPI、実キーボード/ゲームパッド、アプリ切替の実機確認は未実施。M09合格はC++/データ/自動試験の範囲を指す。
 
-## 8. M10操作接続（2026-09-13）
+## 8. M10操作接続の履歴（2026-09-13、M10.5で更新予定）
 
 第7節の「操作は未対応」という記録はM09当時の履歴。M10ではSpaceのShakuri、FのRe-Fall、TのTensionFall要求、R押下/解放の回収を実装した。Hookは引き続き未実装。キーは既存Prototype割当で、製品配置を確定していない。
 
@@ -168,3 +170,57 @@ M10の内部確認用装備変更はControllerのExecコマンド`TRSetEquipment
 HUDへJerkCount/SeriesJerkCount/StayPenaltyJerkCount/PendingJerkCount、DepthVelocityMps（下向き正）、海底/海面接触、装備ロック、船上帰還、変更可能性を追加した。既存のworld Z速度（上向き正）と区別する。仮パネル高さを広げ、操作未実装の案内も更新した。RangeError/RangeStability/安定達成時間/BITE値は先行表示しない。RangeObservationSecondsは観測時間のSnapshot契約であり、安定スコアではない。
 
 M10の入力・保持解除・装備変更試験とM09回帰は成功。UIのPIE目視、解像度/DPI、実キーボード/ゲームパッド/コンソール操作は未検証。Onboard/Ready条件やメッシュ変更はAutomationで検証している。製品UI・Resultパネルの完成はM15に残す。
+
+## 9. M10.5マウス操作・日本語Prototype UI（未実装）
+
+D12改訂: マウス中心を製品の基本方針として採用。数値感度/可動域/演出/最終レイアウトは調整事項。既存キーボードはバックアップとして残せるが、UIの主案内を競合させない。
+
+| 主操作 | 意味 | Enhanced Input/固定更新契約 | バックアップ |
+|---|---|---|---|
+| マウス移動 | 竿Pitch/Yaw | Axis2Dの移動量→RodAimコマンド→RodControl | パッドは将来レート入力を同じ意味へ変換 |
+| 右クリック押下 | Shakuri1回 | Startedのみ。保持Triggeredで連打しない | Space |
+| 左クリック保持/解放 | 通常巻取り/停止 | StartedとCompleted/Canceled。停止でStay相当へ復帰 | R |
+| F | Re-Fall | Started、同Cast | 既存F |
+| Q | Quick Retrieve | Started、一度受理後は途中停止不可 | 製品以外の別割当は任意追加しない |
+| Enter | Deploy | Ready/船上でのみ受理 | 既存Enter |
+| P | Pause/Resume | 時計停止、保持解除 | 既存P |
+| Readyの装備パネル | エギ/シンカー選択・適用 | 公開APIの許可条件を再検査 | Consoleは任意診断のみ |
+
+H/Hookは未実装と示し主ガイドから外す。Tは既存のPrototype診断用TensionFall要求として残す場合だけ補助欄へ表示する。Nは通常/Quick回収後に必須にせず、既存Result用互換操作として必要な時だけ案内。BackspaceのSession終了は補助欄で「中断・再開にはPIE再起動」と明示し、Q回収と混同させない。
+
+### Rod Mouse Controlと入力寿命
+
+予定UTRRodControlComponentをSession所有のFishing責務として追加し、Boatの取付Transformから竿先位置/回転を作る。DataAsset案はUTRRodTuningDataAsset（SessionConfig参照）。RodYaw/Pitchのmin/max、マウス感度[rad/入力単位]、竿長m、取付offset、あおり振幅/時間/復帰応答を分離する。Yaw/Pitchは数値正本、合成姿勢は可動範囲へclamp。可動範囲min<max、正の竿長、有限値、通常姿勢とあおり後の安全な竿先高さを検証する。製品角度は未確定。
+
+PlayerControllerはマウスdeltaへ描画dtを二重に掛けない。受信順に次の未処理Tick/Sequence/CastId/登録世代を付け、同Tickでクリックより前後どちらの竿姿勢を使うかをこの順序で確定する。単純な1フレーム合計でクリック前後を混ぜない。パッドの角速度入力は固定dtを掛ける別アダプタとし、マウスdeltaと同じ単位だと扱わない。固定Tick入力列の再生が決定性試験の対象であり、人間の異なるfps操作が自動的に同一Tickになるとは保証しない。
+
+Readyでも現在の登録世代/最終CastId（初投前0）でRod入力を照合する。Deploy境界で旧世代/旧Castの未処理竿入力を破棄し、受理済み基準姿勢だけを次投初期姿勢へ引き継ぐ。Cast終了・対象破棄・Pause・フォーカス喪失・UIContext切替でdelta/保持/予約入力を解除する。復帰時に溜まったマウス移動を一括適用しない。マウス/バックアップキーは同じ意味の保持状態へ集約し、二重巻取り速度にならない。
+
+### 装備変更導線
+
+Ready時はカーソルを表示し、日本語の簡易装備パネルを表示する。技術案はエギ選択（3号30g/3.5号35g/4号40g）、シンカー選択（無し0g/5/10/15/20/25/30/40/50g、既存Tableの9選択を正本として列挙）、総重量、適用ボタン。実際の選択肢はM02 Tableから生成し、UI側に重複した商品定義を持たない。存在しないID/メッシュ参照は選択成功にしない。
+
+UI操作中は釣りマウス入力を消費し、ボタン左クリックで巻取り、右クリックでシャクリを発行しない。ReadyはUI操作を優先、投入後はゲーム側へマウスを捕捉、帰還Readyでカーソルとパネルを戻す。Enterはパネルの編集中/フォーカス状態と競合させず、適用済み装備を表示してから投入要求を送る。Widgetは状態を確定せずSessionの応答で選択表示を更新する。
+
+Cast中/回収中/船上未確認/Pauseでは変更欄を無効化し、日本語で理由を表示する。Readyになった古い画面からの要求もAPIで再検査。Apply/Deployの競合は同一のSession境界で拒否し、投中装備を変更しない。前投の終端装備と観測値は次投候補と区別し、次Castのメッシュ/係数まで反映する。Console Commandは任意診断に残し、無言失敗を改善する計画だが、UI受入にコマンド操作を要求しない。SHOP/購入/保存は対象外。
+
+### 日本語HUDと見える因果関係
+
+常時ガイド: 「マウス移動：竿操作」「右クリック：シャクリ」「左長押し：巻き上げ」「F：再フォール」「Q：クイック回収」「Enter：投入」「装備変更：回収後の準備パネル」。状態に応じて使用不可の操作は淡色＋理由を示す。Quick中は残り進捗と「途中停止不可」、Pauseは「一時停止」を表示する。
+
+| 日本語ラベル | 表示値/注意 |
+|---|---|
+| 投ID（CastId）/釣り状態 | Ready=次投準備、FreeFall=フリーフォール、BottomContact=着底、Jerking=シャクリ、TensionFall=テンションフォール、Stay=ステイ、Retrieving=通常回収、QuickRetrieving=クイック回収 |
+| エギ深度/水深 | m、深度は下向き正、未投入/回収後は「—（船上）」 |
+| 深度変化速度 | m/s、下向き正、上昇/下降の文字を添える。安定スコアとは呼ばない |
+| 船との水平距離/水平方向 | mと相対方向。竿先との距離は詳細欄で区別 |
+| ライン長/ライン角度/余長 | m/度/m。角は鉛直下向き基準、弛み時は端点間の幾何角 |
+| 張力（代理値） | 0〜1。実張力N/Fightと混同させない |
+| 船ドリフト | 世界方向＋速度m/s、knot併記可 |
+| 風向・風速 | 「流れる向き」基準、m/s。無風は方向なし |
+| 表層潮流/エギ深度の潮流 | それぞれ方向とm/s＋knot。単にCurrent一行にまとめない |
+| エギ重量/シンカー重量/総重量 | g、シンカー無し0g、ロック/変更可否 |
+
+ラベルと値を別Widget/表示要素にし、異なる色と配置で区別する。色だけに依存せず単位・符号・状態名を表示。日本語対応フォント、背景とのコントラスト、1280×720/1920×1080と拡大表示で欠け・重なりを確認する。数値は既存10Hz案、状態/ロック/エラーは即時反映。Quick中の水中値は「回収演出中」として凍結値と区別し、RangeError/RangeStability/BITEの仮値を表示しない。
+
+予定の保存済み検証Level `L_TR_M105_Prototype` にGameMode/SessionConfigを接続し、Levelを開いてPlayするだけで操作案内とReady装備UIが出るようにする。現時点では当Levelは存在しない。実装タスクでUEの正規手段により作成する。船/竿先/エギ/端点ライン/ドリフト方向が読める最小表示を付け、製品アートは不要。コンソールURLやWorld Settingsの手修正を受入手順にしない。
