@@ -1,6 +1,7 @@
 #include "Ocean/TROceanWorldSubsystem.h"
 #include "Data/TROceanAreaDataAsset.h"
 #include "Ocean/TRSeabedProviderActor.h"
+#include "Ocean/TREnvironmentField.h"
 
 bool UTROceanWorldSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
@@ -22,6 +23,7 @@ bool UTROceanWorldSubsystem::InitializeArea(UTROceanAreaDataAsset* InArea,
 	Settings = InArea->Settings;
 	Provider = InProvider;
 	ProviderRevision = InProvider->GetConfigurationRevision();
+	Field = MakeShared<FTREnvironmentField>();
 	OceanState = ETROceanState::Ready;
 	return true;
 }
@@ -64,27 +66,66 @@ FTROceanSample UTROceanWorldSubsystem::SampleOcean(const FTROceanQuery& Query) c
 		Sample.InvalidReason = Bottom.InvalidReason;
 		return Sample;
 	}
-	// Constant MVP current has no depth-dependent evaluation. Finite depths below the
-	// bottom remain valid so the caller can project a trial position back to the seabed.
+	FTROceanQuery FieldQuery = Query;
+	FieldQuery.DepthM = FMath::Min(Query.DepthM, Bottom.BottomDepthM);
+	const FVector Current = Field->CurrentAtLocationAndDepth(Settings, FieldQuery);
+	FieldQuery.DepthM = 0.0f;
+	const FVector SurfaceCurrent = Field->CurrentAtLocationAndDepth(Settings, FieldQuery);
+	const FVector2D Wind = Field->WindAtLocation(Settings, Query.PositionXYM, Query.SimTick);
+	if (Current.ContainsNaN() || SurfaceCurrent.ContainsNaN() || Wind.ContainsNaN() ||
+		Current.Z != 0.0 || SurfaceCurrent.Z != 0.0 || !FMath::IsFinite(Current.SizeSquared()) ||
+		!FMath::IsFinite(SurfaceCurrent.SizeSquared()) || !FMath::IsFinite(Wind.SizeSquared()))
+	{
+		Sample.InvalidReason = ETRSampleError::InvalidQuery;
+		return Sample;
+	}
 	Sample.bValid = true;
 	Sample.InvalidReason = ETRSampleError::None;
 	Sample.AreaId = Settings.AreaId;
 	Sample.SurfaceZ_M = Settings.SurfaceZ_M;
 	Sample.BottomDepthM = Bottom.BottomDepthM;
 	Sample.BottomNormal = Bottom.BottomNormal;
-	Sample.CurrentMps = Settings.CurrentMps;
-	// SeasonId=None and WindMps=0 remain the common type defaults.
+	Sample.CurrentMps = Current;
+	Sample.SurfaceCurrentMps = SurfaceCurrent;
+	Sample.WindMps = Wind;
+	Sample.FieldRevision = Settings.FieldRevision;
 	return Sample;
 }
 
 void UTROceanWorldSubsystem::ShutdownArea()
 {
+	Field.Reset();
 	Provider.Reset();
 	AreaData = nullptr;
 	Settings = {};
 	ProviderRevision = 0;
 	EnvironmentTimeS = 0.0;
 	OceanState = ETROceanState::Unloaded;
+}
+
+bool UTROceanWorldSubsystem::InitializeAreaWithField(UTROceanAreaDataAsset* InArea,
+	ATRSeabedProviderActor* InProvider, TSharedRef<const FTREnvironmentField> InField, TArray<FText>& Errors)
+{
+	if (!IsValid(InArea) || InArea->Settings.FieldRevision != 2)
+	{
+		ShutdownArea(); OceanState = ETROceanState::Error;
+		Errors.Add(FText::FromString(TEXT("Spatial field requires explicit revision 2 settings")));
+		return false;
+	}
+	if (!InitializeArea(InArea, InProvider, Errors)) { return false; }
+	Field = InField;
+	return true;
+}
+
+FTROceanSample UTROceanWorldSubsystem::SampleSurfaceCurrent(const FVector2D& PositionXYM, int64 SimTick) const
+{
+	FTROceanQuery Query; Query.PositionXYM = PositionXYM; Query.SimTick = SimTick;
+	return SampleOcean(Query);
+}
+
+FTROceanSample UTROceanWorldSubsystem::SampleWindAtLocation(const FVector2D& PositionXYM, int64 SimTick) const
+{
+	return SampleSurfaceCurrent(PositionXYM, SimTick);
 }
 
 void UTROceanWorldSubsystem::Deinitialize()

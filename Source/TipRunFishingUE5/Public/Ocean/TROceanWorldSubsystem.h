@@ -8,6 +8,7 @@
 
 class UTROceanAreaDataAsset;
 class ATRSeabedProviderActor;
+class FTREnvironmentField;
 
 // No tick or clock advancement. Game supplies time and explicitly registers the provider.
 UCLASS()
@@ -17,8 +18,15 @@ class TIPRUNFISHINGUE5_API UTROceanWorldSubsystem : public UWorldSubsystem
 
 public:
 	bool InitializeArea(UTROceanAreaDataAsset* InArea, ATRSeabedProviderActor* InProvider, TArray<FText>& Errors);
+	// Optional immutable spatial evaluator, revision 2 only; installed for this initialization lifetime.
+	bool InitializeAreaWithField(UTROceanAreaDataAsset* InArea, ATRSeabedProviderActor* InProvider,
+		TSharedRef<const FTREnvironmentField> InField, TArray<FText>& Errors);
 	bool SetSimulationTime(double InEnvironmentTimeS);
 	FTROceanSample SampleOcean(const FTROceanQuery& Query) const;
+	// Preserve the full validity/area/tick contract. CurrentMps is the requested depth's current.
+	FTROceanSample SampleCurrentAtLocationAndDepth(const FTROceanQuery& Query) const { return SampleOcean(Query); }
+	FTROceanSample SampleWindAtLocation(const FVector2D& PositionXYM, int64 SimTick) const;
+	FTROceanSample SampleSurfaceCurrent(const FVector2D& PositionXYM, int64 SimTick) const;
 	void ShutdownArea();
 	virtual void Deinitialize() override;
 
@@ -40,6 +48,7 @@ protected:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
 private:
+	TSharedPtr<const FTREnvironmentField> Field;
 	UPROPERTY()
 	TObjectPtr<UTROceanAreaDataAsset> AreaData;
 

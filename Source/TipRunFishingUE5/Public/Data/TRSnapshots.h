@@ -60,9 +60,16 @@ struct TIPRUNFISHINGUE5_API FTROceanSample
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	FVector CurrentMps = FVector::ZeroVector;
 
-	// MVP output stays zero; no wind physics.
+	// Independent horizontal wind, travelling direction; boat response belongs to M10.5-B.
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	FVector2D WindMps = FVector2D::ZeroVector;
+
+	// Same current field evaluated at depth zero, at the query XY/tick.
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
+	FVector SurfaceCurrentMps = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
+	int32 FieldRevision = 0;
 };
 
 USTRUCT(BlueprintType)

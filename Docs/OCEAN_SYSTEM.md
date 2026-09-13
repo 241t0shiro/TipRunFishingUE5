@@ -1,5 +1,7 @@
 # 海・水深・地形・潮流技術設計
 
+2026-09-14 M10.5-A完了: 環境の風/表層潮/深度別潮、位置依存評価口、knot換算を実装。UHT生成・C++実コンパイル・Development Editor Win64成功、A 5件＋M03/M05/M08回帰20件成功、各試験エラー/警告0。B〜HおよびM11以降は未着手。M10.5全体のPIE品質ゲートは未合格。下の2026-09-13設計のみの記録は履歴。
+
 2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
 
 関連: [全体正本](GAME_DESIGN.md)、[船](BOAT_SYSTEM.md)、[釣り](FISHING_SYSTEM.md)。描画の海と判定用の海を分離する。
@@ -91,7 +93,7 @@ DataAsset項目はクラス表の通り。BlueprintReadOnly: 現在AreaId、海�
 - SampleOceanは初期化前・破棄済みProvider・境界外・不正深度・非有限XY・負のTickを明示的に無効化する。海底より深い有限の非負深度も問い合わせ可能。MVPの潮は評価深度に依存せず、底を超えた問い合わせでも海底位置での潮と同じ一定値を返す。WindMps=0、SeasonId=None。SampleOceanForDisplayは同じ結果を返す読取専用ラッパー。
 - NullRHIのAutomationでO01/O03/O04/O05/O06と設定検証・World種別・設定コピー・時刻非依存の7件が成功。初回O05のテストWorld context警告に対し登録・解除を追加し再ビルド後、2026-09-13に全7件を再実行して成功・警告0・エラー0・終了コード0を確認した。30m等は一時的なTestデータで、Content・Configやマップは追加/変更していない。描画と海底面の目視比較、斜面、船や釣りとの接続は未実施。
 
-## 8. M10.5の風・表層潮・深度別潮契約（未実装）
+## 8. M10.5の風・表層潮・深度別潮契約（A実装済み）
 
 D15のユーザー改訂により、第2/4節の「WindMps常に0」「深度に依存しない」は旧一定場の履歴となる。海面/海底/有効性/寿命の契約は維持する。
 
@@ -111,3 +113,17 @@ Wind FieldとCurrent Fieldの評価責務は別にし、XY/深度/Tickを省略�
 DataAssetは既存UTROceanAreaDataAssetを拡張し、設定を初期化時にコピー。必要な値型はDataに置く。海域外、Provider破棄、設定不正はbValid=falseのまま、無効風/潮を都合よく0へ置き換えない。海底Flatは維持し、斜面/実地形は既存の後続範囲。
 
 試験: R01の単位換算、同/逆/直交風潮、層境界/中間点/末端、同Tick同位置の一致、独立したゼロ風/ゼロ潮、無効値/Provider寿命、異なるXYへの委譲を検証。旧O09の一定性はConstantモードに限定し、風0固定を共通不変条件とする試験は置換する。
+
+## 9. M10.5-A 環境実装（2026-09-14、合格）
+
+Aのみ実装。Bの船風応答、Cの世界位置/ライン、D以降の操作/UI、M11以降は未着手。風をOceanが返せることと船が風で流れることを区別する。
+
+- FTROceanAreaSettingsにFieldRevision、CurrentMode（Constant/DepthProfile）、WindMps、CurrentDepthProfileを追加。設定全体を初期化時にコピーする。FTRCurrentDepthKeyは深度mと水平速度m/s。先頭深度0必須、昇順/重複なし、有限数、非負深度、水平流と速度の二乗ノルムが有限であることをRuntime/IsDataValidで検証する。Profileモードでは旧CurrentMpsは使用せず、表層値はProfileの深度0を参照する。
+- FieldRevision=1は旧パッケージ互換の明示状態（Constant・無風・Profileなし）。新しい風/Profileを設定するには2を明示選択する。1へ新項目を混在させると検証エラー。既存保存済みM09 Prototypeは1として読み込み、値を勝手に再校正しない。2での無風は意図的な設定として区別する。未知revision/modeを拒否する。
+- 既存SampleOcean/InitializeAreaのシグネチャは維持。FTROceanSample.CurrentMpsは従来と同じ呼出側の深度で評価した潮、追加SurfaceCurrentMpsは同じXY/Tickで深度0の潮。WindMpsは独立風、FieldRevisionは読込契約の識別。SeasonIdは引き続きNone。
+- SampleCurrentAtLocationAndDepth(Query)、SampleSurfaceCurrent(XY,Tick)、SampleWindAtLocation(XY,Tick)をnative読取APIとして追加。戻り値は既存FTROceanSampleで、有効性/エラー/AreaId/Tickを省略しない。いずれも環境全体の有効性を検証するため、無効な潮または風は有効な一部サンプルとして返さない。Blueprintは既存SampleOceanForDisplayから追加値を読む。
+- FTREnvironmentFieldのWindAtLocationとCurrentAtLocationAndDepthを別のconst仮想評価口にする。標準は一様風と一定/層別潮。InitializeAreaWithFieldはrevision 2限定で、不変のnative評価器を共有所有し、Shutdownで解放する。評価器はActor/UObjectを保持せず、設定変更・時計進行・副作用を持たない契約。将来の位置別場のためXY/Depth/Tickを渡し、試験ではXYとTickで変化する評価器を使用する。実海域Fieldや風の物理は追加しない。
+- Profileは成分線形補間し、末端を延長。海底超過の試行深度は従来どおり有効に扱い、潮の評価深度だけ海底へ制限する。海域外/Provider破棄/不正問い合わせを既存理由で拒否。評価器が非有限または鉛直流を返す場合もbValid=false（InvalidQuery）であり、NaNを有効値として公開しない。
+- TREnvironmentUnits::TryKnotsToMps/TryMpsToKnotsは1852/3600で双方向換算する。符号付き成分を許可し、NaN/Infinity/結果overflowはfalse、出力引数は維持。代表値は0.4→0.205777778、0.7→0.360111111、1.0→0.514444444 m/s。製品バランスの設定ではない。
+
+Aの5試験とM03/M05/M08回帰20件は成功、各試験エラー/警告0。詳細はROADMAPのA完了記録を参照。Content保存移行はGへ残し、Aでは既存保存アセットの互換読込とrevision 2のメモリ上シリアライズ/再読込を試験する。

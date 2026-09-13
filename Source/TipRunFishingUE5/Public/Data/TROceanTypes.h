@@ -11,6 +11,19 @@ enum class ETRSeabedMode : uint8 { Flat };
 UENUM(BlueprintType)
 enum class ETROceanState : uint8 { Uninitialized, Ready, Unloaded, Error };
 
+UENUM(BlueprintType)
+enum class ETRCurrentFieldMode : uint8 { Constant, DepthProfile };
+
+USTRUCT(BlueprintType)
+struct TIPRUNFISHINGUE5_API FTRCurrentDepthKey
+{
+	GENERATED_BODY()
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
+	float DepthM = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
+	FVector CurrentMps = FVector::ZeroVector;
+};
+
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRDepthSample
 {
@@ -56,6 +69,16 @@ struct TIPRUNFISHINGUE5_API FTROceanAreaSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
 	FVector CurrentMps = FVector::ZeroVector;
+
+	// Missing in legacy packages: retain the explicit constant-current/no-wind contract.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun|Field")
+	int32 FieldRevision = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun|Field")
+	ETRCurrentFieldMode CurrentMode = ETRCurrentFieldMode::Constant;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun|Field")
+	FVector2D WindMps = FVector2D::ZeroVector;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun|Field")
+	TArray<FTRCurrentDepthKey> CurrentDepthProfile;
 
 	bool Validate(TArray<FText>& Errors) const;
 	bool Contains(const FVector2D& PositionXYM) const;

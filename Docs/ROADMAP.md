@@ -1,11 +1,13 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-09-14 M10.5-A完了: 環境の風/表層潮/深度別潮、位置依存評価口、knot換算を実装。UHT生成・C++実コンパイル・Development Editor Win64成功、A 5件＋M03/M05/M08回帰20件成功、各試験エラー/警告0。B〜HおよびM11以降は未着手。M10.5全体のPIE品質ゲートは未合格。下の2026-09-13設計のみの記録は履歴。
+
 2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
 
 
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5は設計改訂済み・実装未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA実装完了・B〜H未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10/D11とD12の未指定部分はMVP暫定仕様を使い、残る製品仕様をAlpha前に再決定（マウス基本操作はM10.5で決定済み）、D14/D16〜D18はMVP非ブロック。
 
@@ -43,7 +45,7 @@
 | 09 M08（完了） | 水平潮応答、ライン長/球面制約、船追従 | M07、D02/D05 | F04/F05/B07を含む7試験と依存回帰14件成功、UHT/C++ビルド成功。制御入力による検証範囲は下記参照 |
 | 10 M09（完了） | Enhanced Input接続と最小デバッグHUD（状態/深度/装備） | M06/07、D12 | U02を含む7試験＋回帰13件成功、各試験の警告・エラー0。UHT生成/C++/Development Editor Win64成功。目視・実機未検証は下記参照 |
 | 11 M10（完了） | 連続シャクリと一連回数、Shakuri→TensionFall→Stay、再Fall、回収、一投単位の装備ロック/次投変更、レンジ評価用Snapshot、旧タイマー/設定/テスト撤去 | M08/09、D03/D04/D08/D13 | F06/F07/F08/F16/F17/F18/F19を含む8試験と回帰32件成功。UHT/C++/Development Editor Win64成功。詳細・未検証は下記記録 |
-| 11.5 M10.5（設計済み・実装未着手） | Prototype Realism Revision。風/潮/船体応答、空間エギ/ライン、マウス操作、Quick Retrieve、日本語HUD/装備UI | M00〜M10実装、ユーザーPIE不合格報告 | 下記M10.5-A〜HとR01〜R12、自動試験＋PIE品質再評価に合格 |
+| 11.5 M10.5（A完了・B〜H未着手） | Prototype Realism Revision。風/潮/船体応答、空間エギ/ライン、マウス操作、Quick Retrieve、日本語HUD/装備UI | M00〜M10実装、ユーザーPIE不合格報告 | 下記M10.5-A〜HとR01〜R12、自動試験＋PIE品質再評価に合格 |
 | 12 M11（未着手） | テストイカ1体、3段階活性、距離/RangeError/RangeStability/RangeHoldScore/Exposure/STAY時間、評価用DataAsset | M10.5品質ゲート合格、D01/D07 | S01/S13/S14/S19、維持指標検証、季節データ不要 |
 | 13 M12 | Attack/Bite、10回超減衰、Caution/Cooldown、仲裁、Hook最小API | M11、D03/D07 | S02〜S04/S07/S08/S15〜S17/S20。非StayのBITEゼロ、維持良好ほど高確率、回数に応じ強い減衰 |
 | 14 M13 | Hook受付初期0.10/0.55秒、早/適正/遅判定、仮Cue1種 | M12、D06、D11暫定 | S05/S06/S09/S11/S12、S18のCue部分。HIT/MISS重複なし |
@@ -266,7 +268,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 
 ## 7. M10.5 Prototype Realism Revision — 正式品質ゲート
 
-状態: **設計改訂済み、A〜Hすべて実装未着手、試験未実施、品質ゲート未合格。M11〜M18は未着手・進行保留。** M10までの自動試験証跡は保持する。今回の変更はAGENTSと7設計書のみ。コード/Config/Contentを変更せず、ビルドやAutomationを実行した記録を追加しない。
+状態: **設計改訂済み、A実装/検証完了、B〜H実装未着手、全体品質ゲート未合格。M11〜M18は未着手・進行保留。** M10までの自動試験証跡は保持する。今回の変更はAGENTSと7設計書のみ。コード/Config/Contentを変更せず、ビルドやAutomationを実行した記録を追加しない。
 
 ### Codex実装単位
 
@@ -274,7 +276,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 
 | ID | 小タスク・追加/変更予定 | 依存 | 単独受入 |
 |---|---|---|---|
-| M10.5-A | Data/TRSnapshots、TROceanAreaDataAsset、Ocean/TROceanWorldSubsystem。風/表層潮/深度Profile、単位/設定リビジョン/コピー契約、環境純粋試験 | M01〜M03 | R01。Constantと層別場の独立評価、既存無効海/寿命回帰 |
+| M10.5-A（完了） | Data/TRSnapshots、TROceanAreaDataAsset、Ocean/TROceanWorldSubsystem。風/表層潮/深度Profile、単位/設定リビジョン/コピー契約、環境純粋試験 | M01〜M03 | R01。Constantと層別場の独立評価、既存無効海/寿命回帰 |
 | M10.5-B | Data/TRBoatTuningDataAsset、Boat/TRBoatDriftComponent/TRBoatPawn。風＋表層潮応答、抗力/慣性、取付Transform | A、M04/M05 | R02。解析応答と同/逆/直交、Boat固定更新回帰 |
 | M10.5-C | Data/TRSnapshots/TRFishingTuningDataAsset、Fishing/TREgiSimulationComponent/TREgiActor、Session接続。WorldPosition正本、需要繰出し、ライン抗力/制約、水平距離、旧値の読取互換 | A/B、M07/M08 | R03/R04/R05。30m着底・27装備・空間レンジの純粋/Session試験、描画座標回帰 |
 | M10.5-D | Fishing/TRRodControlComponent（予定新規）、Data/TRRodTuningDataAsset（予定新規）、TRInputConfigDataAsset、Game/TRPlayerController/TRFishingSessionActor/TRSimulationWorldSubsystem。Axis2Dキュー、RodSnapshot、Pitch/Yaw/あおり、一入力一動作 | B/C、M09/M10 | R06/R11。旧Boolean固定数検証を意味/型別へ移行、入力/寿命/回数回帰 |
@@ -320,3 +322,29 @@ R04の安定幅は純粋な試験観測基準で、M11の製品RangeStabilityし
 ### M11への進行条件
 
 A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成・実C++コンパイル・Development Editor Win64成功、R01〜R11と必要回帰成功、M10.5変更由来の警告解消、R12ユーザーPIE再評価合格をすべて満たす。残存の既存警告・製品値未校正・実測未検証を区別して報告する。自動試験だけの合格、装備変更未確認、80m問題のclamp隠蔽では通過不可。今回の設計更新ではいずれの実行結果も新たに確定していない。
+
+### M10.5-A完了記録（2026-09-14）
+
+- A合格。Bへ進める環境API/設定/互換性を確認した。B〜H、M11以降は未着手であり、M10.5全体のPIE品質合格ではない。今回の風は環境問い合わせの値だけで、Boat/Egi/Input/UIの挙動を改訂していない。
+- 追加型: ETRCurrentFieldMode、FTRCurrentDepthKey、FTREnvironmentField、TREnvironmentUnits。既存FTROceanAreaSettings/FTROceanSample/UTROceanWorldSubsystemを拡張。UTROceanAreaDataAssetの既存Validate/IsDataValid経路で新項目も検証する。詳細なAPI・revision 1/2の契約はOCEAN_SYSTEM第9節を正本とする。
+- A Automation 5件すべて成功: UnitsAndDirections、ProfileAndFrozenSettings、ValidationAndLifetime、LegacyAndSerialization、SpatialDelegationAndFrameRates。0.4/0.7/1.0 knotと逆換算、風/潮同方向・逆方向・直交、無風/無潮の独立性、層の端点/中間/海底clamp/末端、初期化コピー、revision拒否、非有限/不正Profile/Provider破棄、既存保存Prototype読込、revision 2のメモリシリアライズ再読込、位置/深度/Tick評価委譲、固定60Hzを描画30/60/120fpsで駆動した60サンプル列一致、Pause/読取非破壊を確認。
+- 回帰はM03全7件、M05全6件、M08全7件の計20件成功。海/船/ラインの共有Snapshot変更と旧設定互換性が対象。旧風非寄与のBoat試験はB未着手のため維持し、新しい風応答の合格と読み替えない。
+- 計25件、失敗/未実行0、各試験のerrors/warnings=0、プロセス終了コード0。UE5.8.2、MSVC14.51.36257、Windows SDK10.0.22621.0（Win64 VALID）。UHTは12生成ファイルを書き出し、変更Data/Ocean・新規評価器/試験・モジュールを含む5 C++コンパイル、LIB/DLLリンク、metadataの計8アクション成功。up-to-date確認だけではない。
+- A由来の残存警告なし。既存のMSVC推奨版14.50.35717との差、Unreal5_6互換include順序、Engine起動時Condition failed（Error表記）19件、Editorレイアウト警告1件、対象外SDK不足は残る。試験開始前の既存ログと、各試験のエラー/警告0を区別する。通常権限でUBT起動が進まず停止後、実行権限付き通常ビルドで成功した。
+- 証跡: Saved/Logs/M105ABuild.log、Saved/Logs/M105ATests.log、Saved/Automation/M105A/index.json（Git除外）。今回Content/Config/Build.cs/Target.csと既存Boat/Fishing/Input/UI実装は変更なし。新Prototype資産の保存移行/LevelはG、船の風応答はBに残す。AではPIE目視/実測校正/Windowsパッケージは実施していない。
+
+変更ファイル（Source内はSource/TipRunFishingUE5配下）:
+
+- Public/Data/TROceanTypes.h
+- Public/Data/TRSnapshots.h
+- Public/Data/TREnvironmentUnits.h（新規）
+- Public/Ocean/TREnvironmentField.h（新規）
+- Public/Ocean/TROceanWorldSubsystem.h
+- Private/Data/TROceanAreaDataAsset.cpp
+- Private/Ocean/TREnvironmentField.cpp（新規）
+- Private/Ocean/TROceanWorldSubsystem.cpp
+- Private/Tests/TREnvironmentTests.cpp（新規）
+- AGENTS.md
+- Docs/GAME_DESIGN.md
+- Docs/OCEAN_SYSTEM.md
+- Docs/ROADMAP.md

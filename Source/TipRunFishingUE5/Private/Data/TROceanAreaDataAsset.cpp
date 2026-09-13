@@ -20,6 +20,30 @@ bool FTROceanAreaSettings::Validate(TArray<FText>& Errors) const
 	Require(FMath::IsFinite(CurrentMps.X) && FMath::IsFinite(CurrentMps.Y) &&
 		FMath::IsFinite(CurrentMps.Z) && CurrentMps.Z == 0.0,
 		TEXT("MVP current must be finite and horizontal (Z = 0)"));
+	Require(FMath::IsFinite(CurrentMps.SizeSquared()) && FMath::IsFinite(WindMps.SizeSquared()),
+		TEXT("Environment vectors and their squared magnitudes must be finite"));
+	Require(FieldRevision == 1 || FieldRevision == 2, TEXT("Unknown ocean field revision"));
+	Require(CurrentMode == ETRCurrentFieldMode::Constant || CurrentMode == ETRCurrentFieldMode::DepthProfile,
+		TEXT("Unknown current field mode"));
+	Require(FieldRevision != 1 || (CurrentMode == ETRCurrentFieldMode::Constant &&
+		WindMps == FVector2D::ZeroVector && CurrentDepthProfile.IsEmpty()),
+		TEXT("Legacy field revision requires constant current and no wind/profile; select revision 2 explicitly"));
+	Require(CurrentMode != ETRCurrentFieldMode::Constant || CurrentDepthProfile.IsEmpty(),
+		TEXT("Constant field must not contain an unused depth profile"));
+	if (CurrentMode == ETRCurrentFieldMode::DepthProfile)
+	{
+		Require(!CurrentDepthProfile.IsEmpty() && CurrentDepthProfile[0].DepthM == 0.0f,
+			TEXT("Depth profile requires its first key at depth zero"));
+		float PreviousDepthM = -1.0f;
+		for (const FTRCurrentDepthKey& Key : CurrentDepthProfile)
+		{
+			Require(FMath::IsFinite(Key.DepthM) && Key.DepthM >= 0.0f && Key.DepthM > PreviousDepthM,
+				TEXT("Current depths must be finite, nonnegative and strictly increasing"));
+			Require(!Key.CurrentMps.ContainsNaN() && Key.CurrentMps.Z == 0.0 &&
+				FMath::IsFinite(Key.CurrentMps.SizeSquared()), TEXT("Profile velocities must be finite and horizontal"));
+			PreviousDepthM = Key.DepthM;
+		}
+	}
 	return bValid;
 }
 
