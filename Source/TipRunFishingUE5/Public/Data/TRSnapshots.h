@@ -116,6 +116,20 @@ USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTREgiSnapshot
 {
 	GENERATED_BODY()
+	// Sole position authority, meters, +Z up. False only for legacy initialization callers.
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") bool bWorldPositionValid = false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector WorldPositionM = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") int32 EgiModelRevision = 0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector2D HorizontalOffsetFromBoatM = FVector2D::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector2D HorizontalOffsetFromRodTipM = FVector2D::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") double HorizontalDistanceFromBoatM = 0.0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") double HorizontalDistanceFromRodTipM = 0.0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") double BoatToEgiDistanceM = 0.0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") double RodToEgiDistanceM = 0.0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector LineDirection = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") double SlackM = 0.0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector CurrentAtEgiDepthMps = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") float TotalMassG = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	FTRCastId CastId = {};
@@ -126,7 +140,7 @@ struct TIPRUNFISHINGUE5_API FTREgiSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	FVector2D PositionXYM = FVector2D::ZeroVector;
 
-	// Authoritative depth, positive downward; never inferred from the mesh.
+	// Derived from WorldPosition and local surface, positive downward; never integrated.
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	float DepthM = 0.0f;
 

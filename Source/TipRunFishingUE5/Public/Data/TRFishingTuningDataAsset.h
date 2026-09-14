@@ -12,6 +12,15 @@ struct TIPRUNFISHINGUE5_API FTRFishingParameters
 {
 	GENERATED_BODY()
 
+	// Revision 1 is the saved M10 coefficient contract; revision 2 enables spatial water/line response.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Spatial") int32 EgiModelRevision = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Spatial") double VerticalResponsePerS = 0.0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Spatial") double LineDragKgPerMS = 0.0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Spatial") double TautLineTransfer01 = 0.0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Spatial") double SlackLineTransfer01 = 0.0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Spatial") double LineSlackAllowanceM = 0.0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Spatial") double MaxStepTravelM = 0.0;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
 	float MaxLineLengthM = 0.0f;
 

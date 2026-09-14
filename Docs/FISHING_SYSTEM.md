@@ -1,5 +1,7 @@
 # 釣りシステム技術設計
 
+2026-09-14 M10.5-C完了: Egi WorldPositionを位置正本へ移行し、revision 2の深度潮/水中ライン抗力/需要繰出し/空間拘束とSnapshotを実装。UHT生成・実C++・Development Editor Win64成功、C 6件（243落下条件含む）＋回帰49件成功、各試験エラー/警告0。標準30mの最大ライン39.299694m、最長50.550秒で着底。保存Prototypeは旧係数revision 1のまま、資産移行/新モデルPIEは未実施。D〜H・M11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA/B完了・設計のみの記録は履歴。
+
 2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
 
 
@@ -277,7 +279,7 @@ AutoStayDelaySを宣言・時刻換算・データ検証から削除し、旧前
 
 M10はF06/F07/F08/F16/F17/F18/F19と設定移行を含む8試験成功。1/10/11/20入力、予約取消、一連の保持/更新、無入力Bottom、同Tick入力優先、回収/解放/再開、0g/次投90g、同Tick装備変更拒否、次投メッシュ差替え、旧Cast、Pause/フォーカス、30/60/120fpsの状態列・結果時刻一致、深度速度・境界接触・読取非破壊を確認した。詳細な結果と回帰内訳はROADMAPを参照。M11以降のAI/確率/Hook/Fightは未実装、実測校正・PIE目視・実機入力・パッケージ起動も未実施。
 
-## 9. M10.5の空間エギ・ライン・操作（未実装）
+## 9. M10.5の空間エギ・ライン・操作（C実装、操作改訂はD以降）
 
 ### 世界位置と相対幾何
 
@@ -330,3 +332,19 @@ Quick中はQ再入力・左解放・F・シャクリ・Hook等を拒否し、途
 Quickは通常水中物理を凍結するテンポ改善の回収経路。開始位置/ラインを保持した演出Snapshotから進捗を表示し、水中運動/Range観測の有効性をfalseとして区別する。描画だけの補間位置をWorldPosition正本やAI対象へ戻さない。演出終了コールバックでなく`Tick >= StartTick+DurationTicks`で帰還を確定する。完了時は一度だけRetrieved（必要なら終了方法Normal/Quickの値を付記、Caughtではない）→Cast終了→Egi Onboard→Ready→装備解除。古い終了通知の二重処理を拒否する。
 
 途中停止不可はプレイヤー釣り操作の条件。明示Session終了/World終了/対象破棄は安全中断を優先し、後からQuick完了や船上帰還を発行しない。終端CastIdを保持し、次Deployでだけ新IDを採番する。
+
+## 10. M10.5-C 空間モデルの実装契約（2026-09-14）
+
+- `UTREgiSimulationComponent`が唯一の位置正本`WorldPositionM`を保持する。旧係数の互換経路も内部位置はWorldPositionへ移行した。`PositionXYM`/`DepthM`は読取コピー。WorldPosition指定の初期化では旧XY/Depth入力を使わず、旧呼出側は初期化境界で一度だけXY/Depthから位置を変換する。`bWorldPositionValid`はこの境界を識別する。Session投入は最初からWorldPositionを渡し、描画Actorもこれをm→cm変換して読む。
+- `FTRFishingParameters.EgiModelRevision=2`で本節の新しい3D応答/分布ライン抗力/需要繰出しを有効にする。revision 1は保存済みM10係数と従来運動・繰出しの互換経路。新係数を0のまま無言で新モデルへ換算しない。新設定混在のrevision 1、未知revision、不正/非有限係数を拒否する。今回保存資産/Prototype Levelは変更しておらず、既存PIEを新モデルで検証済みとは扱わない。保存設定の明示移行と旧経路撤去判断はGに残す。
+- 新しい係数は`VerticalResponsePerS`（正）、`LineDragKgPerMS`（非負）、`TautLineTransfer01`/`SlackLineTransfer01`（0〜1、Slack<=Taut）、`LineSlackAllowanceM`（非負）、`MaxStepTravelM`（正）。既存M02総重量によるSinkSpeed/HorizontalResponse曲線、状態別SinkScale、PayoutMps（最大繰出し速度）、MinLine/MaxLineLength、MaxEgiSpeed、TensionReferenceを併用し、一投開始時にコピーする。新係数の既定0は未設定、製品値ではない。
+- 新計算は同じComponentの`TREgiSpatialSimulation.cpp`へ分離。Coordinatorへ計算式を移さない。EgiのXYと当地海面を問い合わせ、WorldPositionから導出した深度でAのOceanを再問い合わせする。分布抗力・拘束補正・移動先にもXY/Depth/Tickを渡す。BoatのWind/SurfaceCurrent計算はBが所有し、Egiは深度潮を使う。Boat VelocityそのものをEgiへ足さない。
+- 自由目標速度は`CurrentAtDepth - Up*SinkSpeed(totalMass)*StateSinkScale`。M10の操作互換用リフトはZ目標の別作用として保持する（マウス竿移動はD未実装）。XYはM02応答率、ZはVerticalResponseで前の運動速度から指数応答する。一定サブステップの速度解とその積分から試行世界位置を得る。重力/浮力を別に二重加算せず、M02の重量別終端沈下曲線で沈下傾向を近似する。
+- 水中の直線区間を3等分した中点で潮を読む。空中部分は除外、点速度は竿先とエギの端点速度の補間。`LineDrag * WetLength * Transfer / MassKg`を応答率へ換算し、エギ速度に依存する減衰項を指数解の率へ含めて大きな抗力でも陽的加算による発散を避ける。張り/弛みの伝達率は設定値。エギ端点の潮応答とライン抗力は独立で、片方だけを変更する比較試験を持つ。柔軟ライン形状の実測再現ではない。
+- FreeFall/Payoutは`min(max(0, Dtrial+SlackAllowance-L), PayoutMps*dt)`のみ追加する。余長十分なら追加0。需要が速度上限を超える場合は実際のLで拘束する。新モデルのTensionFallとStayはL保持、Bottom無操作は繰出さない。MaxLineLength超過候補を拒否し、80mへclampしない。旧Reel操作の速度/完了条件はCでは変更しない。
+- 固定刻みを最大1/60秒の内部サブステップへ分割し、最大240回まで。環境のTickは外側の固定Tickのまま、竿先移動を内部で線形補間する。1サブステップで海面/海底/ラインを最大8反復、許容1e-5mで同時解決。海面接線付近はライン球と海面の交差円を使う。海底問い合わせは水平補正後にもやり直す。収束不能、無効Sample、非有限、最大速度/全移動距離超過は候補を確定せず既存EnvironmentInvalid→Session中断へ渡す。
+- ラインは外向き超過だけを補正し、運動速度の竿先に対する外向き成分も除去する。海底/海面の侵入速度も除去する。SnapshotのVelocityMpsは補正後の実移動量/外側dt、内部の運動速度は次ステップの応答初期値として別に保持する（位置を二重積分するものではない）。新モデルでは公開速度だけをclampしない。DepthVelocityは当地海面からの補正後Depth差/dt。Bottom開始/離脱イベントは確定状態の変化時だけ通知する。
+- Snapshot追加: WorldPositionM、bWorldPositionValid、EgiModelRevision、HorizontalOffsetFromBoatM/FromRodTipM、各HorizontalDistance、BoatToEgiDistanceM、RodToEgiDistanceM、LineDirection（竿先→エギ）、SlackM、CurrentAtEgiDepthMps（確定位置）、TotalMassG。既存Depth/Velocity/LineLength/LineAngle/Tension01、Bottom/SurfaceContact、CastId/Tick、観測秒数を維持する。Tension01は拘束補正距離/TensionReferenceの0〜1代理値で、力[N]やFight評価ではない。RangeError/RangeStability/BITE評価は追加しない。
+- R03試験値はBと同じ風2m/s/船係数、横風を受けるHeading、平底30m、竿先海面上1.5m、M02の保存済み27装備。CのVerticalResponse=2/s、LineDrag=0.0001 kg/(m*s)、Taut/Slack転送=0.05/0、余長0.1m、最大繰出し4m/s、安全値MaxLine=200m/MaxEgiSpeed=10m/s/MaxStepTravel=20m。これらは一時的Test設定で保存製品値ではない。
+- R04は独立した制御試験。全重量で同じ初期位置（竿先から水平後方10m・下方10m）、L=sqrt(200)m、潮0、竿先水平速度0.7m/s、XYZ応答40/s、ライン抗力0、同じM02重量曲線を使う。10秒間を初期化直後から全観測し、30/35/40gだけを変える。定常竿先軌道を与える純粋試験で、Bの風2m/sから自動的に0.7m/sになるという意味ではない。GのPIEシナリオでは対応する船/環境設定・導線の校正が必要。製品の最適重量・安定閾値を確定しない。
+- 試験結果・ビルド・残存警告はROADMAPのC記録を参照。D/Eのマウス/可動竿/回収解放/Quick/Ready仕様、FのHUD/UI、Gの保存Level、M11以降には着手しない。

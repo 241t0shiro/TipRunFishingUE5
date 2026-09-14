@@ -1,5 +1,7 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-09-14 M10.5-C完了: Egi WorldPositionを位置正本へ移行し、revision 2の深度潮/水中ライン抗力/需要繰出し/空間拘束とSnapshotを実装。UHT生成・実C++・Development Editor Win64成功、C 6件（243落下条件含む）＋回帰49件成功、各試験エラー/警告0。標準30mの最大ライン39.299694m、最長50.550秒で着底。保存Prototypeは旧係数revision 1のまま、資産移行/新モデルPIEは未実施。D〜H・M11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA/B完了・設計のみの記録は履歴。
+
 2026-09-14 M10.5-B完了: 風/表層潮を別々に評価する船体方向別応答、抗力/慣性、解析的な固定更新とBoat Snapshot拡張を実装。UHT生成・実C++・Development Editor Win64成功、B 5件＋A/M03/M04/M05/M08回帰26件成功、各試験エラー/警告0。旧保存設定はModelRevision=1で互換維持、新モデルは明示revision 2。保存Prototypeの移行/PIE再評価は未実施。C〜HおよびM11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA完了/設計のみの記録は履歴。
 
 2026-09-14 M10.5-A完了: 環境の風/表層潮/深度別潮、位置依存評価口、knot換算を実装。UHT生成・C++実コンパイル・Development Editor Win64成功、A 5件＋M03/M05/M08回帰20件成功、各試験エラー/警告0。B〜HおよびM11以降は未着手。M10.5全体のPIE品質ゲートは未合格。下の2026-09-13設計のみの記録は履歴。
@@ -9,7 +11,7 @@
 
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA/B実装完了・C〜H未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA/B/C実装完了・D〜H未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10/D11とD12の未指定部分はMVP暫定仕様を使い、残る製品仕様をAlpha前に再決定（マウス基本操作はM10.5で決定済み）、D14/D16〜D18はMVP非ブロック。
 
@@ -280,7 +282,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 |---|---|---|---|
 | M10.5-A（完了） | Data/TRSnapshots、TROceanAreaDataAsset、Ocean/TROceanWorldSubsystem。風/表層潮/深度Profile、単位/設定リビジョン/コピー契約、環境純粋試験 | M01〜M03 | R01。Constantと層別場の独立評価、既存無効海/寿命回帰 |
 | M10.5-B（完了） | Data/TRBoatTuningDataAsset、Boat/TRBoatDriftComponent/TRBoatPawn。風＋表層潮応答、抗力/慣性、取付Transform | A、M04/M05 | R02。解析応答と同/逆/直交、Boat固定更新回帰 |
-| M10.5-C | Data/TRSnapshots/TRFishingTuningDataAsset、Fishing/TREgiSimulationComponent/TREgiActor、Session接続。WorldPosition正本、需要繰出し、ライン抗力/制約、水平距離、旧値の読取互換 | A/B、M07/M08 | R03/R04/R05。30m着底・27装備・空間レンジの純粋/Session試験、描画座標回帰 |
+| M10.5-C（完了） | Data/TRSnapshots/TRFishingTuningDataAsset、Fishing/TREgiSimulationComponent/TREgiActor、Session接続。WorldPosition正本、需要繰出し、ライン抗力/制約、水平距離、旧値の読取互換 | A/B、M07/M08 | R03/R04/R05。30m着底・27装備・空間レンジの純粋/Session試験、描画座標回帰 |
 | M10.5-D | Fishing/TRRodControlComponent（予定新規）、Data/TRRodTuningDataAsset（予定新規）、TRInputConfigDataAsset、Game/TRPlayerController/TRFishingSessionActor/TRSimulationWorldSubsystem。Axis2Dキュー、RodSnapshot、Pitch/Yaw/あおり、一入力一動作 | B/C、M09/M10 | R06/R11。旧Boolean固定数検証を意味/型別へ移行、入力/寿命/回数回帰 |
 | M10.5-E | Data/TRTypes/TREvents等の該当共通コマンド/イベント型、Fishing/TRFishingComponent/TREgiSimulationComponent、Game/TRFishingSessionActor、操作Tuning。通常解放→Stay、Quick状態/期限、両回収後Ready | C/D、M06/M10 | R07/R08/R09。旧Result→N必須/解放後Retrieving期待を新契約へ置換 |
 | M10.5-F | UI/TRFishingHUDWidget/TRHUD、Data/TRHUDSnapshot、Game/TRPlayerController。日本語ガイド/装備パネル/拒否理由/色分離/カーソルContext、最小の前投観測表示 | D/E | R09/R10。クリック二重配送なし、公開APIとUI許可一致、読取非破壊 |
@@ -362,3 +364,34 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 - B由来の残存警告0。既存のMSVC推奨版との差、Unreal5_6互換include順序、Engine試験開始前のCondition failed（Error表記）19件、Editorレイアウト警告1件、Win64以外のSDK不足は残る。試験結果内のエラー/警告0とは区別する。
 - 証跡（Git除外）: Saved/Logs/M105BBuild.log、M105BBuildFinal.log、M105BTests.log（初回）、M105BTestsFinal.log、Saved/Automation/M105BFinal/index.json。PIE/実測/パッケージ未実施。Cへ進めるBoat側APIは揃ったが、C〜H・M11以降は未着手、M10.5全体品質ゲートとM11進行保留を維持する。
 - 変更ファイル: Source/TipRunFishingUE5/Public/Data/TRBoatTuningDataAsset.h、Public/Data/TRSnapshots.h、Private/Data/TRBoatTuningDataAsset.cpp、Private/Boat/TRBoatDriftComponent.cpp、Private/Tests/TRBoatWindTests.cpp（新規）、AGENTS.md、Docs/BOAT_SYSTEM.md、Docs/GAME_DESIGN.md、Docs/ROADMAP.md。
+
+### M10.5-C完了記録（2026-09-14）
+
+- C合格。WorldPositionを唯一の位置正本とし、互換Depth/XYを導出。EgiModelRevision=2はA深度潮、3点の水中ライン抗力、重量別終端沈下への3D応答、Bの移動竿先による拘束、需要繰出しを実装する。既存入力キュー/操作状態遷移は維持。詳細API・単位・設定・数値防御はFISHING_SYSTEM第10節を参照する。
+- C試験6件すべて成功: Standard243FreeFalls、WaterWeightsAndDemand、StayRangeBalance、DepthFieldLineDragAndBottom、SafetyAndSnapshotContract、FixedFramesPauseSessionAndVisual。R03/R04/R05のC範囲を確認した。新しいWorldPosition初期化は旧Depth/XYのコピーを要求しない。Snapshot読取/古いCast/Reset済み対象/Session破棄・World GC、Pause、30/60/120fps一致、m→cm描画接続を確認。
+- R03: 27装備（30/35/40g＋0gを含む9シンカー）×0.4/0.7/1.0 knot×風に同方向/逆方向/直交=243条件。全条件が300 sim秒以内に30mへ着底、全観測TickでLine<80m、海底貫通なし、D<=L+1e-5m。最大Line=39.299694m、最長50.550秒。上限設定は200mであり80m clampを使っていない。各条件の時間、XY、相対距離、L/D/Slack/Angle、船/エギ速度、潮・重量をAutomationのInfoへ記録した。
+- R04: 10秒全観測、同一環境/初期幾何/応答係数で30gのDepth変化=-0.378585m、35g=-0.004354m（全幅0.008663m）、40g=+0.341138m。上昇0.2m以上・中間全幅0.1m以下・下降0.2m以上の事前基準を満たし、全ケースで境界接触なし。制御竿先軌道を使う純粋試験であり、製品の最適重量やBの代表風2m/sからの自動船速を確定したものではない。試験条件はFISHING_SYSTEMに記録、GのPIE環境校正は別途必要。
+- R05: 深度Profileで水平応答が反転、エギ地点の潮0でも水中ライン抗力の独立寄与を確認。0.5/3/30mのBottom通知一度、試験callbackによる移動先水深変化で貫通なし。製品の傾斜地形モードは追加していない。1/60・1/30・0.25・1秒刻み、無効海/Inf/NaN設定/竿先ワープ/過大刻み拒否、十分な余長で追加0、繰出し速度不足時の拘束を確認。
+- 必要回帰49件成功: A 5、B 5、M03 7、M05 6、M06 5、M07 6、M08 7、位置・描画接続変更に対するM10操作8。旧係数revision 1の保存資産読込と従来挙動を回帰、新revision 2はCの専用試験と実Sessionで検証した。M09/M10入力コード、A/Bの環境/船計算は変更していない。
+- 最終55件成功、失敗/未実行0、各試験errors/warnings=0、終了コード0。初回47件も成功。投入直後の導出値、水平距離、世界位置初期化/繰出し上限の追加確認後に最終ビルド・55件を再実行した。
+- UE5.8.2 / Visual Studio 2026 Community / MSVC14.51.36257 / Windows SDK10.0.22621.0（Win64 VALID）。UHT実行、初回のData/空間計算含む実C++コンパイル成功。最終UHTは7生成ファイル、7 C++コンパイル＋LIB/DLL/metadataの計10アクション成功。up-to-dateのみではない。
+- C由来の残存警告0。既存MSVC推奨版との差、Unreal5_6互換include順序、試験開始前のEngine Condition failed（Error表記）19件、レイアウト警告1件、対象外SDK不足は残る。個々の試験のエラー/警告0とは区別する。
+- 証跡（Git除外）: Saved/Logs/M105CBuild.log、M105CBuildTests.log、M105CBuildFinal.log、M105CTests.log、M105CTestsFinal.log、Saved/Automation/M105CFinal/index.json。PIE目視/実測校正/Windowsパッケージは未実施。保存Prototypeはrevision 1の互換運動・旧繰出しで、新モデルのPIEはGの明示資産移行後に再評価する。Cの新モデル試験合格を旧Prototypeの80m問題解消済みと読み替えない。
+- Dに渡す空間Snapshotと竿先接続は用意できた。D〜H・M11以降には着手していない。M10.5全体品質ゲートとM11進行保留を維持する。
+
+変更ファイル（Source内はSource/TipRunFishingUE5配下）:
+
+- Public/Data/TRSnapshots.h
+- Public/Data/TRFishingTuningDataAsset.h
+- Public/Fishing/TREgiSimulationComponent.h
+- Private/Data/TRFishingTuningDataAsset.cpp
+- Private/Fishing/TREgiSimulationComponent.cpp
+- Private/Fishing/TREgiSpatialSimulation.cpp（新規）
+- Private/Fishing/TREgiActor.cpp
+- Private/Fishing/TRFishingComponent.cpp（投入Snapshotのみ）
+- Private/Game/TRFishingSessionActor.cpp（初期竿先の受渡しのみ）
+- Private/Tests/TREgiSpatialTests.cpp（新規）
+- AGENTS.md
+- Docs/FISHING_SYSTEM.md
+- Docs/GAME_DESIGN.md
+- Docs/ROADMAP.md

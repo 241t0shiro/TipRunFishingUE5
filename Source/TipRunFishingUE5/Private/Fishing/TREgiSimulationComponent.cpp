@@ -13,12 +13,12 @@ namespace
 }
 UTREgiSimulationComponent::UTREgiSimulationComponent() { PrimaryComponentTick.bCanEverTick = false; }
 bool UTREgiSimulationComponent::InitializeCast(const FTREgiSnapshot& Initial, const FTREquipmentSnapshot& Equipment,
-	const FTROceanSample& Ocean, TArray<FText>& Errors)
+	const FTROceanSample& Ocean, TArray<FText>& Errors, const FTRBoatSnapshot* InitialBoat)
 {
 	if ((GetOwner() && GetOwner()->IsActorBeingDestroyed()) || !Initial.CastId.IsValid() || Initial.CastId.Value <= HighestCastValue ||
 		Initial.Tick < 0 || !ValidEgiOcean(Ocean) || Initial.Tick != Ocean.SampleTick ||
-		!FMath::IsFinite(Initial.PositionXYM.X) || !FMath::IsFinite(Initial.PositionXYM.Y) ||
-		!FMath::IsFinite(Initial.DepthM) || Initial.DepthM < 0.0f || Initial.DepthM > Ocean.BottomDepthM ||
+		(!Initial.bWorldPositionValid && (!FMath::IsFinite(Initial.PositionXYM.X) || !FMath::IsFinite(Initial.PositionXYM.Y) ||
+		!FMath::IsFinite(Initial.DepthM) || Initial.DepthM < 0.0f || Initial.DepthM > Ocean.BottomDepthM)) ||
 		!FMath::IsFinite(Initial.LineLengthM) || Initial.LineLengthM < Equipment.Parameters.MinLineM || Initial.LineLengthM > Equipment.Parameters.MaxLineLengthM ||
 		!FMath::IsFinite(Equipment.BaseMassG) || Equipment.BaseMassG <= 0.0f ||
 		!FMath::IsFinite(Equipment.SinkerMassG) || Equipment.SinkerMassG < 0.0f ||
@@ -31,6 +31,34 @@ bool UTREgiSimulationComponent::InitializeCast(const FTREgiSnapshot& Initial, co
 		return false;
 	}
 	Snapshot = Initial;
+	Snapshot.WorldPositionM = Initial.bWorldPositionValid ? Initial.WorldPositionM :
+		FVector(Initial.PositionXYM.X, Initial.PositionXYM.Y, double(Ocean.SurfaceZ_M) - Initial.DepthM);
+	if (TRUnits::MetersToCentimeters(Snapshot.WorldPositionM).ContainsNaN() || Snapshot.WorldPositionM.Z > Ocean.SurfaceZ_M ||
+		Snapshot.WorldPositionM.Z < double(Ocean.SurfaceZ_M) - Ocean.BottomDepthM)
+	{
+		Errors.Add(FText::FromString(TEXT("Invalid authoritative Egi world position"))); return false;
+	}
+	Snapshot.bWorldPositionValid = true;
+	Snapshot.PositionXYM = FVector2D(Snapshot.WorldPositionM.X, Snapshot.WorldPositionM.Y);
+	Snapshot.DepthM = float(double(Ocean.SurfaceZ_M) - Snapshot.WorldPositionM.Z);
+	Snapshot.TotalMassG = Equipment.TotalMassG; Snapshot.EgiModelRevision = Equipment.Parameters.EgiModelRevision;
+	Snapshot.CurrentAtEgiDepthMps = Ocean.CurrentMps;
+	MotionVelocityMps = FVector::ZeroVector; bHasPreviousRod = false;
+	if (InitialBoat)
+	{
+		if (InitialBoat->RodTipM.ContainsNaN() || InitialBoat->Tick != Initial.Tick)
+		{ Errors.Add(FText::FromString(TEXT("Initial rod requires finite position and matching tick"))); return false; }
+		PreviousRodTipM = InitialBoat->RodTipM; bHasPreviousRod = true;
+		const FVector Offset = Snapshot.WorldPositionM-InitialBoat->RodTipM;
+		Snapshot.HorizontalOffsetFromBoatM = FVector2D(Snapshot.WorldPositionM.X-InitialBoat->PositionM.X,Snapshot.WorldPositionM.Y-InitialBoat->PositionM.Y);
+		Snapshot.HorizontalOffsetFromRodTipM = FVector2D(Offset.X,Offset.Y);
+		Snapshot.HorizontalDistanceFromBoatM = Snapshot.HorizontalOffsetFromBoatM.Size();
+		Snapshot.HorizontalDistanceFromRodTipM = Offset.Size2D();
+		Snapshot.BoatToEgiDistanceM = (Snapshot.WorldPositionM-InitialBoat->PositionM).Size();
+		Snapshot.RodToEgiDistanceM = Offset.Size(); Snapshot.LineDirection = Offset.GetSafeNormal();
+		Snapshot.SlackM = FMath::Max(0.0,double(Snapshot.LineLengthM)-Offset.Size());
+		Snapshot.LineAngleRad = float(FMath::Atan2(Offset.Size2D(),FMath::Max(0.0,-Offset.Z)));
+	}
 	Snapshot.VelocityMps = FVector::ZeroVector;
 	FrozenEquipment = Equipment;
 	LastSurfaceZ_M = Ocean.SurfaceZ_M;
@@ -39,7 +67,7 @@ bool UTREgiSimulationComponent::InitializeCast(const FTREgiSnapshot& Initial, co
 	// Contact is reported on the first step even if initialized exactly on the seabed.
 	bOnBottom = false;
 	ResidualLiftMps = 0.0;
-	Snapshot.DepthVelocityMps = 0.0f; Snapshot.bSurfaceContact = Initial.DepthM == 0.0f; Snapshot.bBottomContact = false;
+	Snapshot.DepthVelocityMps = 0.0f; Snapshot.bSurfaceContact = Snapshot.DepthM == 0.0f; Snapshot.bBottomContact = false;
 	return true;
 }
 ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, const FTRSimTime& Time,
@@ -64,6 +92,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 		return ETREgiStepEvent::EnvironmentInvalid;
 	}
 	const FTRFishingParameters& P = FrozenEquipment.Parameters;
+	if (P.EgiModelRevision == 2) { return StepSpatial(ExpectedCastId, Time, Ocean, Boat, Action, SampleDestination); }
 	double NextResidual = 0.0;
 	if (Action.FishingState == ETRFishingState::Jerking) { NextResidual = Action.LiftMps; }
 	else if (Action.FishingState == ETRFishingState::TensionFall)
@@ -82,8 +111,8 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	const double Speed = std::hypot(Velocity.X, Velocity.Y, Velocity.Z);
 	if (!FMath::IsFinite(Speed)) { return ETREgiStepEvent::EnvironmentInvalid; }
 	if (Speed > P.MaxEgiSpeedMps) { Velocity *= double(P.MaxEgiSpeedMps) / Speed; }
-	const FVector Previous(Snapshot.PositionXYM.X, Snapshot.PositionXYM.Y, double(LastSurfaceZ_M) - Snapshot.DepthM);
-	FVector Candidate(Snapshot.PositionXYM.X, Snapshot.PositionXYM.Y, double(Ocean.SurfaceZ_M) - Snapshot.DepthM);
+	const FVector Previous = Snapshot.WorldPositionM;
+	FVector Candidate = Previous;
 	Candidate += Velocity * Time.StepSeconds;
 	const double PayoutMps = Action.LineMode == ETRLineMode::Payout ? P.PayoutMps :
 		(Action.LineMode == ETRLineMode::ControlledPayout ? P.TensionPayoutMps : 0.0);
@@ -165,6 +194,16 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	const double DepthSpeed = (double(DepthM) - Snapshot.DepthM) / Time.StepSeconds;
 	if (!FMath::IsFinite(DepthSpeed) || FMath::Abs(DepthSpeed) > MAX_flt) { return ETREgiStepEvent::EnvironmentInvalid; }
 	Snapshot.PositionXYM = FVector2D(Candidate.X, Candidate.Y);
+	Snapshot.WorldPositionM = Candidate;
+	Snapshot.HorizontalOffsetFromBoatM = FVector2D(Candidate.X-Boat.PositionM.X, Candidate.Y-Boat.PositionM.Y);
+	Snapshot.HorizontalOffsetFromRodTipM = FVector2D(Candidate.X-Boat.RodTipM.X, Candidate.Y-Boat.RodTipM.Y);
+	Snapshot.HorizontalDistanceFromBoatM = Snapshot.HorizontalOffsetFromBoatM.Size();
+	Snapshot.HorizontalDistanceFromRodTipM = Snapshot.HorizontalOffsetFromRodTipM.Size();
+	Snapshot.BoatToEgiDistanceM = (Candidate-Boat.PositionM).Size();
+	Snapshot.RodToEgiDistanceM = (Candidate-Boat.RodTipM).Size();
+	Snapshot.LineDirection = (Candidate-Boat.RodTipM).GetSafeNormal();
+	Snapshot.SlackM = FMath::Max(0.0, double(LineM)-Snapshot.RodToEgiDistanceM);
+	Snapshot.CurrentAtEgiDepthMps = Destination.CurrentMps;
 	Snapshot.DepthVelocityMps = float(DepthSpeed);
 	Snapshot.bBottomContact = bReachedBottom; Snapshot.bSurfaceContact = DepthM == 0.0f;
 	Snapshot.DepthM = DepthM;
@@ -194,4 +233,5 @@ void UTREgiSimulationComponent::Reset()
 {
 	bActive = false; bOnBottom = false; Snapshot = {}; FrozenEquipment = {}; LastSurfaceZ_M = 0.0f;
 	ResidualLiftMps = 0.0;
+	MotionVelocityMps = FVector::ZeroVector; bHasPreviousRod = false; PreviousRodTipM = FVector::ZeroVector;
 }

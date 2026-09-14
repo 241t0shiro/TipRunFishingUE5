@@ -21,7 +21,8 @@ bool ATREgiActor::ApplySimulationSnapshot(const FTREgiSnapshot& Snapshot, float 
 	if (IsActorBeingDestroyed() || !VisualCastId.IsValid() || Snapshot.CastId != VisualCastId ||
 		Snapshot.Tick < 0 || Snapshot.Tick < LastSnapshotTick || !FMath::IsFinite(SurfaceZ_M) ||
 		!FMath::IsFinite(Snapshot.DepthM) || Snapshot.DepthM < 0.0f) { return false; }
-	const FVector PositionCm = TRUnits::MetersToCentimeters(FVector(Snapshot.PositionXYM.X, Snapshot.PositionXYM.Y, double(SurfaceZ_M) - Snapshot.DepthM));
+	const FVector PositionCm = TRUnits::MetersToCentimeters(Snapshot.bWorldPositionValid ? Snapshot.WorldPositionM :
+		FVector(Snapshot.PositionXYM.X, Snapshot.PositionXYM.Y, double(SurfaceZ_M) - Snapshot.DepthM));
 	if (PositionCm.ContainsNaN()) { return false; }
 	SetActorLocation(PositionCm, false, nullptr, ETeleportType::TeleportPhysics);
 	LastSnapshotTick = Snapshot.Tick;

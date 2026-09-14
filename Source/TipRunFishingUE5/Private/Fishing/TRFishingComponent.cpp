@@ -85,6 +85,15 @@ bool UTRFishingComponent::CompleteDeployment(const FTRBoatSnapshot& Boat, const 
 	const double LineM = FMath::Max(double(CastEquipment.Parameters.MinLineM), HeightM);
 	if (!FMath::IsFinite(LineM) || HeightM < 0.0 || LineM > CastEquipment.Parameters.MaxLineLengthM) { return false; }
 	Snapshot.PositionXYM = FVector2D(Boat.RodTipM.X, Boat.RodTipM.Y);
+	Snapshot.WorldPositionM = FVector(Boat.RodTipM.X, Boat.RodTipM.Y, Ocean.SurfaceZ_M);
+	Snapshot.bWorldPositionValid = true;
+	Snapshot.EgiModelRevision = CastEquipment.Parameters.EgiModelRevision;
+	Snapshot.TotalMassG = CastEquipment.TotalMassG;
+	Snapshot.HorizontalOffsetFromBoatM = FVector2D(Snapshot.WorldPositionM.X-Boat.PositionM.X,Snapshot.WorldPositionM.Y-Boat.PositionM.Y);
+	Snapshot.HorizontalDistanceFromBoatM = Snapshot.HorizontalOffsetFromBoatM.Size();
+	Snapshot.BoatToEgiDistanceM = (Snapshot.WorldPositionM-Boat.PositionM).Size();
+	Snapshot.RodToEgiDistanceM = HeightM; Snapshot.LineDirection = HeightM>0 ? -FVector::UpVector : FVector::ZeroVector;
+	Snapshot.SlackM = LineM-HeightM; Snapshot.bSurfaceContact = true; Snapshot.CurrentAtEgiDepthMps = Ocean.CurrentMps;
 	Snapshot.DepthM = 0.0f; Snapshot.LineLengthM = float(LineM); Snapshot.Tick = Tick;
 	TransitionTo(ETRFishingState::FreeFall, Tick); return true;
 }

@@ -36,6 +36,22 @@ namespace
 bool FTRFishingParameters::Validate(TArray<FText>& Errors) const
 {
 	bool bValid = true;
+	if (EgiModelRevision == 2)
+	{
+		bValid &= RequireFishingTuning(FMath::IsFinite(VerticalResponsePerS) && VerticalResponsePerS > 0 &&
+			FMath::IsFinite(LineDragKgPerMS) && LineDragKgPerMS >= 0 &&
+			FMath::IsFinite(TautLineTransfer01) && TautLineTransfer01 >= 0 && TautLineTransfer01 <= 1 &&
+			FMath::IsFinite(SlackLineTransfer01) && SlackLineTransfer01 >= 0 && SlackLineTransfer01 <= TautLineTransfer01 &&
+			FMath::IsFinite(LineSlackAllowanceM) && LineSlackAllowanceM >= 0 && LineSlackAllowanceM <= MaxLineLengthM &&
+			FMath::IsFinite(MaxStepTravelM) && MaxStepTravelM > 0,
+			TEXT("Spatial tuning requires finite positive response/travel, nonnegative drag/slack and ordered transfers in [0,1]"), Errors);
+	}
+	else
+	{
+		bValid &= RequireFishingTuning(EgiModelRevision == 1 && VerticalResponsePerS == 0 && LineDragKgPerMS == 0 &&
+			TautLineTransfer01 == 0 && SlackLineTransfer01 == 0 && LineSlackAllowanceM == 0 && MaxStepTravelM == 0,
+			TEXT("Unknown or mixed Egi model revision"), Errors);
+	}
 	bValid &= RequireFishingTuning(FMath::IsFinite(MaxLineLengthM) && MaxLineLengthM > 0, TEXT("MaxLineLengthM: must be finite and positive"), Errors);
 	bValid &= RequireFishingTuning(FMath::IsFinite(MinLineM) && MinLineM > 0, TEXT("MinLineM: must be finite and positive"), Errors);
 	bValid &= RequireFishingTuning(FMath::IsFinite(PayoutMps) && PayoutMps > 0, TEXT("PayoutMps: must be finite and positive"), Errors);

@@ -150,7 +150,7 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 	{
 		if (!Fishing->CompleteDeployment(Boat, Ocean, Time.TickIndex)) { AbortInternal(); return; }
 		TArray<FText> Errors;
-		if (!EgiSimulation->InitializeCast(Fishing->GetSnapshot(), LockedEquipment, Ocean, Errors)) { AbortInternal(); return; }
+		if (!EgiSimulation->InitializeCast(Fishing->GetSnapshot(), LockedEquipment, Ocean, Errors, &Boat)) { AbortInternal(); return; }
 		FActorSpawnParameters SpawnParameters; SpawnParameters.Owner = this;
 		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		ActiveEgi = GetWorld()->SpawnActor<ATREgiActor>(ATREgiActor::StaticClass(), FTransform::Identity, SpawnParameters);

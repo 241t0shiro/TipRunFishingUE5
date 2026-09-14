@@ -14,7 +14,7 @@ class TIPRUNFISHINGUE5_API UTREgiSimulationComponent : public UActorComponent
 public:
 	UTREgiSimulationComponent();
 	bool InitializeCast(const FTREgiSnapshot& Initial, const FTREquipmentSnapshot& Equipment,
-		const FTROceanSample& Ocean, TArray<FText>& Errors);
+		const FTROceanSample& Ocean, TArray<FText>& Errors, const FTRBoatSnapshot* InitialBoat = nullptr);
 	// Only fixed updates may call this. None also denotes an ignored stale/duplicate call.
 	ETREgiStepEvent StepEgi(FTRCastId ExpectedCastId, const FTRSimTime& Time,
 		const FTROceanSample& Ocean, const FTRBoatSnapshot& Boat, const FTREgiAction& Action,
@@ -24,6 +24,13 @@ public:
 	void Reset();
 	bool IsTransientComplete() const { return ResidualLiftMps <= FrozenEquipment.Parameters.TensionLiftCompletionMps; }
 private:
+	ETREgiStepEvent StepSpatial(FTRCastId ExpectedCastId, const FTRSimTime& Time,
+		const FTROceanSample& Ocean, const FTRBoatSnapshot& Boat, const FTREgiAction& Action,
+		TFunctionRef<FTROceanSample(const FTROceanQuery&)> Sample);
+	// End velocity used for response; Snapshot velocity reports actual displacement over the fixed step.
+	FVector MotionVelocityMps = FVector::ZeroVector;
+	FVector PreviousRodTipM = FVector::ZeroVector;
+	bool bHasPreviousRod = false;
 	FTREgiSnapshot Snapshot;
 	FTREquipmentSnapshot FrozenEquipment;
 	// Retained for world velocity when the queried surface height changes.

@@ -1,5 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
+2026-09-14 M10.5-C完了: Egi WorldPositionを位置正本へ移行し、revision 2の深度潮/水中ライン抗力/需要繰出し/空間拘束とSnapshotを実装。UHT生成・実C++・Development Editor Win64成功、C 6件（243落下条件含む）＋回帰49件成功、各試験エラー/警告0。標準30mの最大ライン39.299694m、最長50.550秒で着底。保存Prototypeは旧係数revision 1のまま、資産移行/新モデルPIEは未実施。D〜H・M11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA/B完了・設計のみの記録は履歴。
+
 2026-09-14 M10.5-B完了: 風/表層潮を別々に評価する船体方向別応答、抗力/慣性、解析的な固定更新とBoat Snapshot拡張を実装。UHT生成・実C++・Development Editor Win64成功、B 5件＋A/M03/M04/M05/M08回帰26件成功、各試験エラー/警告0。旧保存設定はModelRevision=1で互換維持、新モデルは明示revision 2。保存Prototypeの移行/PIE再評価は未実施。C〜HおよびM11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA完了/設計のみの記録は履歴。
 
 2026-09-14 M10.5-A完了: 環境の風/表層潮/深度別潮、位置依存評価口、knot換算を実装。UHT生成・C++実コンパイル・Development Editor Win64成功、A 5件＋M03/M05/M08回帰20件成功、各試験エラー/警告0。B〜HおよびM11以降は未着手。M10.5全体のPIE品質ゲートは未合格。下の2026-09-13設計のみの記録は履歴。
@@ -73,7 +75,7 @@ FishingとSquidは互いのActor/Componentを直接操作しない。`Game` が�
 | `FTRActorSimId` | Coordinatorが登録順に付与する安定ID。Actorアドレスを並び順に使わない |
 | `FTROceanSample` | 有効性、海面Z、海底深度、潮流m/s、風m/s、環境ID。詳細はOCEAN |
 | `FTRBoatSnapshot` | Tick、位置m、竿先m、速度m/s、向き。読取専用コピー |
-| `FTREgiSnapshot` | CastId、Tick、XYm、DepthM、速度m/s、DepthVelocityMps（下向き正）/海底・海面接触（M10で追加済み）、ライン長m、角度rad、張力代理値0..1、釣り状態、StayPenaltyJerkCount:int64 |
+| `FTREgiSnapshot` | CastId、Tick、WorldPositionM（位置正本）、導出XYm/DepthM、船/竿先への水平offset/距離・LineDirection・深度潮・総重量、速度m/s、DepthVelocityMps（下向き正）/海底・海面接触（M10で追加済み）、ライン長m、角度rad、張力代理値0..1、釣り状態、StayPenaltyJerkCount:int64 |
 | `FTRSquidSnapshot` | SimId、位置m、深度m、AI状態、ActivityLevel（Low/Medium/High）、重量kg |
 | `FTRBiteRequest` | CastId、SimId、要求Tick。承認前の要求にすぎない |
 | `FTRCatchResult` | CastId、SimId、Outcome、重量kg、装備ID、所要sim秒。釣果確定時にコピーして保持 |
