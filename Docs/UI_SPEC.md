@@ -1,5 +1,7 @@
 # UI・入力接続技術設計
 
+2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
+
 2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
 
 
@@ -171,7 +173,7 @@ HUDへJerkCount/SeriesJerkCount/StayPenaltyJerkCount/PendingJerkCount、DepthVel
 
 M10の入力・保持解除・装備変更試験とM09回帰は成功。UIのPIE目視、解像度/DPI、実キーボード/ゲームパッド/コンソール操作は未検証。Onboard/Ready条件やメッシュ変更はAutomationで検証している。製品UI・Resultパネルの完成はM15に残す。
 
-## 9. M10.5マウス操作・日本語Prototype UI（未実装）
+## 9. M10.5マウス操作・日本語Prototype UI（Dの竿/右クリック実装、E以降未実装）
 
 D12改訂: マウス中心を製品の基本方針として採用。数値感度/可動域/演出/最終レイアウトは調整事項。既存キーボードはバックアップとして残せるが、UIの主案内を競合させない。
 
@@ -224,3 +226,12 @@ Cast中/回収中/船上未確認/Pauseでは変更欄を無効化し、日本�
 ラベルと値を別Widget/表示要素にし、異なる色と配置で区別する。色だけに依存せず単位・符号・状態名を表示。日本語対応フォント、背景とのコントラスト、1280×720/1920×1080と拡大表示で欠け・重なりを確認する。数値は既存10Hz案、状態/ロック/エラーは即時反映。Quick中の水中値は「回収演出中」として凍結値と区別し、RangeError/RangeStability/BITEの仮値を表示しない。
 
 予定の保存済み検証Level `L_TR_M105_Prototype` にGameMode/SessionConfigを接続し、Levelを開いてPlayするだけで操作案内とReady装備UIが出るようにする。現時点では当Levelは存在しない。実装タスクでUEの正規手段により作成する。船/竿先/エギ/端点ライン/ドリフト方向が読める最小表示を付け、製品アートは不要。コンソールURLやWorld Settingsの手修正を受入手順にしない。
+
+### Dで実装した入力・読取口（2026-09-14）
+
+- ETRPlayerAction/ETRFishingCommandTypeへRodAim、FTRFishingCommandへAxis2Dを追加。InputConfig検証は固定Boolean9件という個数判定から、必須意味コマンドの存在・重複なし・Boolean/Axis2Dの型対応へ変更した。RodAim未設定の旧入力資産は互換読込する。
+- CreateMouseRodPrototypeは既存Prototypeのキーボード/パッド割当てを残し、JerkへRightMouseButton、RodAimへMouse2D（Axis2D）を追加する明示opt-inの一時設定生成口。左マウス/Quickは追加しない。JerkはStartedのみ、Completed/Canceledで再受付可能にする。RodAimはTriggeredのdeltaを送る。Started/保持の重複はControllerの既存Pressed/BlockedUntilReleaseで抑止する。
+- Controller::SubmitMouseDelta→Session::SubmitRodAim→Coordinator::EnqueueCommandを使用。登録IDはキュー行先とSession受理時に検査、CastIdは送信時と固定配送時の両方で照合する。描画dtの二重乗算やControllerからの角度直接書換えはない。Sequence順は保持し、Deployより後の旧Castのdeltaは破棄する。
+- ControllerのPause/Focus/Flush/Unbindで保持と入力キューを解放。復帰時の保持Jerkは解放確認まで再受付せず、Dの未実行Shakuri予約も固定更新境界で取消す。既に開始した動作はPause中に進めず復帰後に継続する。実マウスのOS/PIE操作感は未検証。
+- FTRHUDSnapshot.Rodで基準/最終角、開始時基準、竿先位置/回転/方向、活動フラグ・相・Tick/CastIdを読む。Widgetの日本語化・値配置・新UIは変更なし。Boatの取付基準RodTipと可動Rod.TipWorldPositionMを混同しない。
+- 利用時はRodTuning DataAssetとMouse Rod用InputConfigを明示作成し、SessionConfig.Rod/Inputへ割り当て、FishingはC revision 2にする。GameModeはRod参照をSessionへ渡す。今回Contentを保存変更しておらず、既存Levelを開くだけで新操作へ移行した状態ではない。保存資産移行と新LevelはG、操作感/品質再評価はHに残す。数値とプロファイル契約はFISHING_SYSTEM第11節、結果はROADMAPのD記録を参照する。

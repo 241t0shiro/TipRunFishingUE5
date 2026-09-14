@@ -27,6 +27,10 @@ bool ATRPlayerController::InstallInputBindings(UEnhancedInputComponent* Componen
 	BoundInput = Component;
 	for (const auto& B : InputConfig->Bindings)
 	{
+		if(B.Command==ETRPlayerAction::RodAim)
+		{
+			BindingHandles.Add(Component->BindAction(B.Action,ETriggerEvent::Triggered,this,&ATRPlayerController::EnhancedRodAim).GetHandle());continue;
+		}
 		BindingHandles.Add(Component->BindAction(B.Action, ETriggerEvent::Started, this, &ATRPlayerController::EnhancedStarted, B.Command).GetHandle());
 		BindingHandles.Add(Component->BindAction(B.Action, ETriggerEvent::Completed, this, &ATRPlayerController::EnhancedReleased, B.Command).GetHandle());
 		BindingHandles.Add(Component->BindAction(B.Action, ETriggerEvent::Canceled, this, &ATRPlayerController::EnhancedReleased, B.Command).GetHandle());
@@ -145,6 +149,13 @@ void ATRPlayerController::ActionReleased(ETRPlayerAction Action)
 	}
 }
 void ATRPlayerController::EnhancedStarted(ETRPlayerAction Action) { ActionStarted(Action); }
+void ATRPlayerController::EnhancedRodAim(const FInputActionValue& Value){SubmitMouseDelta(Value.Get<FVector2D>());}
+bool ATRPlayerController::SubmitMouseDelta(FVector2D Delta,int64 TargetTick)
+{
+	SynchronizeSession();
+	if(!bInputFocused || IsActorBeingDestroyed() || Delta.ContainsNaN() || !BoundSession.IsValid() || BoundSession->IsPlayerPaused()){return false;}
+	return BoundSession->SubmitRodAim(Delta,ObservedCast,ObservedRegistration,TargetTick);
+}
 void ATRPlayerController::EnhancedReleased(ETRPlayerAction Action) { ActionReleased(Action); }
 void ATRPlayerController::SetPauseRequested(bool bPaused)
 {

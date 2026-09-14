@@ -1,5 +1,7 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
+
 2026-09-14 M10.5-C完了: Egi WorldPositionを位置正本へ移行し、revision 2の深度潮/水中ライン抗力/需要繰出し/空間拘束とSnapshotを実装。UHT生成・実C++・Development Editor Win64成功、C 6件（243落下条件含む）＋回帰49件成功、各試験エラー/警告0。標準30mの最大ライン39.299694m、最長50.550秒で着底。保存Prototypeは旧係数revision 1のまま、資産移行/新モデルPIEは未実施。D〜H・M11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA/B完了・設計のみの記録は履歴。
 
 2026-09-14 M10.5-B完了: 風/表層潮を別々に評価する船体方向別応答、抗力/慣性、解析的な固定更新とBoat Snapshot拡張を実装。UHT生成・実C++・Development Editor Win64成功、B 5件＋A/M03/M04/M05/M08回帰26件成功、各試験エラー/警告0。旧保存設定はModelRevision=1で互換維持、新モデルは明示revision 2。保存Prototypeの移行/PIE再評価は未実施。C〜HおよびM11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA完了/設計のみの記録は履歴。
@@ -11,7 +13,7 @@
 
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA/B/C実装完了・D〜H未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA〜D実装完了・E〜H未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
 
 更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10/D11とD12の未指定部分はMVP暫定仕様を使い、残る製品仕様をAlpha前に再決定（マウス基本操作はM10.5で決定済み）、D14/D16〜D18はMVP非ブロック。
 
@@ -283,7 +285,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 | M10.5-A（完了） | Data/TRSnapshots、TROceanAreaDataAsset、Ocean/TROceanWorldSubsystem。風/表層潮/深度Profile、単位/設定リビジョン/コピー契約、環境純粋試験 | M01〜M03 | R01。Constantと層別場の独立評価、既存無効海/寿命回帰 |
 | M10.5-B（完了） | Data/TRBoatTuningDataAsset、Boat/TRBoatDriftComponent/TRBoatPawn。風＋表層潮応答、抗力/慣性、取付Transform | A、M04/M05 | R02。解析応答と同/逆/直交、Boat固定更新回帰 |
 | M10.5-C（完了） | Data/TRSnapshots/TRFishingTuningDataAsset、Fishing/TREgiSimulationComponent/TREgiActor、Session接続。WorldPosition正本、需要繰出し、ライン抗力/制約、水平距離、旧値の読取互換 | A/B、M07/M08 | R03/R04/R05。30m着底・27装備・空間レンジの純粋/Session試験、描画座標回帰 |
-| M10.5-D | Fishing/TRRodControlComponent（予定新規）、Data/TRRodTuningDataAsset（予定新規）、TRInputConfigDataAsset、Game/TRPlayerController/TRFishingSessionActor/TRSimulationWorldSubsystem。Axis2Dキュー、RodSnapshot、Pitch/Yaw/あおり、一入力一動作 | B/C、M09/M10 | R06/R11。旧Boolean固定数検証を意味/型別へ移行、入力/寿命/回数回帰 |
+| M10.5-D（完了） | Fishing/TRRodControlComponent（予定新規）、Data/TRRodTuningDataAsset（予定新規）、TRInputConfigDataAsset、Game/TRPlayerController/TRFishingSessionActor/TRSimulationWorldSubsystem。Axis2Dキュー、RodSnapshot、Pitch/Yaw/あおり、一入力一動作 | B/C、M09/M10 | R06/R11。旧Boolean固定数検証を意味/型別へ移行、入力/寿命/回数回帰 |
 | M10.5-E | Data/TRTypes/TREvents等の該当共通コマンド/イベント型、Fishing/TRFishingComponent/TREgiSimulationComponent、Game/TRFishingSessionActor、操作Tuning。通常解放→Stay、Quick状態/期限、両回収後Ready | C/D、M06/M10 | R07/R08/R09。旧Result→N必須/解放後Retrieving期待を新契約へ置換 |
 | M10.5-F | UI/TRFishingHUDWidget/TRHUD、Data/TRHUDSnapshot、Game/TRPlayerController。日本語ガイド/装備パネル/拒否理由/色分離/カーソルContext、最小の前投観測表示 | D/E | R09/R10。クリック二重配送なし、公開APIとUI許可一致、読取非破壊 |
 | M10.5-G | Game/TRGameModeBase、TRSessionConfigDataAsset、Prototype設定/入力/メッシュ参照の明示移行、L_TR_M105_PrototypeをUEで作成。最小船/竿/エギ/ライン/方向表示 | A〜F | 保存後の別プロセス再読込、Levelを開きPlayだけで起動。旧M09設定を無言で新係数扱いしない |
@@ -393,5 +395,45 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 - Private/Tests/TREgiSpatialTests.cpp（新規）
 - AGENTS.md
 - Docs/FISHING_SYSTEM.md
+- Docs/GAME_DESIGN.md
+- Docs/ROADMAP.md
+
+### M10.5-D完了記録（2026-09-14）
+
+- D合格。UTRRodControlComponent、UTRRodTuningDataAsset/FTRRodParameters、FTRRodSnapshotを追加。Mouse Axis2Dと右クリックStartedを既存Input Queueへ接続し、Boat→Rod→Cの固定順で動く竿先をライン拘束へ渡す。基準姿勢/一時あおりを分離し、既存Jerkカウント/予約/TF→Stayを維持。Rod有効時は旧Lift/Reelを0にして二重作用を除いた。Eの左マウス/回収解放/Quick/UIは実装していない。
+- DataAsset・時間/単位・式・境界の正本はFISHING_SYSTEM第11節、Enhanced Input/設定参照と保存資産移行の範囲はUI_SPECのD追記を参照する。Cの物理実装、A/B環境/船係数、M09/M10の製品UIや回収仕様は変更なし。Session内の既存FishingフェーズへRod更新を追加し、Coordinatorに竿/物理式を置かない。
+- D Automation 5件成功: AimQueueClampAndTransform、ClickProfileQueueAndLine、PauseFocusCastAndLifetime、FixedFramesAndSequence、ConfigurationAndEnhancedMapping。XY感度とClamp、凍結設定、船位置/方位/竿長の座標合成、QuaternionとDirection、1/3/11/20クリック=実動作数、保持再送拒否、PendingJerk、全動作のJerking→TF通知、Stay復帰、Bottomからの引上げ、旧JerkReel非寄与（L不変）、Cへの同Tick接続を確認。
+- 同TickのAim→Jerk→Aimで開始時Baseと最新Baseを区別し、最新Baseへの復帰と30/60/120fpsの同じ固定入力列のRod/Egi/Line一致を確認。Ready→Deployの旧Cast delta拒否、Pauseの時計停止、Focus後の保持再演なし、未実行予約取消、旧登録/旧Cast拒否、Session/World破棄後のGC回収を検証した。InputConfigのMouse2D/RMB存在とLMB不在、Enhancedバインド導入、パラメータ不正拒否・メモリシリアライズも確認。
+- 回帰49件成功: A 5、B 5、C 6（243落下ケースを含む）、M04 6、M06 5、M08 7、M09 7、M10 8。計54件成功、失敗/未実行0、各試験errors/warnings=0、終了コード0。初回54件も成功し、Bottom試験・終了時Snapshot無効化・起動参照検証を補った後、最終ビルド/54件を再確認した。
+- UE5.8.2 / Visual Studio 2026 Community / MSVC14.51.36257 / Windows SDK10.0.22621.0（Win64 VALID）。初回UHT20生成ファイル、Snapshot追加時6生成ファイルを確認。初回11 C++コンパイル＋LIB/DLL/metadataの14アクション、最終は5 C++コンパイル＋リンク等8アクション成功。最終UHTも成功（宣言差分なしで生成書換0）。up-to-dateだけの確認ではない。
+- D由来の残存警告0。既存MSVC推奨版との差、Unreal5_6互換include順序、起動時Condition failed（Error表記）19件、Editorレイアウト警告1件、対象外SDK不足は残る。各試験内のエラー/警告0と区別する。
+- 証跡（Git除外）: Saved/Logs/M105DBuild.log、M105DBuildTests.log、M105DBuildFinal.log、M105DTests.log、M105DTestsFinal.log、Saved/Automation/M105DFinal/index.json。Automationは入力アダプタ/バインド構成/数値・状態を検証したもので、実マウスPIE/操作感/実測/Windowsパッケージは未実施。
+- 保存PrototypeはRod未設定のまま。C revision 2とRod/Input設定の明示割当て・保存移行はGへ残す。Eへ渡すRod/Input/Snapshotは揃ったが、E〜H・M11以降は未着手。M10.5全体品質ゲートとM11進行保留を維持する。
+
+変更ファイル（Source内はSource/TipRunFishingUE5配下、計20 Source＋5 Markdown）:
+
+- Public/Data/TRRodTuningDataAsset.h（新規）
+- Private/Data/TRRodTuningDataAsset.cpp（新規）
+- Public/Fishing/TRRodControlComponent.h（新規）
+- Private/Fishing/TRRodControlComponent.cpp（新規）
+- Private/Tests/TRRodTests.cpp（新規）
+- Public/Data/TRTypes.h
+- Public/Data/TREvents.h
+- Public/Data/TRSnapshots.h
+- Public/Data/TRHUDSnapshot.h
+- Public/Data/TRInputConfigDataAsset.h
+- Private/Data/TRInputConfigDataAsset.cpp
+- Public/Data/TRSessionConfigDataAsset.h
+- Private/Data/TRSessionConfigDataAsset.cpp
+- Public/Game/TRSimulationWorldSubsystem.h
+- Private/Game/TRSimulationWorldSubsystem.cpp
+- Public/Game/TRFishingSessionActor.h
+- Private/Game/TRFishingSessionActor.cpp
+- Public/Game/TRPlayerController.h
+- Private/Game/TRPlayerController.cpp
+- Private/Game/TRGameModeBase.cpp
+- AGENTS.md
+- Docs/FISHING_SYSTEM.md
+- Docs/UI_SPEC.md
 - Docs/GAME_DESIGN.md
 - Docs/ROADMAP.md

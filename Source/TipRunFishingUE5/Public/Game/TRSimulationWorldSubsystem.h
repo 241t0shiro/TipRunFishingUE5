@@ -43,7 +43,7 @@ public:
 	// Live input uses -1. Explicit future ticks support deterministic replay; past ticks
 	// are rejected. The coordinator assigns a world-global sequence, never caller input.
 	bool EnqueueCommand(FTRActorSimId SessionId, ETRFishingCommandType Type, float AxisValue = 0.0f,
-		int64 TargetTick = -1, FTRCastId ExpectedCastId = {});
+		int64 TargetTick = -1, FTRCastId ExpectedCastId = {}, FVector2D Axis2D = FVector2D::ZeroVector);
 	bool IsInFixedStep() const { return bAdvancing; }
 	void ClearCommands();
 	void SetSimulationPaused(bool bPaused);

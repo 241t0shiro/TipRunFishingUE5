@@ -118,7 +118,8 @@ enum class ETRFishingCommandType : uint8
 	RetrieveStarted,
 	RetrieveStopped,
 	EndFishing,
-	NextCast
+	NextCast,
+	RodAim
 };
 
 UENUM(BlueprintType)

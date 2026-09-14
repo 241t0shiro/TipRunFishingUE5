@@ -24,6 +24,8 @@ struct TIPRUNFISHINGUE5_API FTRFishingCommand
 
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	float AxisValue = 0.0f;
+	// Mouse displacement, not rate; no render-dt multiplication.
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") FVector2D Axis2D = FVector2D::ZeroVector;
 
 	// M06: identity observed when input was submitted; sessions reject stale casts.
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")

@@ -88,10 +88,10 @@ void UTRSimulationWorldSubsystem::Unregister(FTRActorSimId Id)
 }
 
 bool UTRSimulationWorldSubsystem::EnqueueCommand(FTRActorSimId SessionId, ETRFishingCommandType Type,
-	float AxisValue, int64 TargetTick, FTRCastId ExpectedCastId)
+	float AxisValue, int64 TargetTick, FTRCastId ExpectedCastId, FVector2D Axis2D)
 {
 	const FRegistration* Entry = FindLive(SessionId);
-	if (!bConfigured || IsSimulationPaused() || !Entry || Entry->bSquid || Entry->bBoat || !FMath::IsFinite(AxisValue) ||
+	if (!bConfigured || IsSimulationPaused() || !Entry || Entry->bSquid || Entry->bBoat || !FMath::IsFinite(AxisValue) || Axis2D.ContainsNaN() ||
 		!StaticEnum<ETRFishingCommandType>()->IsValidEnumValue(int64(Type)) ||
 		NextSequence == MAX_int64 || Time.TickIndex == MAX_int64) { return false; }
 	const int64 EarliestTick = Time.TickIndex + (bAdvancing ? 1 : 0);
@@ -101,6 +101,7 @@ bool UTRSimulationWorldSubsystem::EnqueueCommand(FTRActorSimId SessionId, ETRFis
 	Queued.SessionId = SessionId;
 	Queued.Value.Type = Type;
 	Queued.Value.AxisValue = AxisValue;
+	Queued.Value.Axis2D = Axis2D;
 	Queued.Value.TargetTick = TargetTick;
 	Queued.Value.Sequence = NextSequence++;
 	Queued.Value.ExpectedCastId = ExpectedCastId;

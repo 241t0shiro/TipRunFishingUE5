@@ -12,6 +12,8 @@ class UTRFishingComponent;
 class UTREgiSimulationComponent;
 class ATREgiActor;
 class UStaticMesh;
+class UTRRodControlComponent;
+class UTRRodTuningDataAsset;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FTRCommandProcessed, const FTRFishingCommand&, ETRCommandResult);
 
@@ -21,6 +23,9 @@ class TIPRUNFISHINGUE5_API ATRFishingSessionActor : public AActor
 	GENERATED_BODY()
 public:
 	ATRFishingSessionActor();
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodTuningDataAsset> RodTuning;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodControlComponent> RodControl;
+	bool SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1);
 	// Configuration-time entry points may resolve assets; never invoke inside a fixed step.
 	bool Initialize(UTRSimulationWorldSubsystem* Simulation, FTRActorSimId InBoatId,
 		UDataTable* Egis, UDataTable* Sinkers, UTRFishingTuningDataAsset* Tuning,
@@ -103,4 +108,5 @@ private:
 	bool bFishingStarted = false;
 	bool bEgiOnboard = true;
 	bool bPendingResultNotification = false;
+	bool bClearRodReservations=false;
 };

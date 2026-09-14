@@ -1,5 +1,7 @@
 # 釣りシステム技術設計
 
+2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
+
 2026-09-14 M10.5-C完了: Egi WorldPositionを位置正本へ移行し、revision 2の深度潮/水中ライン抗力/需要繰出し/空間拘束とSnapshotを実装。UHT生成・実C++・Development Editor Win64成功、C 6件（243落下条件含む）＋回帰49件成功、各試験エラー/警告0。標準30mの最大ライン39.299694m、最長50.550秒で着底。保存Prototypeは旧係数revision 1のまま、資産移行/新モデルPIEは未実施。D〜H・M11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA/B完了・設計のみの記録は履歴。
 
 2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
@@ -348,3 +350,18 @@ Quickは通常水中物理を凍結するテンポ改善の回収経路。開始
 - R03試験値はBと同じ風2m/s/船係数、横風を受けるHeading、平底30m、竿先海面上1.5m、M02の保存済み27装備。CのVerticalResponse=2/s、LineDrag=0.0001 kg/(m*s)、Taut/Slack転送=0.05/0、余長0.1m、最大繰出し4m/s、安全値MaxLine=200m/MaxEgiSpeed=10m/s/MaxStepTravel=20m。これらは一時的Test設定で保存製品値ではない。
 - R04は独立した制御試験。全重量で同じ初期位置（竿先から水平後方10m・下方10m）、L=sqrt(200)m、潮0、竿先水平速度0.7m/s、XYZ応答40/s、ライン抗力0、同じM02重量曲線を使う。10秒間を初期化直後から全観測し、30/35/40gだけを変える。定常竿先軌道を与える純粋試験で、Bの風2m/sから自動的に0.7m/sになるという意味ではない。GのPIEシナリオでは対応する船/環境設定・導線の校正が必要。製品の最適重量・安定閾値を確定しない。
 - 試験結果・ビルド・残存警告はROADMAPのC記録を参照。D/Eのマウス/可動竿/回収解放/Quick/Ready仕様、FのHUD/UI、Gの保存Level、M11以降には着手しない。
+
+## 11. M10.5-D Mouse Rod / Shakuri実装契約（2026-09-14）
+
+- SessionがCreateDefaultSubobjectでUTRRodControlComponentを所有する。SessionConfig.Rod（UTRRodTuningDataAsset）は明示opt-in。未設定なら従来固定RodTipを維持する。設定する場合はCのEgiModelRevision=2を必須とし、起動設定はRodAimの割当ても検証する。係数はSession初期化時にコピーし、Editor編集を実行中へ反映しない。
+- RodControlのBasePitchRad/BaseYawRadがマウス基準姿勢の正本。RodAimのAxis2Dは移動量であり描画dtを掛けない。X→Yaw、Y→Pitch、各感度[rad/入力単位]と反転を適用。各イベントのMaxMouseDeltaと、同一固定Tickの軸別総角度変化量MaxAimRateRadPerS*dtで極端な跳びを制限する。超過分は蓄積せず捨て、Pause後へ持ち越さない。最後に基準可動域へclampする。
+- ApplyAimは固定キュー配送からだけ呼ぶ。RodAimとJerkを同TickのSequence順で処理し、実Jerk開始時点の基準姿勢をShakuriStartBaseへ記録する。その後のマウス入力は現在Baseを更新する。戻り先は最新Baseであり、開始時のBaseへ書き戻してプレイヤー入力を消さない。実行中予約は既存FishingのPendingJerkCountを使い、次の実開始でその時点のBaseを記録する。
+- 更新順はInput→既存操作時間処理→Ocean/Boat→Fishing内のRodControl→Egi→状態確定/Publish。Rod更新前に既存Fishing::PrepareStepを呼ぶ。Rodは独立Tickを持たず、Egi位置を直接変更しない。Readyでも登録世代/最終CastIdで照合したRod入力とBoat追従を固定更新する。
+- MountWorld=Boat.PositionM+RotateZ(Boat.HeadingRad,MountOffsetM)。Direction=(cos(Pitch)*cos(Heading+Yaw),cos(Pitch)*sin(Heading+Yaw),sin(Pitch))、TipWorld=MountWorld+LengthM*Direction。姿勢は世界Pitch/Yaw・Roll0のQuaternionも提供する。すべてm/rad、描画境界だけcm/degrees。船側のRodTipは従来取付基準、可動竿先はRodSnapshotとして分離し、Egiへ渡すBoat値コピーのRodTipだけ置き換える。Boatの数値正本は書き換えない。
+- ShakuriはUp/Returnそれぞれ秒→整数Tickへ変換し、その和を既存FishingのJerk期間に設定。上昇割合sを0→1→0にし、振幅*`s*s*(3-2*s)`のPitch一時オフセットを作る。ピークは両相の境界、固定待機時間は追加しない。FinalPitch=clamp(BasePitch+Offset)、FinalYaw=BaseYaw。終了時はOffset=0。最短でも各相1Tick、無限速度テレポートではない。
+- Rod有効時のJerkは旧Action.LiftMps=0、JerkReel=0、LineMode=LockedとしてCへ渡す。追加インパルスは使わない。RodTip移動→ライン拘束→エギの作用が正本。既存Jerking→TensionFall→Stay、BottomからのJerk、予約回数・10回超の履歴契約を維持する。TFは同固定Tick内で完了し得るため、観測用の待機Timerを入れない。
+- Pause/フォーカス喪失はControllerの保持・キューを解除し、押下中のJerkを解放確認まで再受付しない。Dの未実行Jerk予約の取消要求は次の固定処理で適用し、Pause中に物理状態を進めない。実行中のShakuriはPauseで時刻を止め、復帰で残りを続ける。Cast終端・Session終了ではRodSnapshotを無効化し、古い活動中表示を残さない。World/Actor破棄では参照と設定コピーを解除する。
+- FTRRodSnapshot: bValid、Tick/CastId、Base/Final Pitch/Yaw、開始時Base、TipWorldPositionM/TipWorldRotation/TipDirection、bShakuriActive、ShakuriPhase（0基準/1上昇/2復帰）。HUD集約Snapshotへ追加し、読取だけで取得できる。日本語表示・Rodメッシュ・新UIは追加していない。
+- DataAsset項目: Pitch/Yaw最小最大・初期値、感度XY、反転XY、MaxMouseDelta、MaxAimRateRadPerS、LengthM、MountOffsetM、ShakuriAmplitudeRad、UpSeconds、ReturnSeconds。有限/範囲/正値をRuntime/IsDataValidで検証し、Session初期化では最小Pitchの竿先が海面下へ入らないことを検査する。
+- Test値: Pitch[0,1.2]rad、Yaw[-0.6,0.6]rad、初期Pitch0.1rad/Yaw0、感度X0.01/Y0.02、delta上限50、最大操作角速度1.2rad/s、竿2m、船相対取付(0,0,1)m、振幅0.3rad、Up0.15秒/Return0.25秒（60Hzで9+15=24Tick）。製品値/実測値ではない。Cの空間調整値は専用Test設定を利用する。
+- Eの左マウス回収・解放後Stay・Quick・帰還Ready変更は今回なし。Dの試験/回帰結果はROADMAPを参照。保存PrototypeへRod/Inputを割当てる資産移行、実マウスPIEと操作感の確認はG/Hへ残す。

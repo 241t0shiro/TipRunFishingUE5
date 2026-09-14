@@ -3,20 +3,22 @@
 
 bool UTRInputConfigDataAsset::Validate(TArray<FText>& Errors) const
 {
-	bool bValid = IsValid(FishingContext) && Bindings.Num() == 9;
+	bool bValid = IsValid(FishingContext);
 	TSet<ETRPlayerAction> Commands;
 	TSet<const UInputAction*> Actions;
 	for (const FTRInputBinding& B : Bindings)
 	{
 		bValid &= StaticEnum<ETRPlayerAction>()->IsValidEnumValue(int64(B.Command)) && !Commands.Contains(B.Command) &&
 			IsValid(B.Action) && !Actions.Contains(B.Action);
-		if (IsValid(B.Action)) { bValid &= B.Action->ValueType == EInputActionValueType::Boolean; }
+		if (IsValid(B.Action)) { bValid &= B.Action->ValueType == (B.Command==ETRPlayerAction::RodAim?EInputActionValueType::Axis2D:EInputActionValueType::Boolean); }
 		Commands.Add(B.Command); Actions.Add(B.Action);
 		bool bMapped = false;
 		if (IsValid(FishingContext)) { for (const auto& M : FishingContext->GetMappings()) { bMapped |= M.Action == B.Action && M.Key.IsValid(); } }
 		bValid &= bMapped;
 	}
-	if (!bValid) { Errors.Add(FText::FromString(TEXT("Input config requires one mapped Boolean action for each M09 command, without duplicate commands/actions"))); }
+	for(auto Required:{ETRPlayerAction::Deploy,ETRPlayerAction::Jerk,ETRPlayerAction::Fall,ETRPlayerAction::TensionFall,ETRPlayerAction::Hook,
+		ETRPlayerAction::Retrieve,ETRPlayerAction::Cancel,ETRPlayerAction::NextCast,ETRPlayerAction::Pause}){bValid &= Commands.Contains(Required);}
+	if (!bValid) { Errors.Add(FText::FromString(TEXT("Input config requires mapped semantic actions without duplicates: Boolean commands and optional Axis2D RodAim"))); }
 	return bValid;
 }
 UTRInputConfigDataAsset* UTRInputConfigDataAsset::CreatePrototype(UObject* Outer)
@@ -37,6 +39,14 @@ UTRInputConfigDataAsset* UTRInputConfigDataAsset::CreatePrototype(UObject* Outer
 		Config->Bindings.Add(B);
 	}
 	return Config;
+}
+UTRInputConfigDataAsset* UTRInputConfigDataAsset::CreateMouseRodPrototype(UObject* Outer)
+{
+	auto* Config=CreatePrototype(Outer);
+	for(const auto& B:Config->Bindings){if(B.Command==ETRPlayerAction::Jerk){Config->FishingContext->MapKey(B.Action,EKeys::RightMouseButton);}}
+	FTRInputBinding B;B.Command=ETRPlayerAction::RodAim;
+	B.Action=NewObject<UInputAction>(Config,TEXT("IA_TR_MouseRod_Prototype"));B.Action->ValueType=EInputActionValueType::Axis2D;
+	Config->FishingContext->MapKey(B.Action,EKeys::Mouse2D);Config->Bindings.Add(B);return Config;
 }
 #if WITH_EDITOR
 EDataValidationResult UTRInputConfigDataAsset::IsDataValid(FDataValidationContext& Context) const

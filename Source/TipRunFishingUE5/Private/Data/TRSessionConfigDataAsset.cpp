@@ -5,6 +5,7 @@
 #include "Data/TRBoatTuningDataAsset.h"
 #include "Data/TRInputConfigDataAsset.h"
 #include "Data/TREquipmentData.h"
+#include "Data/TRRodTuningDataAsset.h"
 
 bool UTRSessionConfigDataAsset::ValidateStartup(TArray<FText>& Errors) const
 {
@@ -15,6 +16,9 @@ bool UTRSessionConfigDataAsset::ValidateStartup(TArray<FText>& Errors) const
 		return false;
 	}
 	FTREquipmentSnapshot Equipment;
+	if(Rod && (!IsValid(Rod) || !Rod->Parameters.Validate(Errors) || !IsValid(Fishing) || Fishing->Parameters.EgiModelRevision!=2 ||
+		!Input->Bindings.ContainsByPredicate([](const FTRInputBinding& B){return B.Command==ETRPlayerAction::RodAim;})))
+	{Errors.Add(FText::FromString(TEXT("Rod startup requires valid Rod tuning, C revision 2 and mapped RodAim input")));return false;}
 	return Ocean->Validate(Errors) && Boat->Validate(Errors) && Input->Validate(Errors) &&
 		TREquipment::TryBuildSnapshot(Egis, Sinkers, Fishing, TREquipment::InitialEgiId(), InitialSinkerId, StepSeconds, Equipment, Errors);
 }
@@ -36,7 +40,7 @@ EDataValidationResult UTRSessionConfigDataAsset::IsDataValid(FDataValidationCont
 {
 	TArray<FText> Errors;
 	// Clock-only assets remain valid for M04. Any startup reference opts into full validation.
-	const bool bValid = (Ocean || Boat || Input || Fishing || Egis || Sinkers) ? ValidateStartup(Errors) : Validate(Errors);
+	const bool bValid = (Ocean || Boat || Input || Fishing || Egis || Sinkers || Rod) ? ValidateStartup(Errors) : Validate(Errors);
 	for (const FText& Error : Errors) { Context.AddError(Error); }
 	return bValid ? EDataValidationResult::Valid : EDataValidationResult::Invalid;
 }

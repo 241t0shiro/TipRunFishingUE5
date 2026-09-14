@@ -7,6 +7,7 @@
 class ATRFishingSessionActor;
 class UEnhancedInputComponent;
 class UTRFishingHUDWidget;
+struct FInputActionValue;
 
 UCLASS()
 class TIPRUNFISHINGUE5_API ATRPlayerController : public APlayerController
@@ -22,6 +23,7 @@ public:
 	bool SubmitFishingCommand(ETRFishingCommandType Command, FTRCastId ExpectedCastId, int64 TargetTick = -1);
 	// Device-independent event adapter, shared by Enhanced Input and deterministic tests.
 	bool ActionStarted(ETRPlayerAction Action, int64 TargetTick = -1);
+	bool SubmitMouseDelta(FVector2D Delta,int64 TargetTick=-1);
 	void ActionReleased(ETRPlayerAction Action);
 	void SetInputFocus(bool bFocused);
 	bool IsRetrieveHeld() const { return bRetrieveHeld; }
@@ -37,6 +39,7 @@ protected:
 	virtual void Destroyed() override;
 private:
 	void EnhancedStarted(ETRPlayerAction Action);
+	void EnhancedRodAim(const FInputActionValue& Value);
 	void EnhancedReleased(ETRPlayerAction Action);
 	void ReleaseInput();
 	void FlushPendingStop();

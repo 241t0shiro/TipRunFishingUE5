@@ -2,6 +2,7 @@
 #include "Fishing/TRFishingComponent.h"
 #include "Fishing/TREgiSimulationComponent.h"
 #include "Fishing/TREgiActor.h"
+#include "Fishing/TRRodControlComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Ocean/TROceanWorldSubsystem.h"
 #include "Engine/World.h"
@@ -11,6 +12,7 @@ ATRFishingSessionActor::ATRFishingSessionActor()
 	PrimaryActorTick.bCanEverTick = false;
 	Fishing = CreateDefaultSubobject<UTRFishingComponent>(TEXT("Fishing"));
 	EgiSimulation = CreateDefaultSubobject<UTREgiSimulationComponent>(TEXT("EgiSimulation"));
+	RodControl = CreateDefaultSubobject<UTRRodControlComponent>(TEXT("RodControl"));
 }
 bool ATRFishingSessionActor::Initialize(UTRSimulationWorldSubsystem* Simulation, FTRActorSimId InBoatId,
 	UDataTable* Egis, UDataTable* Sinkers, UTRFishingTuningDataAsset* Tuning, FName InitialSinkerId, TArray<FText>& Errors)
@@ -40,6 +42,10 @@ bool ATRFishingSessionActor::Initialize(UTRSimulationWorldSubsystem* Simulation,
 	}
 	EgiTable = Egis; SinkerTable = Sinkers; FishingTuning = Tuning;
 	SelectedEquipment = Initial;
+	if(RodTuning && (Initial.Parameters.EgiModelRevision!=2 || !RodControl->Initialize(RodTuning->Parameters,Simulation->GetSimulationTime().StepSeconds,Errors)))
+	{ Coordinator.Reset(); Phase=ETRSessionPhase::Error;return false; }
+	if(RodTuning && Boat.PositionM.Z+RodTuning->Parameters.MountOffsetM.Z+RodTuning->Parameters.LengthM*FMath::Sin(RodTuning->Parameters.MinPitchRad)<Ocean.SurfaceZ_M)
+	{Errors.Add(FText::FromString(TEXT("Rod minimum pitch places tip below surface")));RodControl->Reset();Coordinator.Reset();Phase=ETRSessionPhase::Error;return false;}
 	bInitialized = true; Phase = ETRSessionPhase::Ready;
 	return true;
 }
@@ -98,6 +104,11 @@ ETRCommandResult ATRFishingSessionActor::StartFishing(TArray<FText>& Errors)
 	return bInitialized && bFishingStarted && !IsActorBeingDestroyed() && Coordinator.IsValid() &&
 		Coordinator->EnqueueCommand(RegistrationId, Type, 0.0f, TargetTick, ExpectedCastId);
 }
+bool ATRFishingSessionActor::SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick)
+{
+	return IsAcceptingPlayerInput() && RodControl->IsInitialized() && ExpectedCastId==CurrentCastId && ExpectedRegistration==RegistrationId &&
+		Coordinator->EnqueueCommand(RegistrationId,ETRFishingCommandType::RodAim,0,TargetTick,ExpectedCastId,Delta);
+}
 void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 {
 	LastCommandResult = ETRCommandResult::RejectedInvalidState;
@@ -107,8 +118,12 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 		Command.TargetTick > Coordinator->GetSimulationTime().TickIndex) { return; }
 	LastSequence = Command.Sequence;
 	LastCommandTick = Command.TargetTick;
+	if(bClearRodReservations){Fishing->PendingJerkCount=0;bClearRodReservations=false;}
 	switch (Command.Type)
 	{
+	case ETRFishingCommandType::RodAim:
+		if((bCastActive || Phase==ETRSessionPhase::Ready) && RodControl->ApplyAim(Command.Axis2D,Coordinator->GetSimulationTime()))
+		{LastCommandResult=ETRCommandResult::Accepted;} break;
 	case ETRFishingCommandType::Deploy:
 		if (Fishing->GetState() == ETRFishingState::Ready && CanChangeEquipment() && IsValid(SelectedEgiMesh) && NextCastValue < MAX_int64)
 		{
@@ -119,6 +134,7 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 			CastStartTick = Coordinator->GetSimulationTime().TickIndex;
 			bCastActive = true; bHasResult = false;
 			Fishing->BeginCast(CurrentCastId, Coordinator->GetSimulationTime(), LockedEquipment);
+			if(RodControl->IsInitialized()){Fishing->JerkTicks=RodControl->GetJerkTicks();}
 			LastCommandResult = ETRCommandResult::Accepted;
 		}
 		break;
@@ -128,7 +144,8 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 	case ETRFishingCommandType::EndFishing:
 		EndFishing(); LastCommandResult = ETRCommandResult::Accepted;
 		break;
-	default: if (bCastActive) { LastCommandResult = Fishing->HandleCommand(Command, Coordinator->GetSimulationTime()); } break;
+	default: if (bCastActive) { LastCommandResult = Fishing->HandleCommand(Command, Coordinator->GetSimulationTime());
+		if(RodControl->IsInitialized()){RodControl->ObserveOperationStart(Fishing->GetSnapshot());} } break;
 	}
 }
 void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSimTime& Time)
@@ -143,9 +160,21 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 		}
 		return;
 	}
-	if (StepPhase != ETRSimulationPhase::Fishing || !bCastActive || IsActorBeingDestroyed()) { return; }
+	if (StepPhase != ETRSimulationPhase::Fishing || IsActorBeingDestroyed() || (!bCastActive && !RodControl->IsInitialized())) { return; }
 	FTRBoatSnapshot Boat; FTROceanSample Ocean;
 	if (!ReadEnvironment(Boat, Ocean)) { AbortInternal(); return; }
+	if(bClearRodReservations){Fishing->PendingJerkCount=0;bClearRodReservations=false;}
+	if(bCastActive){Fishing->PrepareStep(Time);}
+	if(RodControl->IsInitialized())
+	{
+		auto RodFishing=Fishing->GetSnapshot();RodFishing.CastId=CurrentCastId;
+		if(!RodControl->Step(Time,Boat,RodFishing,Ocean.SurfaceZ_M)){AbortInternal();return;}
+		Boat.RodTipM=RodControl->GetSnapshot().TipWorldPositionM;
+		FTROceanQuery RodQuery;RodQuery.PositionXYM=FVector2D(Boat.RodTipM.X,Boat.RodTipM.Y);RodQuery.SimTick=Time.TickIndex;
+		Ocean=GetWorld()->GetSubsystem<UTROceanWorldSubsystem>()->SampleOcean(RodQuery);
+		if(!Ocean.bValid || Boat.RodTipM.Z<Ocean.SurfaceZ_M){AbortInternal();return;}
+	}
+	if(!bCastActive){return;}
 	if (Fishing->GetState() == ETRFishingState::Deploying)
 	{
 		if (!Fishing->CompleteDeployment(Boat, Ocean, Time.TickIndex)) { AbortInternal(); return; }
@@ -160,12 +189,17 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 		return; // Preserve deployment tick at depth zero. Integration starts next fixed tick.
 	}
 	if (!IsValid(ActiveEgi) || ActiveEgi->IsActorBeingDestroyed()) { AbortInternal(); return; }
-	Fishing->PrepareStep(Time);
 	const FTREgiSnapshot Before = EgiSimulation->BuildSnapshot(Fishing->GetState());
 	FTROceanQuery Query; Query.PositionXYM = Before.PositionXYM; Query.DepthM = Before.DepthM; Query.SimTick = Time.TickIndex;
 	Ocean = GetWorld()->GetSubsystem<UTROceanWorldSubsystem>()->SampleOcean(Query);
 	FTROceanSample DestinationOcean = Ocean;
-	const ETREgiStepEvent Event = EgiSimulation->StepEgi(CurrentCastId, Time, Ocean, Boat, Fishing->GetAction(),
+	auto Action=Fishing->GetAction();
+	if(RodControl->IsInitialized())
+	{
+		Action.LiftMps=0;
+		if(Action.FishingState==ETRFishingState::Jerking){Action.ReelMps=0;Action.LineMode=ETRLineMode::Locked;}
+	}
+	const ETREgiStepEvent Event = EgiSimulation->StepEgi(CurrentCastId, Time, Ocean, Boat, Action,
 		[this, &DestinationOcean](const FTROceanQuery& DestinationQuery)
 		{
 			DestinationOcean = GetWorld()->GetSubsystem<UTROceanWorldSubsystem>()->SampleOcean(DestinationQuery);
@@ -190,6 +224,7 @@ void ATRFishingSessionActor::FinishInternal(ETRCastOutcome Outcome, bool bReturn
 		LastResult.ElapsedSimSeconds = double(Coordinator->GetSimulationTime().TickIndex - CastStartTick) * Coordinator->GetSimulationTime().StepSeconds;
 	}
 	Fishing->FinishCast(); Phase = ETRSessionPhase::Result;
+	RodControl->InvalidateSnapshot(); bClearRodReservations=false;
 	Unregister(); // Invalidates all queued and already-extracted commands for this registration.
 	if (!IsActorBeingDestroyed()) { Register(); }
 }
@@ -216,6 +251,7 @@ void ATRFishingSessionActor::EndFishing()
 	bFishingStarted = false; bEquipmentLocked = !bEgiOnboard;
 	ReleaseEgi(); LockedEgiMesh = nullptr;
 	Fishing->Stop(); Phase = bInitialized ? ETRSessionPhase::Ready : ETRSessionPhase::Initializing;
+	RodControl->InvalidateSnapshot(); bClearRodReservations=false;
 	// A stopped session has no later Publish phase. Deliver its pending terminal event once.
 	if (bPendingResultNotification && !IsActorBeingDestroyed())
 	{
@@ -227,6 +263,7 @@ void ATRFishingSessionActor::ReleaseSession()
 	EndFishing();
 	bInitialized = false;
 	Coordinator.Reset(); BoatId = {};
+	RodControl->Reset();
 	EgiTable = nullptr; SinkerTable = nullptr; FishingTuning = nullptr;
 	Fishing->OnFishingStateChanged.Clear();
 	OnCommandProcessed.Clear(); OnCastCompleted.Clear(); SelectedEgiMesh = nullptr;
@@ -262,12 +299,13 @@ bool ATRFishingSessionActor::IsAcceptingPlayerInput() const
 }
 bool ATRFishingSessionActor::IsPlayerPaused() const { return !Coordinator.IsValid() || Coordinator->IsSimulationPaused(); }
 void ATRFishingSessionActor::SetPlayerPaused(bool bPaused) { if (Coordinator.IsValid()) { Coordinator->SetSimulationPaused(bPaused); } }
-void ATRFishingSessionActor::ClearPlayerCommands() { if (Coordinator.IsValid()) { Coordinator->ClearCommands(); } } // MVP: one local session.
+void ATRFishingSessionActor::ClearPlayerCommands() { if (Coordinator.IsValid()) { Coordinator->ClearCommands(); } if(RodControl->IsInitialized()){bClearRodReservations=true;} } // Consumed only at fixed update.
 void ATRFishingSessionActor::CaptureHUD(const FTRSimTime& Time)
 {
 	PublishedHUD = {};
 	if (!bInitialized || !Coordinator.IsValid()) { return; }
 	PublishedHUD.Egi = Fishing->GetSnapshot();
+	PublishedHUD.Rod = RodControl->GetSnapshot();
 	if (!Coordinator->GetBoatSnapshot(BoatId, PublishedHUD.Boat)) { return; }
 	FTROceanQuery Q; Q.SimTick = Time.TickIndex;
 	Q.PositionXYM = bCastActive ? PublishedHUD.Egi.PositionXYM : FVector2D(PublishedHUD.Boat.RodTipM.X, PublishedHUD.Boat.RodTipM.Y);

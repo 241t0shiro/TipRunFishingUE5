@@ -46,6 +46,7 @@ bool ATRGameModeBase::InitializeSession(TArray<FText>& Errors)
 	const FTRActorSimId BoatId = Sim->RegisterBoat(BoatActor, SessionConfig->InitialBoatXYM, SessionConfig->InitialHeadingRad, Errors);
 	if (!BoatId.IsValid()) { return false; }
 	Session = GetWorld()->SpawnActor<ATRFishingSessionActor>();
+	if(Session){Session->RodTuning=SessionConfig->Rod;}
 	bStarted = Session && Session->Initialize(Sim, BoatId, SessionConfig->Egis, SessionConfig->Sinkers, SessionConfig->Fishing,
 		SessionConfig->InitialSinkerId, Errors) && Session->StartFishing(Errors) == ETRCommandResult::Accepted;
 	return bStarted;

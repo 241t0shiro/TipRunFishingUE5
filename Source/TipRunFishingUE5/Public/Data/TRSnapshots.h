@@ -177,6 +177,27 @@ struct TIPRUNFISHINGUE5_API FTREgiSnapshot
 };
 
 USTRUCT(BlueprintType)
+struct TIPRUNFISHINGUE5_API FTRRodSnapshot
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") bool bValid=false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") int64 Tick=0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FTRCastId CastId;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double BasePitchRad=0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double BaseYawRad=0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double FinalPitchRad=0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double FinalYawRad=0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector TipWorldPositionM=FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector TipDirection=FVector::ForwardVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FQuat TipWorldRotation=FQuat::Identity;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double ShakuriStartBasePitchRad=0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double ShakuriStartBaseYawRad=0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") bool bShakuriActive=false;
+	// 0=base, 1=up, 2=return. Peak is the shared phase boundary.
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") int32 ShakuriPhase=0;
+};
+
+USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRSquidSnapshot
 {
 	GENERATED_BODY()
