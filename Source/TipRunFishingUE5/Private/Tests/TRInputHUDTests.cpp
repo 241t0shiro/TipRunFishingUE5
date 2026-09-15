@@ -155,7 +155,7 @@ bool FTRHUDReadTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Water depth"), S.Ocean.BottomDepthM, 30.0f);
 		TestEqual(TEXT("Egi mass"), S.Equipment.BaseMassG, 35.0f); TestEqual(TEXT("No sinker valid"), S.Equipment.SinkerMassG, 0.0f);
 		const FString Text = UTRFishingHUDWidget::FormatSnapshot(S).ToString();
-		TestTrue(TEXT("HUD shows units and vertical sign"), Text.Contains(TEXT("world Z, up +")) && Text.Contains(TEXT("Boat drift")) && Text.Contains(TEXT("Tension proxy")));
+		TestTrue(TEXT("HUD shows Japanese labels and depth sign"), Text.Contains(TEXT("深度変化速度（下向き＋）")) && Text.Contains(TEXT("船ドリフト")) && Text.Contains(TEXT("張力Proxy")));
 		S.Egi.DepthM = 999.0f; S.Equipment.BaseMassG = 999.0f;
 	}
 	TestEqual(TEXT("Reads never advance clock"), R.F.Sim()->GetSimulationTime().TickIndex, Time.TickIndex);

@@ -175,7 +175,7 @@ HUDへJerkCount/SeriesJerkCount/StayPenaltyJerkCount/PendingJerkCount、DepthVel
 
 M10の入力・保持解除・装備変更試験とM09回帰は成功。UIのPIE目視、解像度/DPI、実キーボード/ゲームパッド/コンソール操作は未検証。Onboard/Ready条件やメッシュ変更はAutomationで検証している。製品UI・Resultパネルの完成はM15に残す。
 
-## 9. M10.5マウス操作・日本語Prototype UI（D/E入力実装済み、F以降未実装）
+## 9. M10.5マウス操作・日本語Prototype UI（D/E/F実装・自動検証完了）
 
 D12改訂: マウス中心を製品の基本方針として採用。数値感度/可動域/演出/最終レイアウトは調整事項。既存キーボードはバックアップとして残せるが、UIの主案内を競合させない。
 
@@ -245,3 +245,18 @@ Cast中/回収中/船上未確認/Pauseでは変更欄を無効化し、日本�
 - 通常回収完了はResult中の装備ロックを維持し、NでReady/解除。Quick完了は直接Ready/解除でN不要。画面側は終端通知だけから常にResultへ遷移せず、SessionPhaseと結果のbQuickRetrievedを読むこと。パネル本体の実装はF以降。
 - `FTRHUDSnapshot.Retrieval`から通常/Quickフラグ、要求/実巻取り速度、残ライン、進捗、物理更新有効性を取得できる。既存bEquipmentLocked/bCanChangeEquipmentも利用する。Quick中のEgiは凍結した最終物理Snapshotであり、最新の水中運動として表示しない。
 - 状態・寿命・数値の契約は[FISHING_SYSTEM第12節](FISHING_SYSTEM.md#12-m105-e-normal--quick-retrieve実装契約2026-09-15)、検証結果は[ROADMAPのE完了記録](ROADMAP.md#m105-e完了記録2026-09-15)を正本とする。実マウスPIE、日本語HUD、装備パネル、新Levelは未実施。
+
+### FのPrototype UI実装（2026-09-16、実装・自動検証合格）
+
+上のE記録までの「日本語HUD・装備パネル未実装」は履歴。本節がFの現行接続を示す。Gの保存設定移行・新Level、Hの最終PIE評価は含めない。
+
+- 既存UTRFishingHUDWidgetをC++ UMGの日本語観測パネルへ改訂。ラベルと値は別TextBlockで2列配置し、LabelColor/ValueColor/DisabledColorをWidgetのPrototype表示設定として分離。1120×640の基準枠をScaleBoxで画面へ収め、観測値と装備欄にScrollBoxを使用する。基本操作ガイドは装備欄のスクロール外へ常設。Engine標準複合フォントの日本語fallbackを利用する。これは製品レイアウト・最終フォントを確定するものではない。
+- 表示はCastId/日本語状態、深度/水深/下向き正の深度速度、船/竿先からの水平距離、ライン長/鉛直基準角/弛み、張力Proxy、船速、風、表層潮、エギ深度潮、エギ/シンカー/総重量、ロック/変更可否、通常回収速度、Quick状態/進捗、シャクリ回数/予約数。船・風・表層潮はBoat Snapshotの船地点サンプル、エギ潮はEgi Snapshotを使用。方向は流れる向き、世界+X=0°/+Y=90°（地理的北とは呼ばない）、m/sとAの換算によるknotを表示する。
+- 船上/無効なエギ値を深度0で代用しない。Quick中の水中値には「回収中・凍結値」を明示する。RangeError/RangeStability/BITE等の仮値を追加しない。通常数値更新は既存10Hz、状態/投/ロック/変更可否/Pauseは次描画で反映する。
+- 操作ガイドはMouse/右押下/左保持/左解放/F/Q/Enter/N/Tab/P。可否はSessionのAvailableCommands、装備可否は既存CanChangeEquipmentと共有する理由判定から取得する。UIはFishing遷移条件を持たず、UI入力捕捉中だけ釣り操作の表示を無効にする。Controllerは実際のInputConfigで主キーが未割当なら灰色表示と説明を加える。保存済み旧入力設定を自動移行しない。
+- Prototypeの追加キーはTab（パネル開閉）。初投Ready、Quick帰還Ready、通常Resultでは自動表示し、投入後は閉じる。投中もTabで開いて変更不可理由を確認できる。ResultはN/次投ボタンからReadyへ、Quick後はN不要。Readyで閉じた場合もTabで再表示できる。Pはパネル中も停止/再開できる。
+- Sessionの既存Equipment Tableから行をコピーし、重量/ID順に選択肢を生成。UIに3種/9種の製品定義を持たない。シンカー0gは「なし」。現在使用中（投中/Resultはロック中）の装備、選択候補、次投の適用済み装備を区別する。適用ボタンはController→Session::TrySetEquipmentを使用し、重量/係数/メッシュの解決・ロック条件は既存APIが正本。無効ID/参照は成功表示しない。
+- 未適用の候補がある状態でEnter/投入ボタンを押すと「選択を適用してから投入してください」と表示する。コンボを編集中のEnterは選択の確定だけに使い、同じ押下で投入しない。投入/NextCastは既存固定キューを使用し、UIを閉じて保持/キューを解除した後に要求を登録する。装備適用は既存の固定更新外の設定APIであり、Widgetから数値状態を書き換えない。
+- ControllerはGameAndUIとGameOnlyを切替え、パネル中は釣り入力アダプタ自体も遮断する。未処理のマウス移動/保持を解除し、再接続は押下キーを解放まで無視する。Slateが先に消費した押下も考慮する。アプリフォーカスとUI捕捉を別管理し、Pause/Focus LostのE契約を維持する。
+- WidgetはController/Sessionを弱参照し、表示時CastId/登録世代を要求時に再検査。終了・破棄後は候補と表示を無効化し、別Sessionへ古い画面の要求を送らない。失敗時は投中・Result・Pause・船外等の日本語理由を表示する。
+- F全6件とD/E/M09/M10の回帰27件は成功。プレイヤーコンテキストのないWorldで初期化通知が省略されても、RebuildWidgetからレイアウトを生成する。実UMGの日本語ラベル/値/色、Enhanced入力遮断、Native Enter/Tab/P、装備27組合せ、旧Cast/Session寿命を検証した。保存Prototype移行、実マウスPIE、1280×720/1920×1080・100/150%の視認性/日本語欠字の目視確認は未実施。ビルド/試験証跡と範囲はROADMAPのF記録を参照する。

@@ -23,4 +23,11 @@ struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRRetrievalSnapshot Retrieval;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTROceanSample Ocean;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTREquipmentSnapshot Equipment;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bPaused = false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") FText EquipmentBlockReason;
+	// State eligibility only; actual commands still revalidate tick, cast and environment.
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") TArray<ETRFishingCommandType> AvailableCommands;
+	// Controller fills device availability; Session retains state eligibility above.
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") TArray<ETRFishingCommandType> UnmappedPrimaryInputs;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") FText InputConfigurationNote;
 };

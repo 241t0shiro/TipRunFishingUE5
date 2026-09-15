@@ -28,6 +28,14 @@ public:
 	void ActionReleased(ETRPlayerAction Action);
 	void SetInputFocus(bool bFocused);
 	bool IsRetrieveHeld() const { return bRetrieveHeld; }
+	ATRFishingSessionActor* GetBoundSession() const { return BoundSession.Get(); }
+	void EnablePrototypeUI(bool bEnabled);
+	void RefreshPrototypePanel();
+	void TogglePrototypePanel();
+	void SetPrototypePanelOpen(bool bOpen);
+	bool IsPrototypePanelOpen() const { return bPrototypePanelOpen; }
+	bool SubmitUICommand(ETRFishingCommandType Command, FTRCastId ExpectedCast, FTRActorSimId ExpectedRegistration);
+	ETRCommandResult SubmitUIEquipment(FName EgiId, FName SinkerId, FTRCastId ExpectedCast, FTRActorSimId ExpectedRegistration, TArray<FText>& Errors);
 	bool InstallInputBindings(UEnhancedInputComponent* Component);
 	// Internal MVP console control; the session applies the same onboard/Ready guard as UI.
 	UFUNCTION(Exec) void TRSetEquipment(FName EgiId, FName SinkerId);
@@ -62,4 +70,7 @@ private:
 	bool bRetrieveHeld = false;
 	bool bPendingStop = false;
 	bool bWasPaused = false;
+	bool bPrototypeUIEnabled = false;
+	bool bPrototypePanelOpen = false;
+	ETRSessionPhase PrototypeObservedPhase = ETRSessionPhase::Initializing;
 };

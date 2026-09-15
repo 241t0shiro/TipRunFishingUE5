@@ -276,7 +276,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 
 ## 7. M10.5 Prototype Realism Revision — 正式品質ゲート
 
-状態（2026-09-15）: **A〜E実装/自動検証完了、F〜H未着手、全体品質ゲート未合格。M11〜M18は未着手・進行保留。** M10までの証跡と各段階の完了記録を保持する。保存資産移行・新Level・PIE品質再評価はG/Hの未実施項目であり、自動試験合格で代用しない。
+状態（2026-09-16）: **A〜F実装/自動検証完了、G/H未着手、全体品質ゲート未合格。M11〜M18は未着手・進行保留。** M10までの証跡と各段階の完了記録を保持する。保存資産移行・新Level・PIE品質再評価はG/Hの未実施項目であり、自動試験合格で代用しない。
 
 ### Codex実装単位
 
@@ -289,7 +289,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 | M10.5-C（完了） | Data/TRSnapshots/TRFishingTuningDataAsset、Fishing/TREgiSimulationComponent/TREgiActor、Session接続。WorldPosition正本、需要繰出し、ライン抗力/制約、水平距離、旧値の読取互換 | A/B、M07/M08 | R03/R04/R05。30m着底・27装備・空間レンジの純粋/Session試験、描画座標回帰 |
 | M10.5-D（完了） | Fishing/TRRodControlComponent（予定新規）、Data/TRRodTuningDataAsset（予定新規）、TRInputConfigDataAsset、Game/TRPlayerController/TRFishingSessionActor/TRSimulationWorldSubsystem。Axis2Dキュー、RodSnapshot、Pitch/Yaw/あおり、一入力一動作 | B/C、M09/M10 | R06/R11。旧Boolean固定数検証を意味/型別へ移行、入力/寿命/回数回帰 |
 | M10.5-E（完了） | Data/TRTypes/TREvents等の該当共通コマンド/イベント型、Fishing/TRFishingComponent/TREgiSimulationComponent、Game/TRFishingSessionActor、操作Tuning。通常解放→Stay、Quick状態/期限 | C/D、M06/M10 | R07/R08/R09のAPI・数値試験合格。2026-09-15依頼を優先: 通常完了はResult→NでReady/解除、Quick完了は直接Ready/解除。GUI部分はF/G/Hへ残す |
-| M10.5-F | UI/TRFishingHUDWidget/TRHUD、Data/TRHUDSnapshot、Game/TRPlayerController。日本語ガイド/装備パネル/拒否理由/色分離/カーソルContext、最小の前投観測表示 | D/E | R09/R10。クリック二重配送なし、公開APIとUI許可一致、読取非破壊 |
+| M10.5-F（実装・自動検証完了） | UI/TRFishingHUDWidget/TRHUD、Data/TRHUDSnapshot、Game/TRPlayerController、Session/Fishingの操作可否読取口。日本語ガイド/装備パネル/拒否理由/色分離/カーソルContext | D/E | R09/R10のAPI・UMG・入力試験合格。F 6件＋関連回帰27件成功。解像度/DPI/日本語欠字・実マウスの目視確認と保存移行はG/Hへ残す |
 | M10.5-G | Game/TRGameModeBase、TRSessionConfigDataAsset、Prototype設定/入力/メッシュ参照の明示移行、L_TR_M105_PrototypeをUEで作成。最小船/竿/エギ/ライン/方向表示 | A〜F | 保存後の別プロセス再読込、Levelを開きPlayだけで起動。旧M09設定を無言で新係数扱いしない |
 | M10.5-H | Private/TestsのM10.5 Automation/Functional Test、必要回帰、PIEチェック票/結果をDocsへ記録、調整はPrototype限定 | A〜G | R01〜R12、UHT/実C++/Development Editor Win64成功、ユーザーPIE再評価合格 |
 
@@ -477,3 +477,33 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 - Docs/GAME_DESIGN.md
 - Docs/ROADMAP.md
 - Docs/UI_SPEC.md
+
+### M10.5-F完了記録（2026-09-16、実装・自動検証）
+
+- Fは実装・自動検証範囲で合格。日本語ラベル/値の2列HUD、常時操作ガイド、Tableから生成する装備選択、変更不可理由、UI/釣り入力の排他を実装。現行の操作・表示・API契約はUI_SPEC第9節を正本とし、本節には検証と変更一覧を記録する。G/H・M11以降は未着手。
+- 中断前のコードを保持し、最終ビルドから再開した。最終確認で追加した実UMG試験が、プレイヤーコンテキストのないWorldでNativeOnInitializedが省略されレイアウト未生成となる問題を検出。RebuildWidgetでも冪等に生成するよう修正し、期待値を維持して再試験した。
+- F Automation 6件成功: JapaneseSnapshotAndGuide、EquipmentTableAndCastLock、QuickReadyAndStaleRequests、EnhancedUIInputConflictAndFocus、WidgetSessionLifetime、NativePanelKeys。日本語主要ラベル、実TextBlockの値/色、水平距離/風/潮/重量、状態/ガイド/未割当入力、3×9装備選択と総重量、投中/Result拒否、Quick帰還後の変更・再投入ロックを確認。UI捕捉中のEnhanced押下/保持とUMGボタン要求が釣り操作を発行しないこと、解放後の再操作、Pause/Focus、古いCast/世代/破棄済みSession、Native Enter/Tab/PとEnter repeat拒否を検証した。
+- 必須回帰27件成功: D 5、E 7、M09 7、M10 8。再開後の33件ではFのUMG確認1件だけが失敗し、回帰27件は成功。Widget生成修正後はF全6件＋直接影響するM09全7件の13件を再実行し、すべて成功、各試験errors/warnings=0、未実行0、終了コード0。D/E/M10のコードはこの修正で変更しておらず成功結果を保持。未変更のA〜C全試験は今回再実行していない。
+- UE5.8.2 / Visual Studio 2026 Community / MSVC14.51.36257 / Windows SDK10.0.22621.0（Win64 VALID）。初回UHTは5生成ファイル、再開後は4生成ファイル、9 C++コンパイル＋リンク等12アクション成功。Widget修正後もUHTを強制実行し成功（反射宣言変更なし、生成書換0）、6 C++コンパイル＋リンク等9アクションとDevelopment Editor Win64が成功。up-to-dateだけの確認ではない。
+- F由来の残存警告0。既存のMSVC推奨版差・Unreal5_6互換include順序案内、起動時Condition failed（Error表記）19件、Editorレイアウト警告1件、対象外SDK不足は残る。各Automation内部のエラー/警告0とは区別する。
+- 証跡（Git除外）: Saved/Logs/M105FBuild.log、M105FBuildTests.log、M105FFinalBuild.log、M105FFinalTests.log、M105FWidgetBuild.log、M105FWidgetTests.log。レポート: Saved/Automation/M105F/index.json（初回32件成功）、M105FFinal/index.json（失敗を含む診断記録）、M105FWidget/index.json（修正後13件成功）。git diff --check成功。
+- Config/Content/保存済みDataAsset/Levelは変更なし。既存HUDクラスの接続を利用するため、新日本語HUDは既存Prototypeで生成されるが、D/E操作の保存設定を移行済みとは扱わない。Gに渡すAPI/UIは用意できた。保存資産移行、解像度/DPI/日本語欠字の目視確認、実マウス操作感、最終PIE評価は未実施。R10の目視部分とR12、M10.5全体品質ゲートは未合格のまま、M11進行保留を維持する。
+
+変更ファイル（Source内はSource/TipRunFishingUE5配下、13 Source＋3 Markdown）:
+
+- Private/Fishing/TRFishingComponent.cpp
+- Private/Game/TRFishingSessionActor.cpp
+- Private/Game/TRPlayerController.cpp
+- Private/Tests/TRInputHUDTests.cpp（既存表示期待を日本語へ更新）
+- Private/Tests/TRPrototypeUITests.cpp（新規）
+- Private/UI/TRFishingHUDWidget.cpp
+- Private/UI/TRHUD.cpp
+- Private/UI/TRPrototypePresentation.cpp（新規）
+- Public/Data/TRHUDSnapshot.h
+- Public/Fishing/TRFishingComponent.h
+- Public/Game/TRFishingSessionActor.h
+- Public/Game/TRPlayerController.h
+- Public/UI/TRFishingHUDWidget.h
+- AGENTS.md
+- Docs/UI_SPEC.md
+- Docs/ROADMAP.md

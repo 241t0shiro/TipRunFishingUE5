@@ -20,6 +20,7 @@ public:
 	FTREgiSnapshot GetSnapshot() const;
 	FTREgiAction GetAction() const;
 	FTRRetrievalSnapshot GetRetrievalSnapshot(int64 Tick) const;
+	ETRCommandResult GetCommandAvailability(ETRFishingCommandType Command) const;
 	FTRFishingStateChanged OnFishingStateChanged;
 private:
 	friend class ATRFishingSessionActor;

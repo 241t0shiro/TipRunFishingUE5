@@ -18,6 +18,7 @@ void ATRPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 	InstallInputBindings(Cast<UEnhancedInputComponent>(InputComponent));
+	if (InputComponent) { InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ATRPlayerController::TogglePrototypePanel).bExecuteWhenPaused = true; }
 }
 bool ATRPlayerController::InstallInputBindings(UEnhancedInputComponent* Component)
 {
@@ -64,6 +65,7 @@ bool ATRPlayerController::BindSession(ATRFishingSessionActor* Session)
 	BoundSession = Session; ObservedCast = Session->GetCastId(); ObservedRegistration = Session->GetRegistrationId();
 	CommandHandle = Session->OnCommandProcessed.AddUObject(this, &ATRPlayerController::ObserveCommand);
 	SetMappingContext(true);
+	PrototypeObservedPhase = ETRSessionPhase::Initializing;
 	return true;
 }
 void ATRPlayerController::UnbindSession()
@@ -72,6 +74,8 @@ void ATRPlayerController::UnbindSession()
 	CommandHandle.Reset();
 	ReleaseInput(); BoundSession.Reset(); bPendingStop = false; ObservedCast = {}; ObservedRegistration = {};
 	SetMappingContext(false);
+	SetPrototypePanelOpen(false);
+	PrototypeObservedPhase = ETRSessionPhase::Initializing;
 }
 void ATRPlayerController::ReleaseInput()
 {
@@ -113,7 +117,7 @@ void ATRPlayerController::SynchronizeSession()
 }
 bool ATRPlayerController::SubmitFishingCommand(ETRFishingCommandType Command, FTRCastId ExpectedCastId, int64 TargetTick)
 {
-	if (!bInputFocused || IsActorBeingDestroyed() || !BoundSession.IsValid() || !BoundSession->IsAcceptingPlayerInput() ||
+	if (bPrototypePanelOpen || !bInputFocused || IsActorBeingDestroyed() || !BoundSession.IsValid() || !BoundSession->IsAcceptingPlayerInput() ||
 		BoundSession->IsPlayerPaused() || ExpectedCastId != BoundSession->GetCastId()) { return false; }
 	FlushPendingStop();
 	return BoundSession->SubmitCommand(Command, ExpectedCastId, TargetTick);
@@ -128,6 +132,7 @@ bool ATRPlayerController::ActionStarted(ETRPlayerAction Action, int64 TargetTick
 		Pressed.Add(Action); SetPauseRequested(!BoundSession->IsPlayerPaused()); return true;
 	}
 	if (BlockedUntilRelease.Contains(Action)) { return false; }
+	if (bPrototypePanelOpen) { BlockedUntilRelease.Add(Action); return false; }
 	if (!BoundSession.IsValid() || !bInputFocused || BoundSession->IsPlayerPaused()) { BlockedUntilRelease.Add(Action); return false; }
 	ETRFishingCommandType Command;
 	switch (Action)
@@ -164,7 +169,7 @@ void ATRPlayerController::EnhancedRodAim(const FInputActionValue& Value){SubmitM
 bool ATRPlayerController::SubmitMouseDelta(FVector2D Delta,int64 TargetTick)
 {
 	SynchronizeSession();
-	if(!bInputFocused || IsActorBeingDestroyed() || Delta.ContainsNaN() || !BoundSession.IsValid() || BoundSession->IsPlayerPaused()){return false;}
+	if(bPrototypePanelOpen || !bInputFocused || IsActorBeingDestroyed() || Delta.ContainsNaN() || !BoundSession.IsValid() || BoundSession->IsPlayerPaused()){return false;}
 	return BoundSession->SubmitRodAim(Delta,ObservedCast,ObservedRegistration,TargetTick);
 }
 void ATRPlayerController::EnhancedReleased(ETRPlayerAction Action) { ActionReleased(Action); }
@@ -184,7 +189,36 @@ void ATRPlayerController::FlushPressedKeys() { ReleaseInput(); Super::FlushPress
 void ATRPlayerController::PlayerTick(float DeltaTime) { SynchronizeSession(); Super::PlayerTick(DeltaTime); }
 FTRHUDSnapshot ATRPlayerController::GetDebugSnapshot() const
 {
-	return BoundSession.IsValid() ? BoundSession->GetHUDSnapshot() : FTRHUDSnapshot();
+	auto Copy = BoundSession.IsValid() ? BoundSession->GetHUDSnapshot() : FTRHUDSnapshot();
+	if (!Copy.bSessionValid) { return Copy; }
+	auto HasKey = [&](ETRPlayerAction Action, FKey Key)
+	{
+		if (!IsValid(InputConfig) || !IsValid(InputConfig->FishingContext)) { return false; }
+		for (const auto& Binding : InputConfig->Bindings)
+		{
+			if (Binding.Command != Action) { continue; }
+			for (const auto& Mapping : InputConfig->FishingContext->GetMappings())
+			{
+				if (Mapping.Action == Binding.Action && Mapping.Key == Key) { return true; }
+			}
+		}
+		return false;
+	};
+	auto Check = [&](ETRPlayerAction Action, FKey Key, ETRFishingCommandType Command)
+	{
+		if (!HasKey(Action, Key)) { Copy.UnmappedPrimaryInputs.Add(Command); }
+	};
+	Check(ETRPlayerAction::RodAim, EKeys::Mouse2D, ETRFishingCommandType::RodAim);
+	Check(ETRPlayerAction::Jerk, EKeys::RightMouseButton, ETRFishingCommandType::Jerk);
+	Check(ETRPlayerAction::Retrieve, EKeys::LeftMouseButton, ETRFishingCommandType::RetrieveStarted);
+	Check(ETRPlayerAction::Retrieve, EKeys::LeftMouseButton, ETRFishingCommandType::RetrieveStopped);
+	Check(ETRPlayerAction::QuickRetrieve, EKeys::Q, ETRFishingCommandType::QuickRetrieve);
+	Check(ETRPlayerAction::Fall, EKeys::F, ETRFishingCommandType::Fall);
+	if (!Copy.UnmappedPrimaryInputs.IsEmpty())
+	{
+		Copy.InputConfigurationNote = NSLOCTEXT("TRPrototype", "UnmappedPrimary", "基本操作の一部が未設定です。灰色の項目は現在使用できません。Debugキーは設定済みのものだけ使用できます。");
+	}
+	return Copy;
 }
 void ATRPlayerController::Cleanup()
 {
@@ -203,4 +237,68 @@ void ATRPlayerController::TRSetEquipment(FName EgiId, FName SinkerId)
 	TArray<FText> Errors;
 	const auto Result = BoundSession->TrySetEquipment(EgiId, SinkerId, Errors);
 	UE_LOG(LogTemp, Display, TEXT("Prototype equipment request: %s"), *StaticEnum<ETRCommandResult>()->GetNameStringByValue(int64(Result)));
+}
+
+void ATRPlayerController::EnablePrototypeUI(bool bEnabled)
+{
+	bPrototypeUIEnabled = bEnabled;
+	PrototypeObservedPhase = ETRSessionPhase::Initializing;
+	if (!bEnabled) { SetPrototypePanelOpen(false); }
+	else { RefreshPrototypePanel(); }
+}
+void ATRPlayerController::RefreshPrototypePanel()
+{
+	if (!bPrototypeUIEnabled) { return; }
+	if (!BoundSession.IsValid() || !BoundSession->IsAcceptingPlayerInput()) { SetPrototypePanelOpen(false); return; }
+	const auto Phase = BoundSession->GetSessionPhase();
+	if (Phase != PrototypeObservedPhase)
+	{
+		PrototypeObservedPhase = Phase;
+		SetPrototypePanelOpen(Phase == ETRSessionPhase::Ready || Phase == ETRSessionPhase::Result);
+	}
+}
+void ATRPlayerController::TogglePrototypePanel()
+{
+	if (!bPrototypeUIEnabled || !bInputFocused || !BoundSession.IsValid() || !BoundSession->IsAcceptingPlayerInput()) { return; }
+	SetPrototypePanelOpen(!bPrototypePanelOpen);
+}
+void ATRPlayerController::SetPrototypePanelOpen(bool bOpen)
+{
+	if (bPrototypePanelOpen == bOpen) { return; }
+	ReleaseInput(); bPrototypePanelOpen = bOpen;
+	if (!bOpen && FSlateApplication::IsInitialized())
+	{
+		// Slate may have consumed the press before Enhanced Input saw it.
+		const auto& MouseButtons = FSlateApplication::Get().GetPressedMouseButtons();
+		if (MouseButtons.Contains(EKeys::LeftMouseButton)) { BlockedUntilRelease.Add(ETRPlayerAction::Retrieve); }
+		if (MouseButtons.Contains(EKeys::RightMouseButton)) { BlockedUntilRelease.Add(ETRPlayerAction::Jerk); }
+	}
+	// UI mode is not application focus. Gameplay adapters are also gated so an
+	// unhandled click outside the panel cannot leak through GameAndUI.
+	bShowMouseCursor = bOpen;
+	if (GetLocalPlayer())
+	{
+		if (bOpen)
+		{
+			FInputModeGameAndUI Mode; Mode.SetHideCursorDuringCapture(false);
+			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock); SetInputMode(Mode);
+		}
+		else { SetInputMode(FInputModeGameOnly()); }
+	}
+	SetMappingContext(BoundSession.IsValid());
+}
+bool ATRPlayerController::SubmitUICommand(ETRFishingCommandType Command, FTRCastId ExpectedCast, FTRActorSimId ExpectedRegistration)
+{
+	if (!bPrototypePanelOpen || !bInputFocused || !BoundSession.IsValid() ||
+		BoundSession->GetCastId() != ExpectedCast || BoundSession->GetRegistrationId() != ExpectedRegistration ||
+		(Command != ETRFishingCommandType::Deploy && Command != ETRFishingCommandType::NextCast) || !BoundSession->IsCommandAvailable(Command)) { return false; }
+	// Close/flush BEFORE enqueueing, otherwise the mode change would erase this command.
+	SetPrototypePanelOpen(false);
+	return BoundSession->SubmitCommand(Command, ExpectedCast);
+}
+ETRCommandResult ATRPlayerController::SubmitUIEquipment(FName EgiId, FName SinkerId, FTRCastId ExpectedCast, FTRActorSimId ExpectedRegistration, TArray<FText>& Errors)
+{
+	if (!bPrototypePanelOpen || !bInputFocused || !BoundSession.IsValid() || !BoundSession->IsAcceptingPlayerInput() ||
+		BoundSession->GetCastId() != ExpectedCast || BoundSession->GetRegistrationId() != ExpectedRegistration) { return ETRCommandResult::RejectedInvalidState; }
+	return BoundSession->TrySetEquipment(EgiId, SinkerId, Errors);
 }

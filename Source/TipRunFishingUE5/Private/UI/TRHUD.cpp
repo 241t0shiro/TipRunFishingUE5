@@ -11,8 +11,8 @@ void ATRHUD::BeginPlay()
 		RootWidget = CreateWidget<UTRFishingHUDWidget>(PC, UTRFishingHUDWidget::StaticClass());
 		if (RootWidget)
 		{
-			RootWidget->AddToPlayerScreen(); RootWidget->SetPositionInViewport(FVector2D(16.0, 16.0));
-			RootWidget->SetDesiredSizeInViewport(FVector2D(700.0, 450.0));
+			RootWidget->AddToPlayerScreen();
+			RootWidget->BindController(PC);
 		}
 	}
 #endif
@@ -26,9 +26,10 @@ void ATRHUD::DrawHUD()
 	DisplayElapsedS += GetWorld()->GetDeltaSeconds();
 	const auto& Old = RootWidget->DisplaySnapshot;
 	if (DisplayElapsedS >= 0.1f || S.CastId != Old.CastId || S.Phase != Old.Phase ||
-		S.Egi.FishingState != Old.Egi.FishingState || S.bSessionValid != Old.bSessionValid || S.bEgiValid != Old.bEgiValid)
+		S.Egi.FishingState != Old.Egi.FishingState || S.bSessionValid != Old.bSessionValid || S.bEgiValid != Old.bEgiValid ||
+		S.bPaused != Old.bPaused || S.bEquipmentLocked != Old.bEquipmentLocked || S.bCanChangeEquipment != Old.bCanChangeEquipment)
 	{
-		RootWidget->ApplySnapshot(S); DisplayElapsedS = 0.0f;
+		RootWidget->RefreshFromController(); DisplayElapsedS = 0.0f;
 	}
 }
 void ATRHUD::EndPlay(const EEndPlayReason::Type Reason)

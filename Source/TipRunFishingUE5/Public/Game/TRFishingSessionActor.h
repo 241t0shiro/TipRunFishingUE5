@@ -54,6 +54,9 @@ public:
 	FTRHUDSnapshot GetHUDSnapshot() const;
 	bool IsAcceptingPlayerInput() const;
 	bool IsPlayerPaused() const;
+	FText GetEquipmentBlockReason() const;
+	bool IsCommandAvailable(ETRFishingCommandType Command) const;
+	void GetEquipmentOptions(TArray<FTREgiSpecRow>& Egis, TArray<FTRSinkerSpecRow>& Sinkers) const;
 	void SetPlayerPaused(bool bPaused);
 	void ClearPlayerCommands();
 	FTRCommandProcessed OnCommandProcessed;

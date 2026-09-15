@@ -36,33 +36,48 @@ void UTRFishingComponent::BeginJerk(int64 Tick)
 	if (SeriesJerkCount < MAX_int64) { ++SeriesJerkCount; }
 	TransitionTo(ETRFishingState::Jerking, Tick); StateEnteredTick = Tick;
 }
-ETRCommandResult UTRFishingComponent::HandleCommand(const FTRFishingCommand& Command, const FTRSimTime& Time)
+ETRCommandResult UTRFishingComponent::GetCommandAvailability(ETRFishingCommandType Command) const
 {
 	const bool bFishing = State == ETRFishingState::FreeFall || State == ETRFishingState::BottomContact ||
 		State == ETRFishingState::Jerking || State == ETRFishingState::TensionFall || State == ETRFishingState::Stay;
 	if (State == ETRFishingState::QuickRetrieving) { return ETRCommandResult::RejectedBusy; }
-	if (Command.Type == ETRFishingCommandType::QuickRetrieve && (bFishing || State == ETRFishingState::Retrieving))
+	if (Command == ETRFishingCommandType::QuickRetrieve && (bFishing || State == ETRFishingState::Retrieving))
 	{
-		if (QuickRetrieveTicks <= 0) { return ETRCommandResult::RejectedMissingData; }
+		return QuickRetrieveTicks > 0 ? ETRCommandResult::Accepted : ETRCommandResult::RejectedMissingData;
+	}
+	if (Command == ETRFishingCommandType::RetrieveStopped && State == ETRFishingState::Retrieving) { return ETRCommandResult::Accepted; }
+	if (Command == ETRFishingCommandType::RetrieveStarted && (bFishing || State == ETRFishingState::Retrieving)) { return ETRCommandResult::Accepted; }
+	if (bFishing && Command == ETRFishingCommandType::Jerk)
+	{
+		return State == ETRFishingState::Jerking && PendingJerkCount == MAX_int64 ? ETRCommandResult::RejectedBusy : ETRCommandResult::Accepted;
+	}
+	if (bFishing && Command == ETRFishingCommandType::Fall) { return ETRCommandResult::Accepted; }
+	if (Command == ETRFishingCommandType::TensionFall && (State == ETRFishingState::FreeFall || State == ETRFishingState::BottomContact)) { return ETRCommandResult::Accepted; }
+	return ETRCommandResult::RejectedInvalidState;
+}
+ETRCommandResult UTRFishingComponent::HandleCommand(const FTRFishingCommand& Command, const FTRSimTime& Time)
+{
+	const auto Availability = GetCommandAvailability(Command.Type);
+	if (Availability != ETRCommandResult::Accepted) { return Availability; }
+	if (Command.Type == ETRFishingCommandType::QuickRetrieve)
+	{
 		if (Time.TickIndex > MAX_int64 - QuickRetrieveTicks) { return ETRCommandResult::RejectedInvalidState; }
 		PendingJerkCount = 0; bReeling = false;
 		TransitionTo(ETRFishingState::QuickRetrieving, Time.TickIndex);
 		return ETRCommandResult::Accepted;
 	}
-	if (Command.Type == ETRFishingCommandType::RetrieveStopped && State == ETRFishingState::Retrieving)
+	if (Command.Type == ETRFishingCommandType::RetrieveStopped)
 	{
 		StopNormalRetrieve(Time.TickIndex); return ETRCommandResult::Accepted;
 	}
-	if (Command.Type == ETRFishingCommandType::RetrieveStarted && (bFishing || State == ETRFishingState::Retrieving))
+	if (Command.Type == ETRFishingCommandType::RetrieveStarted)
 	{
 		PendingJerkCount = 0; bReeling = true; TransitionTo(ETRFishingState::Retrieving, Time.TickIndex); return ETRCommandResult::Accepted;
 	}
-	if (!bFishing) { return ETRCommandResult::RejectedInvalidState; }
 	if (Command.Type == ETRFishingCommandType::Jerk)
 	{
 		if (State == ETRFishingState::Jerking)
 		{
-			if (PendingJerkCount == MAX_int64) { return ETRCommandResult::RejectedBusy; } // representational exhaustion only
 			++PendingJerkCount;
 		}
 		else { BeginJerk(Time.TickIndex); }
@@ -72,7 +87,7 @@ ETRCommandResult UTRFishingComponent::HandleCommand(const FTRFishingCommand& Com
 	{
 		PendingJerkCount = 0; TransitionTo(ETRFishingState::FreeFall, Time.TickIndex); return ETRCommandResult::Accepted;
 	}
-	if (Command.Type == ETRFishingCommandType::TensionFall && (State == ETRFishingState::FreeFall || State == ETRFishingState::BottomContact))
+	if (Command.Type == ETRFishingCommandType::TensionFall)
 	{
 		TransitionTo(ETRFishingState::TensionFall, Time.TickIndex); return ETRCommandResult::Accepted;
 	}

@@ -351,6 +351,14 @@ FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
 	Copy.bSessionValid = true; Copy.bEgiValid = bCastActive; Copy.bEquipmentLocked = bEquipmentLocked;
 	Copy.bEgiOnboard = bEgiOnboard; Copy.bCanChangeEquipment = CanChangeEquipment();
 	Copy.Phase = Phase; Copy.CastId = CurrentCastId; Copy.Equipment = GetEquipmentSnapshot();
+	Copy.bPaused = IsPlayerPaused(); Copy.EquipmentBlockReason = GetEquipmentBlockReason();
+	Copy.AvailableCommands.Reset();
+	for (const auto Command : { ETRFishingCommandType::Deploy, ETRFishingCommandType::NextCast, ETRFishingCommandType::RodAim,
+		ETRFishingCommandType::Jerk, ETRFishingCommandType::Fall, ETRFishingCommandType::RetrieveStarted,
+		ETRFishingCommandType::RetrieveStopped, ETRFishingCommandType::QuickRetrieve })
+	{
+		if (IsCommandAvailable(Command)) { Copy.AvailableCommands.Add(Command); }
+	}
 	Copy.Egi.FishingState = Fishing->GetState();
 	Copy.Retrieval = Fishing->GetRetrievalSnapshot(PublishedHUD.Retrieval.Tick);
 	Copy.Retrieval.CastId = CurrentCastId;
@@ -360,6 +368,37 @@ FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
 
 bool ATRFishingSessionActor::CanChangeEquipment() const
 {
-	return bInitialized && !IsActorBeingDestroyed() && bEgiOnboard && !bCastActive && !bEquipmentLocked &&
-		Phase == ETRSessionPhase::Ready && Coordinator.IsValid() && !Coordinator->IsSimulationPaused();
+	return GetEquipmentBlockReason().IsEmpty();
+}
+
+FText ATRFishingSessionActor::GetEquipmentBlockReason() const
+{
+	if (!bInitialized || IsActorBeingDestroyed() || !Coordinator.IsValid()) { return NSLOCTEXT("TRPrototype", "NoSession", "セッションがありません"); }
+	if (Coordinator->IsSimulationPaused()) { return NSLOCTEXT("TRPrototype", "PausedEquipment", "一時停止中は変更できません（Pで再開）"); }
+	if (Phase == ETRSessionPhase::Result) { return NSLOCTEXT("TRPrototype", "ResultEquipment", "次投へ進むと装備を変更できます（N）"); }
+	if (bCastActive) { return NSLOCTEXT("TRPrototype", "CastEquipment", "キャスト中は変更できません。クイック回収後に変更できます"); }
+	if (!bEgiOnboard) { return NSLOCTEXT("TRPrototype", "OffboardEquipment", "エギを回収してください"); }
+	if (bEquipmentLocked || Phase != ETRSessionPhase::Ready) { return NSLOCTEXT("TRPrototype", "LockedEquipment", "次投準備状態ではありません"); }
+	return FText::GetEmpty();
+}
+
+bool ATRFishingSessionActor::IsCommandAvailable(ETRFishingCommandType Command) const
+{
+	if (!IsAcceptingPlayerInput() || IsPlayerPaused() || Fishing->GetState() == ETRFishingState::QuickRetrieving) { return false; }
+	if (Command == ETRFishingCommandType::Deploy) { return Fishing->GetState() == ETRFishingState::Ready && CanChangeEquipment() && IsValid(SelectedEgiMesh) && NextCastValue < MAX_int64; }
+	if (Command == ETRFishingCommandType::NextCast) { return bHasResult && !bCastActive; }
+	if (Command == ETRFishingCommandType::RodAim) { return (bCastActive || Phase == ETRSessionPhase::Ready) && RodControl->IsInitialized(); }
+	return bCastActive && Fishing->GetCommandAvailability(Command) == ETRCommandResult::Accepted;
+}
+
+void ATRFishingSessionActor::GetEquipmentOptions(TArray<FTREgiSpecRow>& Egis, TArray<FTRSinkerSpecRow>& Sinkers) const
+{
+	Egis.Reset(); Sinkers.Reset();
+	if (!bInitialized || IsActorBeingDestroyed() || !IsValid(EgiTable) || !IsValid(SinkerTable)) { return; }
+	TArray<FTREgiSpecRow*> EgiRows; EgiTable->GetAllRows(TEXT("Prototype equipment choices"), EgiRows);
+	TArray<FTRSinkerSpecRow*> SinkerRows; SinkerTable->GetAllRows(TEXT("Prototype equipment choices"), SinkerRows);
+	for (const auto* Row : EgiRows) { if (Row) { Egis.Add(*Row); } }
+	for (const auto* Row : SinkerRows) { if (Row) { Sinkers.Add(*Row); } }
+	Egis.Sort([](const auto& A, const auto& B) { return A.BaseMassG == B.BaseMassG ? A.EgiId.LexicalLess(B.EgiId) : A.BaseMassG < B.BaseMassG; });
+	Sinkers.Sort([](const auto& A, const auto& B) { return A.MassG == B.MassG ? A.SinkerId.LexicalLess(B.SinkerId) : A.MassG < B.MassG; });
 }
