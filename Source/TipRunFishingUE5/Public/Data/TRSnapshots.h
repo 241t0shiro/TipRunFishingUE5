@@ -5,6 +5,23 @@
 #include "Data/TRTypes.h"
 #include "TRSnapshots.generated.h"
 
+// Operation/tempo data, separate from the last physically integrated Egi sample.
+USTRUCT(BlueprintType)
+struct TIPRUNFISHINGUE5_API FTRRetrievalSnapshot
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") FTRCastId CastId;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") int64 Tick = 0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") bool bIsRetrieving = false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") bool bIsQuickRetrieving = false;
+	// Quick/Ready/Result are not underwater targets for future Attack/Bite/Hook evaluation.
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") bool bUnderwaterSimulationActive = false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") float RetrieveSpeedMps = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") float RequestedRetrieveSpeedMps = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") float RemainingLineLengthM = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Retrieve") double QuickRetrieveProgress01 = 0.0;
+};
+
 // These are copies of authoritative values. Consumers receive const references/copies.
 // No Actor, Component or UObject ownership is carried across subsystem boundaries.
 

@@ -30,7 +30,8 @@ enum class ETRFishingState : uint8
 	Retrieving,
 	Fighting,
 	Landing,
-	Result
+	Result,
+	QuickRetrieving
 };
 
 UENUM(BlueprintType)
@@ -119,7 +120,8 @@ enum class ETRFishingCommandType : uint8
 	RetrieveStopped,
 	EndFishing,
 	NextCast,
-	RodAim
+	RodAim,
+	QuickRetrieve
 };
 
 UENUM(BlueprintType)

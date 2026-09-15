@@ -1,5 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
+2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
+
 2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
 
 2026-09-14 M10.5-C完了: Egi WorldPositionを位置正本へ移行し、revision 2の深度潮/水中ライン抗力/需要繰出し/空間拘束とSnapshotを実装。UHT生成・実C++・Development Editor Win64成功、C 6件（243落下条件含む）＋回帰49件成功、各試験エラー/警告0。標準30mの最大ライン39.299694m、最長50.550秒で着底。保存Prototypeは旧係数revision 1のまま、資産移行/新モデルPIEは未実施。D〜H・M11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA/B完了・設計のみの記録は履歴。
@@ -181,7 +183,7 @@ M03でOceanAreaDataAsset、平底SeabedProvider、OceanWorldSubsystemを追加�
 | D10 | 保留 | MVP暫定: 固定重量テストイカ。重量分布は実装しない | 固定kg値は試験設定。製品仕様はAlpha前に再決定 |
 | D11 | 保留 | MVP暫定: 仮BITE Cue 1種類、3種へ拡張可能な型 | 3種演出・大型との相関等、製品仕様はAlpha前に再決定 |
 | D12 | 基本操作決定（M10.5改訂） | マウス竿操作、右クリックShakuri、左保持通常回収、F再Fall、Q Quick Retrieve、Enter投入。日本語Prototype HUD・装備UI | マウス中心は製品基本方針。感度/可動域/演出/製品レイアウト・パッド最終配置は未確定 |
-| D13 | MVP決定（M10.5改訂） | MISSで投を終了せずStayまたは再Fall。通常回収と中途停止不可のQuick Retrieveを分離、回収完了後Ready/装備変更可 | 釣獲/バラシ/明示中断の終端処理はFISHING参照 |
+| D13 | MVP決定（2026-09-15 E依頼で明確化） | MISSで投を終了せずStayまたは再Fall。通常回収完了はResult（装備ロック継続）→NextCastでReady/解除。中途停止不可のQuick完了は直接Ready/解除 | 両回収を直接Readyとする旧案を置換。釣獲/バラシ/明示中断の終端処理はFISHING参照 |
 | D14 | 保留 | MVP非対象・非ブロック。境界/岸/根掛かりゲーム仕様を追加しない | Alpha以降。無効データ防御は技術処理として維持 |
 | D15 | MVP決定（M10.5改訂） | 風・表層潮・深度別水平潮を分離。船へ風/表層潮、エギと海中ラインへ深度別潮。一定場と層別場を検証 | 地形/位置に応じたCurrent/Wind Fieldへ拡張可能。波物理/CFD/鉛直潮/実海域場は後続の別設計 |
 | D16 | 保留 | MVP非対象・非ブロック: 自由操船等 | Alpha以降 |
@@ -250,7 +252,7 @@ WorldPositionM（m、+Z上）を唯一の位置正本とし、PositionXYM/DepthM
 
 ### 回収と次投
 
-通常回収解放は中途終了ではなく、同Castの水中運動へ復帰。QuickRetrieveはQuickRetrievingへ入り、途中停止不可・攻撃/合わせ不可・固定sim所要時間で船上帰還する別経路。両回収完了は一度だけRetrieved（重量付き釣果なし）と前投装備を保存してCast終了・船上帰還を確定し、Readyへ進む技術契約とする。M10のResult→N必須経路は通常回収でも簡略化し、結果は非モーダル通知で保持する。Quick完了後にNを要求しない。Caught/Abort等の後続結果経路は変更せず、AbortやActor破棄で帰還を捏造しない。
+通常回収解放は中途終了ではなく、同Castの水中運動へ復帰。QuickRetrieveはQuickRetrievingへ入り、途中停止不可・攻撃/合わせ不可・固定sim所要時間で船上帰還する別経路。2026-09-15のE依頼に従い、通常回収完了はRetrieved→Cast終了・船上帰還→Result（装備ロック維持）とし、NextCast（N）でReady/解除する。Quick完了は一度だけRetrieved→Cast終了・船上帰還→Ready/解除とし、Nを要求しない。双方とも前投結果と装備を保存する。両回収を直接Readyとする旧案は撤回。Caught/Abort等の後続結果経路は変更せず、AbortやActor破棄で帰還を捏造しない。
 
 Readyかつ船上・活動Castなし・非Pauseで装備変更を許可。次のDeployが新CastIdと装備凍結を原子的に確定する。UIと公開APIが同じ条件を確認し、古いReady画面や旧CastIdによる変更を拒否する。
 

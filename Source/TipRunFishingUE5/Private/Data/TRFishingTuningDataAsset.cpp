@@ -36,6 +36,8 @@ namespace
 bool FTRFishingParameters::Validate(TArray<FText>& Errors) const
 {
 	bool bValid = true;
+	bValid &= RequireFishingTuning(FMath::IsFinite(QuickRetrieveDurationS) && QuickRetrieveDurationS >= 0.0,
+		TEXT("QuickRetrieveDurationS must be finite and nonnegative (zero means unavailable)"), Errors);
 	if (EgiModelRevision == 2)
 	{
 		bValid &= RequireFishingTuning(FMath::IsFinite(VerticalResponsePerS) && VerticalResponsePerS > 0 &&

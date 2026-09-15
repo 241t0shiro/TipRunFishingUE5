@@ -1,5 +1,7 @@
 # 釣りシステム技術設計
 
+2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
+
 2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
 
 2026-09-14 M10.5-C完了: Egi WorldPositionを位置正本へ移行し、revision 2の深度潮/水中ライン抗力/需要繰出し/空間拘束とSnapshotを実装。UHT生成・実C++・Development Editor Win64成功、C 6件（243落下条件含む）＋回帰49件成功、各試験エラー/警告0。標準30mの最大ライン39.299694m、最長50.550秒で着底。保存Prototypeは旧係数revision 1のまま、資産移行/新モデルPIEは未実施。D〜H・M11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA/B完了・設計のみの記録は履歴。
@@ -73,7 +75,7 @@ Retrieve完了でCastを終了し、エギの船上帰還を論理状態とし�
 STAYは「竿をあおるシャクリ動作をしていない通常の釣り状態」。FreeFall・着底・回収・Fight等まで無入力だけでStayに分類しない。原則の遷移は `Shakuri -> TensionFall -> Stay`。本書のShakuriは既存enumのJerkingに対応し、今回enumの改名は行わない。
 
 `ETRFishingState`:
-`Inactive, Ready, Deploying, FreeFall, BottomContact, Jerking, TensionFall, Stay, Retrieving, Fighting, Landing, Result`
+`Inactive, Ready, Deploying, FreeFall, BottomContact, Jerking, TensionFall, Stay, Retrieving, Fighting, Landing, Result, QuickRetrieving`
 
 **Attack/Bite/HIT/MISSをFishingStateに追加しない。** Attack/BiteはAI状態、HIT/MISSは `ETRHookOutcome`。Bite中のエギはStayのままである。
 
@@ -97,6 +99,9 @@ STAYは「竿をあおるシャクリ動作をしていない通常の釣り状�
 | Stay | 有効なHook入力でHit | Fighting | ラインモデルの所有を簡易ファイトへ切替 |
 | Stay等 | Hook入力がEarly/Late/NoBite | 元の状態 | MISS通知と機会消費。詳細SQUID_AI |
 | Retrieving | ライン回収閾値到達 | Result | Cast終了と船上帰還を確定。Caughtにはしない。Escaped / Missed / Retrievedを履歴で選ぶ |
+| Retrieving | 左解放/取消・安全停止 | Stay（底ならBottomContact） | 位置・速度・ラインは保持し、巻取りだけ停止 |
+| FreeFall / BottomContact / Jerking / TensionFall / Stay / Retrieving | QuickRetrieve | QuickRetrieving | 予約/通常巻取りを解除、水中積分停止、固定Tick期限開始 |
+| QuickRetrieving | 固定期限完了 | Ready | Retrieved・Cast終了・船上帰還・装備解除を一度だけ確定。Resultを挟まない |
 | Fighting | ファイト成功 | Landing | Caught候補を固定 |
 | Fighting | 過大テンションが規定時間継続 | Stay | バラシ通知、bHadEscape=true、対象解放。投は回収まで継続する技術案 |
 | Landing | 論理的取り込み完了 | Result | Caughtを一度だけ確定。演出完了依存にしない |
@@ -323,7 +328,7 @@ Stayでは船・竿先・エギ深度潮・ライン抗力/角度/長さと重�
 
 左押下でRetrieving/ReelIn、保持中だけLを巻き取る。左解放/取消は巻取り速度を0にし、同CastのStayへ戻す技術契約（海底接触中はBottomContact優先）。その入力境界でWorldPosition/Velocity/L/Angleを初期化せず、次の固定積分から潮・船・重量による運動を継続する。旧Retrievingのままの沈下係数は使わない。解放でFreeFall自動繰出しを開始せず、船直下スナップもしない。
 
-通常回収の完了条件は竿先直下の海面近傍（深度/水平距離が設定許容内）を維持し、海中モデルの外へ無理に引き上げない。Retrieved→船上帰還→ReadyをSessionが一度だけ確定し、装備UIを有効化する。旧Result→N必須を廃止する改訂技術契約。前投の結果・装備は保持する。
+通常回収の完了条件は竿先直下の海面近傍（深度/水平距離が設定許容内）を維持し、海中モデルの外へ無理に引き上げない。2026-09-15のE依頼を優先し、通常回収はRetrieved→船上帰還→Resultとする。Result中は装備ロックを維持し、NextCast（N）でReadyへ進むと解除する。Quickだけが直接Readyへ進む。両回収を直接Readyとした旧案を置き換え、前投の結果・装備は保持する。
 
 ### Quick Retrieve
 
@@ -365,3 +370,19 @@ Quickは通常水中物理を凍結するテンポ改善の回収経路。開始
 - DataAsset項目: Pitch/Yaw最小最大・初期値、感度XY、反転XY、MaxMouseDelta、MaxAimRateRadPerS、LengthM、MountOffsetM、ShakuriAmplitudeRad、UpSeconds、ReturnSeconds。有限/範囲/正値をRuntime/IsDataValidで検証し、Session初期化では最小Pitchの竿先が海面下へ入らないことを検査する。
 - Test値: Pitch[0,1.2]rad、Yaw[-0.6,0.6]rad、初期Pitch0.1rad/Yaw0、感度X0.01/Y0.02、delta上限50、最大操作角速度1.2rad/s、竿2m、船相対取付(0,0,1)m、振幅0.3rad、Up0.15秒/Return0.25秒（60Hzで9+15=24Tick）。製品値/実測値ではない。Cの空間調整値は専用Test設定を利用する。
 - Eの左マウス回収・解放後Stay・Quick・帰還Ready変更は今回なし。Dの試験/回帰結果はROADMAPを参照。保存PrototypeへRod/Inputを割当てる資産移行、実マウスPIEと操作感の確認はG/Hへ残す。
+
+## 12. M10.5-E Normal / Quick Retrieve実装契約（2026-09-15）
+
+- 通常回収は既存RetrieveStarted/Stoppedの意味を維持し、Left Mouse/R/パッドを同一Boolean Actionへ接続。Startedで1回だけ開始、保持中はFishingのbReelingからReelInを継続、Completed/Canceledで停止。Controllerは数値を変更せず、既存Session→固定Tick/Sequence/CastId/登録世代の経路を使用する。
+- StopNormalRetrieveは同じCastのStayへ戻す。既に海底接触中ならBottomContactを優先する。入力境界でWorldPosition/Velocity/LineLength/LineDirection/Angle/Offset/Currentを変更しない。次の固定積分からStay係数でCの潮・重量・ライン抗力・Boat/Rod移動を継続する。自動繰出し/船直下スナップはない。再Shakuri/Re-Fall/Retrieveが可能。
+- 既存FishingTuningのReelMps（要求速度m/s）、MinLineM、RetrievalToleranceMを再利用し、一投開始時のEquipment Snapshotで凍結する。加速/減速の製品値は追加しない。解放時の巻取りは即0。通常回収はライン長を短縮してCの球面拘束を解き、エギ位置の直接Lerpはしない。
+- Cの海面交差円で、補正済み座標の丸め誤差を半径の厳密超過と判定し続ける問題を修正。既存1e-5m許容を交差円でも使用する。通常回収の海面近傍では一定dL/dtが水平速度の急増を生むため、h=竿先海面上高さ、r=更新前位置と当該竿先の水平距離、v=要求巻取り速度、dt=内部刻みから、rNext=max(0,r-v*dt)、Lsurface=sqrt(h*h+rNext*rNext)を算出。海面に接する場合は要求ライン長をLsurface以上（ただし元のL以下）に制限する。巻取りを遅くする幾何条件であり、エギ位置の直接移動や速度上限緩和ではない。速度拘束にも実際に短縮したL/dtを使用する。海面から離れた通常回収は従来のv*dt巻取り。
+- 通常完了は従来の深度/竿先水平距離<=RetrievalToleranceMを満たす巻取り中に一度だけRetrieved。SessionはOnboard/Cast終了/Resultを確定し、装備はロックしたまま。NextCastでReady/解除する。今回のユーザー明示指定に従うため、M10.5設計当初の「両回収が直接Ready」は置換した。
+- QuickRetrieveコマンドとQuickRetrieving状態は既存enumの末尾へ追加し、保存済みenum値を変えない。FreeFall/Bottom/Jerking/TF/Stay/通常Retrievingで受理し、未実行Jerkと通常巻取りを解除する。Ready/Result/船上ではRejectedInvalidState、Quick中の釣りコマンド（再Q、左停止、F、Jerk、Hook、RodAim、Deploy、NextCast等）はRejectedBusy。同TickでもSequence順に受理/拒否を通知し、後続コマンドを無言で一括破棄しない。明示EndFishing/Session終了/Actor破棄は安全中断を優先する。
+- FishingTuning.QuickRetrieveDurationSを投開始時に凍結し、共通ceil換算の整数QuickRetrieveTicksで管理。Tick-開始Tick>=所要Tickで完了、ライン長非依存、TimerManager/実時間/演出通知不使用。保存済み旧設定の既定0は「未設定・Quick利用不可」として互換読込し、要求にはRejectedMissingDataを返す。有限非負、正値のTick表現可能性、開始Tickとの加算範囲を検証する。起動InputにQuickを割り当てるなら正の明示時間を要求する。
+- Quick中は最後の物理Egi SnapshotとRod姿勢を保持し、Egi/ライン積分を停止。Boat/Oceanは通常固定更新を継続する。FTRRetrievalSnapshot.bUnderwaterSimulationActive=falseとQuick状態により後続Attack/Bite/Hookの対象不適格を表す。演出用補間位置は今回追加せず、凍結位置を最新の水中物理として扱わない。Egi Snapshot.Tickは最終積分時刻、Retrieval.Tickは操作進捗時刻として区別する。環境・対象寿命が無効なら帰還を捏造せずAborted。
+- Quick完了は一度だけRetrieved、bQuickRetrieved=true、過去装備コピー、Egi数値/Actor解放、Onboard、Cast終了、Ready、装備解除を同固定Tickで確定。CastIdを保持し次Deployでのみ採番。登録世代を更新して古い入力を失効させる。終端通知は既存Publish方式で新登録の次のPublish時に一度だけ配送する。物理期限と通知配送を区別する。N追加操作は不要。
+- Pause/Focus LostはControllerの保持・キューを解除する。Sessionには通常回収の安全停止要求も残し、Pauseでキューが破棄されても再開の最初の固定境界で適用する（Pause中の数値更新はなし）。Quick受理時はControllerの保持も同期解除し、保持キーを解放確認まで再受付しない。Quick自体はFocus Lostで中断せず、Pauseでは期限を進めない。Controllerの結果観測delegateは接続/解除を対にし弱いUObjectバインドを使用。
+- FTRRetrievalSnapshotはCastId/Tick、bIsRetrieving/bIsQuickRetrieving、bUnderwaterSimulationActive、RetrieveSpeedMps（直前の実ライン減少/固定dt）、RequestedRetrieveSpeedMps、RemainingLineLengthM、QuickRetrieveProgress01を読取コピーとして提供する。実速度はfloatライン値由来の丸めを含む。非巻取り中は両速度0。HUD集約型にRetrievalを追加し、装備ロック/変更許可は既存フィールドを維持する。FTRCatchResult.bQuickRetrievedはQuick成功のみtrue、Abortはfalse。Range評価・AI・日本語表示は追加しない。
+- Test設定はA/B/C/Dの明示revision 2、平底30m、潮(0.2,0,0)m/s、風(0,2)m/s、Dと同じ竿、要求巻取り1m/s、Quick1.5秒=60Hzで90Tick。製品値/実測値ではない。長いライン2/30/80/100mは投入時余長の隔離条件で、標準FreeFallの過大繰出しを許す試験ではない。
+- E 7件と必要回帰54件が成功。通常回収停止境界、Enhanced Action押下/保持/解放、幾何、Quick全開始状態/期限/拒否、Pause/Focus、装備変更/次投、旧Cast/登録世代/破棄、30/60/120fps、読取非破壊、設定検証/シリアライズを確認。実マウス・PIE・保存資産移行は未実施。ログ/ファイル一覧はROADMAPのE完了記録を参照。

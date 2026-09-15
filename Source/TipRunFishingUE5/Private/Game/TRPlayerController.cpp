@@ -62,11 +62,14 @@ bool ATRPlayerController::BindSession(ATRFishingSessionActor* Session)
 	UnbindSession();
 	if (!IsValid(Session) || Session->IsActorBeingDestroyed() || Session->GetWorld() != GetWorld() || !Session->IsAcceptingPlayerInput()) { return false; }
 	BoundSession = Session; ObservedCast = Session->GetCastId(); ObservedRegistration = Session->GetRegistrationId();
+	CommandHandle = Session->OnCommandProcessed.AddUObject(this, &ATRPlayerController::ObserveCommand);
 	SetMappingContext(true);
 	return true;
 }
 void ATRPlayerController::UnbindSession()
 {
+	if (BoundSession.IsValid()) { BoundSession->OnCommandProcessed.Remove(CommandHandle); }
+	CommandHandle.Reset();
 	ReleaseInput(); BoundSession.Reset(); bPendingStop = false; ObservedCast = {}; ObservedRegistration = {};
 	SetMappingContext(false);
 }
@@ -78,6 +81,13 @@ void ATRPlayerController::ReleaseInput()
 	bRetrieveHeld = false;
 	if (BoundSession.IsValid()) { BoundSession->ClearPlayerCommands(); }
 	FlushPendingStop();
+}
+void ATRPlayerController::ObserveCommand(const FTRFishingCommand& Command, ETRCommandResult Result)
+{
+	if (Command.Type != ETRFishingCommandType::QuickRetrieve || Result != ETRCommandResult::Accepted) { return; }
+	// Input bookkeeping only. Never discard later same-tick commands: simulation must reject them in sequence.
+	for (ETRPlayerAction Action : Pressed) { BlockedUntilRelease.Add(Action); }
+	Pressed.Empty(); bRetrieveHeld = false; bPendingStop = false;
 }
 void ATRPlayerController::FlushPendingStop()
 {
@@ -128,6 +138,7 @@ bool ATRPlayerController::ActionStarted(ETRPlayerAction Action, int64 TargetTick
 	case ETRPlayerAction::TensionFall: Command = ETRFishingCommandType::TensionFall; break;
 	case ETRPlayerAction::Hook: Command = ETRFishingCommandType::Hook; break;
 	case ETRPlayerAction::Retrieve: Command = ETRFishingCommandType::RetrieveStarted; break;
+	case ETRPlayerAction::QuickRetrieve: Command = ETRFishingCommandType::QuickRetrieve; break;
 	case ETRPlayerAction::Cancel: Command = ETRFishingCommandType::EndFishing; break;
 	case ETRPlayerAction::NextCast: Command = ETRFishingCommandType::NextCast; break;
 	default: return false;

@@ -20,6 +20,7 @@ struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTREgiSnapshot Egi;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRBoatSnapshot Boat;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRRodSnapshot Rod;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRRetrievalSnapshot Retrieval;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTROceanSample Ocean;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTREquipmentSnapshot Equipment;
 };

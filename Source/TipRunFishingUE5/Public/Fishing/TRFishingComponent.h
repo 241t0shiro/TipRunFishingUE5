@@ -19,13 +19,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "TipRun|Fishing")
 	FTREgiSnapshot GetSnapshot() const;
 	FTREgiAction GetAction() const;
+	FTRRetrievalSnapshot GetRetrievalSnapshot(int64 Tick) const;
 	FTRFishingStateChanged OnFishingStateChanged;
 private:
 	friend class ATRFishingSessionActor;
 	void Prepare();
 	void BeginCast(FTRCastId Id, const FTRSimTime& Time, const FTREquipmentSnapshot& Equipment);
 	bool CompleteDeployment(const FTRBoatSnapshot& Boat, const FTROceanSample& Ocean, int64 Tick);
-	void FinishCast();
+	void FinishCast(int64 Tick, bool bQuickReturned = false);
+	void StopNormalRetrieve(int64 Tick);
+	bool IsQuickRetrieveComplete(const FTRSimTime& Time) const;
 	void Stop();
 	void ApplyEgiStep(const FTREgiSnapshot& Updated, ETREgiStepEvent Event, bool bTransientComplete = false);
 	ETRCommandResult HandleCommand(const FTRFishingCommand& Command, const FTRSimTime& Time);
@@ -34,6 +37,8 @@ private:
 	void BeginJerk(int64 Tick);
 	int64 JerkCount = 0, SeriesJerkCount = 0, PendingJerkCount = 0, StayPenaltyJerkCount = 0;
 	int64 StateEnteredTick = 0, JerkTicks = 0;
+	int64 QuickRetrieveTicks = 0;
+	float LastRetrieveSpeedMps = 0.0f;
 	double RangeObservationSeconds = 0.0, StepSeconds = 0.0;
 	bool bSeriesClosed = false, bReeling = false;
 	TArray<TPair<ETRFishingState, ETRFishingState>> PendingTransitions;

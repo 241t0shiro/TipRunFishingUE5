@@ -103,6 +103,10 @@ struct TIPRUNFISHINGUE5_API FTRCatchResult
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	ETRCastOutcome Outcome = ETRCastOutcome::Aborted;
 
+	// True only for a completed Quick return, never for an interrupted one.
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
+	bool bQuickRetrieved = false;
+
 	// Only Caught may carry a catch weight. Other outcomes display no catch.
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	float WeightKg = 0.0f;

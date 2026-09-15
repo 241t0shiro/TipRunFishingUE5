@@ -1,5 +1,7 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
+
 2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
 
 2026-09-14 M10.5-C完了: Egi WorldPositionを位置正本へ移行し、revision 2の深度潮/水中ライン抗力/需要繰出し/空間拘束とSnapshotを実装。UHT生成・実C++・Development Editor Win64成功、C 6件（243落下条件含む）＋回帰49件成功、各試験エラー/警告0。標準30mの最大ライン39.299694m、最長50.550秒で着底。保存Prototypeは旧係数revision 1のまま、資産移行/新モデルPIEは未実施。D〜H・M11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA/B完了・設計のみの記録は履歴。
@@ -274,7 +276,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 
 ## 7. M10.5 Prototype Realism Revision — 正式品質ゲート
 
-状態: **設計改訂済み、A実装/検証完了、B〜H実装未着手、全体品質ゲート未合格。M11〜M18は未着手・進行保留。** M10までの自動試験証跡は保持する。今回の変更はAGENTSと7設計書のみ。コード/Config/Contentを変更せず、ビルドやAutomationを実行した記録を追加しない。
+状態（2026-09-15）: **A〜E実装/自動検証完了、F〜H未着手、全体品質ゲート未合格。M11〜M18は未着手・進行保留。** M10までの証跡と各段階の完了記録を保持する。保存資産移行・新Level・PIE品質再評価はG/Hの未実施項目であり、自動試験合格で代用しない。
 
 ### Codex実装単位
 
@@ -286,7 +288,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 | M10.5-B（完了） | Data/TRBoatTuningDataAsset、Boat/TRBoatDriftComponent/TRBoatPawn。風＋表層潮応答、抗力/慣性、取付Transform | A、M04/M05 | R02。解析応答と同/逆/直交、Boat固定更新回帰 |
 | M10.5-C（完了） | Data/TRSnapshots/TRFishingTuningDataAsset、Fishing/TREgiSimulationComponent/TREgiActor、Session接続。WorldPosition正本、需要繰出し、ライン抗力/制約、水平距離、旧値の読取互換 | A/B、M07/M08 | R03/R04/R05。30m着底・27装備・空間レンジの純粋/Session試験、描画座標回帰 |
 | M10.5-D（完了） | Fishing/TRRodControlComponent（予定新規）、Data/TRRodTuningDataAsset（予定新規）、TRInputConfigDataAsset、Game/TRPlayerController/TRFishingSessionActor/TRSimulationWorldSubsystem。Axis2Dキュー、RodSnapshot、Pitch/Yaw/あおり、一入力一動作 | B/C、M09/M10 | R06/R11。旧Boolean固定数検証を意味/型別へ移行、入力/寿命/回数回帰 |
-| M10.5-E | Data/TRTypes/TREvents等の該当共通コマンド/イベント型、Fishing/TRFishingComponent/TREgiSimulationComponent、Game/TRFishingSessionActor、操作Tuning。通常解放→Stay、Quick状態/期限、両回収後Ready | C/D、M06/M10 | R07/R08/R09。旧Result→N必須/解放後Retrieving期待を新契約へ置換 |
+| M10.5-E（完了） | Data/TRTypes/TREvents等の該当共通コマンド/イベント型、Fishing/TRFishingComponent/TREgiSimulationComponent、Game/TRFishingSessionActor、操作Tuning。通常解放→Stay、Quick状態/期限 | C/D、M06/M10 | R07/R08/R09のAPI・数値試験合格。2026-09-15依頼を優先: 通常完了はResult→NでReady/解除、Quick完了は直接Ready/解除。GUI部分はF/G/Hへ残す |
 | M10.5-F | UI/TRFishingHUDWidget/TRHUD、Data/TRHUDSnapshot、Game/TRPlayerController。日本語ガイド/装備パネル/拒否理由/色分離/カーソルContext、最小の前投観測表示 | D/E | R09/R10。クリック二重配送なし、公開APIとUI許可一致、読取非破壊 |
 | M10.5-G | Game/TRGameModeBase、TRSessionConfigDataAsset、Prototype設定/入力/メッシュ参照の明示移行、L_TR_M105_PrototypeをUEで作成。最小船/竿/エギ/ライン/方向表示 | A〜F | 保存後の別プロセス再読込、Levelを開きPlayだけで起動。旧M09設定を無言で新係数扱いしない |
 | M10.5-H | Private/TestsのM10.5 Automation/Functional Test、必要回帰、PIEチェック票/結果をDocsへ記録、調整はPrototype限定 | A〜G | R01〜R12、UHT/実C++/Development Editor Win64成功、ユーザーPIE再評価合格 |
@@ -307,7 +309,7 @@ A/B/C/D/Eは各段階で反射変更を通常ビルド/UHTと関連Automationで
 | R04 重量/レンジ | 同一形状係数で30/35/40g＋各シンカー、同じ初期世界位置/竿/L/風/潮 | 静水自由ラインで総重量増に応じた沈下曲線の差。別の一定環境・非境界の共通初期幾何で軽量/中間/重量過多を比較し、10 sim秒のStayで軽量は深度0.2m以上減、中間は全観測深度幅0.1m以下、重量過多は0.2m以上増を試験案とする。中間だけ係数/位置/潮を差替えない。適切な試験環境はCで校正・固定しGのPIE比較にも同一設定を使う。全ケース接触なし、レンジスコア/BITE評価は作らない |
 | R05 空間/ライン | 船とエギで異なる入力場、深度潮/ライン抗力を独立変更、竿移動、大dt | 非退化条件で船/エギ速度が異なり、水平距離/深度/角度が変化。ライン抗力係数0/正の比較で寄与を分離。D<=L+1e-3m、海面/海底貫通<=1e-3m、NaN/発散なし。1/60、1/30、0.25、1秒の各刻みの安全性を確認（異なる刻み間の厳密一致は要求しない） |
 | R06 マウス/竿 | 右1/3/11/20押下・長押し、Axis2D、極値、連続入力、姿勢復帰 | 押下数=実動作数（明示取消分を除外）、保持連打なし。基準Yaw/PitchとTip Transform一致、合成姿勢も範囲内、あおり後は最新マウス基準へ復帰。作用を二重加算しない。Shakuri→TF→Stay、FreeFall/Bottom無入力でAutoStayなし |
-| R07 通常回収 | 左保持/解放/再押下、途中停止 | 保持中のみL減少。解放コマンド境界でWorldPosition/Velocity/Lを維持、角は同じ端点から導出。次ステップからStay相当の運動、底ならBottom優先。船直下スナップ/FreeFall繰出しなし。通常完了は一度だけ帰還/Ready |
+| R07 通常回収 | 左保持/解放/再押下、途中停止 | 保持中のみL減少。解放コマンド境界でWorldPosition/Velocity/Lを維持、角は同じ端点から導出。次ステップからStay相当の運動、底ならBottom優先。船直下スナップ/FreeFall繰出しなし。通常完了は一度だけ帰還/Result（ロック維持）、NでReady/解除 |
 | R08 Quick | Q、長さ2/30/80/100m、再Q/左解放/F/Hook、Pause/破棄/旧Cast | 全Lで同じDurationTicks、終了1Tick前は未完、終了Tickで一度だけRetrieved/Onboard/Ready。Attack/Bite対象不適格、Hook拒否。途中停止不可、Pause中期限不進行。Session破棄後の完了0件。長いLはD<=Lかつ有効な海面/海底/設定上限を満たす初期状態を直接構成する隔離試験であり標準FreeFallの異常を許可する意味ではない |
 | R09 装備 | 初投Ready、投中/回収中/Quick/Pause、両回収後Ready、古いUI要求 | Ready/船上だけ27組合せ変更成功。投中拒否、次Deployで重量/係数/メッシュが新値へ、再ロック。前投結果は旧装備を保持。GUIだけで完了でき、拒否理由を日本語表示 |
 | R10 UI/表示 | 日本語、操作案内、ラベル/値色、1280×720/1920×1080・拡大率100/150%、UIクリック | 必須全項目が読める。UIクリックによる回収/シャクリ0件。Snapshot反復取得で時計/位置/キュー不変。水中無効/Quick/船上を0深度で偽装しない。日本語フォント欠落/文字切れなし |
@@ -437,3 +439,41 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 - Docs/UI_SPEC.md
 - Docs/GAME_DESIGN.md
 - Docs/ROADMAP.md
+
+### M10.5-E完了記録（2026-09-15）
+
+- E合格。中断地点のgit status/diff、実装、ビルド/試験証跡を確認した結果、Eの18 Sourceファイルは既に実装・検証済みだった。再開後はコードを作り直さず、UI_SPECの入力/データ接続説明と本節の完了記録を補完した。再開前後の18ファイルのSHA256一致を確認。
+- 通常回収は左保持（Rバックアップ）から固定Input Queueを経由してラインを短縮し、Cの空間拘束でエギを移動する。解放は位置/速度/ラインを引き継ぐStay相当、通常完了はResultで装備ロック維持、NextCastでReady/解除。Quickは独立状態で固定Tickの所要時間を使い、完了時に直接Ready/解除する。詳細契約と調整値はFISHING_SYSTEM第12節、入力資産の接続はUI_SPEC第9節を正本とする。
+- 中断前のE修正には、海面付近のライン拘束の丸め誤差許容と、巻取り時の海面交差幾何に応じた実繰取り量の制限を含む。Egiを船へ直接移動する処理や、Cの速度上限を緩める回避策は追加していない。
+- E Automation 7件成功: NormalInputReleaseContinuity、NormalCompletionResultLock、QuickDurationRestrictionsAndUnlock、PauseFocusAndDestruction、QuickEntryStatesAndAbort、FixedFramesAndReadOnlySnapshot、ConfigurationAndSafety。保持/解放と再操作、通常Resultロック、Quickの他入力拒否・途中停止不可・一度だけの完了、即装備変更と次投ロック、Pause/Focus/Cast/寿命、30/60/120fps、有限数、設定検証を確認。長さ2/30/80/100mのQuick試験は初期余長を与えた独立条件であり、標準FreeFallの繰出し量ではない。1.5秒はPrototype試験値で製品値ではない。
+- 中断前はE 7件＋回帰54件、計61件成功。再開後はE 7件＋直接関連回帰32件（C 6、D 5、M04 6、M09 7、M10 8）、計39件成功、失敗/未実行0、各試験errors/warnings=0、実行終了コード0。未変更のA/Bは中断前の成功記録を保持し、再開後は再実行していない。
+- UE5.8.2 / Visual Studio 2026 Community / MSVC14.51.36257 / Windows SDK10.0.22621.0。中断前のUHTは初回16生成ファイル、Snapshot追加時6生成ファイルを確認。再開後もUHTを強制再実行し成功（宣言変更なし、生成書換0）。コード本文を変更せず、E関連9 C++ファイルをNoUbaで実コンパイルし、リンク等を含む12アクションとDevelopment Editor Win64ビルドが成功。up-to-dateだけの確認ではない。
+- E由来の残存警告0。既存MSVC推奨版との差、Unreal5_6互換include順序の案内は残る。試験開始前のEngine Condition failed（Error表記）19件とEditorレイアウト警告1件も残り、各試験内のエラー/警告0とは区別する。
+- 証跡（Git除外）: Saved/Logs/M105EFinalBuild.log、M105EFinalTests.log、Saved/Automation/M105EFinal/index.json。再開後: Saved/Logs/M105EResumeBuild.log、M105EResumeTests.log、Saved/Automation/M105EResume/index.json。git diff --check成功。
+- Fへ渡す回収/装備Snapshotと入力経路は用意できた。保存Prototypeへの設定移行、実マウスPIE、操作感確認は未実施でG/Hへ残す。F〜H・M11以降は未着手、M10.5全体品質ゲート未合格とM11進行保留を維持する。
+
+変更ファイル（Source内はSource/TipRunFishingUE5配下、計18 Source＋5 Markdown。再開後の本文変更はDocs/ROADMAP.mdとDocs/UI_SPEC.mdのみ）:
+
+- Private/Data/TREquipmentData.cpp
+- Private/Data/TRFishingTuningDataAsset.cpp
+- Private/Data/TRInputConfigDataAsset.cpp
+- Private/Data/TRSessionConfigDataAsset.cpp
+- Private/Fishing/TREgiSpatialSimulation.cpp
+- Private/Fishing/TRFishingComponent.cpp
+- Private/Game/TRFishingSessionActor.cpp
+- Private/Game/TRPlayerController.cpp
+- Private/Tests/TRRetrievalTests.cpp（新規）
+- Public/Data/TREvents.h
+- Public/Data/TRFishingTuningDataAsset.h
+- Public/Data/TRHUDSnapshot.h
+- Public/Data/TRInputConfigDataAsset.h
+- Public/Data/TRSnapshots.h
+- Public/Data/TRTypes.h
+- Public/Fishing/TRFishingComponent.h
+- Public/Game/TRFishingSessionActor.h
+- Public/Game/TRPlayerController.h
+- AGENTS.md
+- Docs/FISHING_SYSTEM.md
+- Docs/GAME_DESIGN.md
+- Docs/ROADMAP.md
+- Docs/UI_SPEC.md

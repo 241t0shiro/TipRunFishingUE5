@@ -99,9 +99,24 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			const double Needed = (Trial-Rod).Size()+P.LineSlackAllowanceM;
 			Line += FMath::Min(FMath::Max(0.0, Needed-Line), double(P.PayoutMps)*Dt);
 		}
+		double ActualReelMps = 0.0;
 		if (Action.LineMode == ETRLineMode::ReelIn)
 		{
-			Line = FMath::Max(FMath::Max(double(P.MinLineM), Rod.Z-Local.SurfaceZ_M), Line-double(Action.ReelMps)*Dt);
+			const double PreviousLine = Line;
+			const double SurfaceHeight = Rod.Z-Local.SurfaceZ_M;
+			Line = FMath::Max(FMath::Max(double(P.MinLineM), SurfaceHeight), Line-double(Action.ReelMps)*Dt);
+			const FVector TrialOffset = Trial-Rod;
+			const FVector Constrained = TrialOffset.Size()>Line ? Rod+TrialOffset.GetSafeNormal()*Line : Trial;
+			if (Action.FishingState == ETRFishingState::Retrieving &&
+				(Position.Z>=Local.SurfaceZ_M-EpsilonM || Constrained.Z>=Local.SurfaceZ_M-EpsilonM))
+			{
+				// Near the surface tangent, constant dL/dt implies unbounded horizontal speed.
+				// Limit spool demand by the surface arc geometry, not by moving the Egi directly.
+				const double Radius = FMath::Max(0.0,(Position-Rod).Size2D()-double(Action.ReelMps)*Dt);
+				const double SurfaceLine = FMath::Sqrt(SurfaceHeight*SurfaceHeight+Radius*Radius);
+				Line = FMath::Max(Line,FMath::Min(PreviousLine,SurfaceLine));
+			}
+			ActualReelMps = FMath::Max(0.0,(PreviousLine-Line)/Dt);
 		}
 		if (!FMath::IsFinite(Line) || Line < P.MinLineM || Line > P.MaxLineLengthM)
 		{ return ETREgiStepEvent::EnvironmentInvalid; }
@@ -120,7 +135,9 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			{
 				const double Radius2 = FMath::Max(0.0, Line*Line-FMath::Square(Rod.Z-Trial.Z));
 				const FVector2D XY(Trial.X-Rod.X,Trial.Y-Rod.Y);
-				if (XY.SizeSquared()>Radius2)
+				// World-coordinate roundoff can put a projected point microscopically outside
+				// the circle forever. Use the solver's existing metre tolerance here too.
+				if (XY.Size()>FMath::Sqrt(Radius2)+EpsilonM)
 				{
 					const auto Limited=XY.GetSafeNormal()*FMath::Sqrt(Radius2);
 					Trial.X=Rod.X+Limited.X; Trial.Y=Rod.Y+Limited.Y;
@@ -138,7 +155,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 		const FVector N = (Trial-Rod).GetSafeNormal();
 		if ((Trial-Rod).Size()>=Line-EpsilonM)
 		{
-			const double Outward = FVector::DotProduct(V-RodVelocity,N)+double(Action.ReelMps);
+			const double Outward = FVector::DotProduct(V-RodVelocity,N)+ActualReelMps;
 			if (Outward>0) { V -= N*Outward; }
 		}
 		const double StepTravel = (Trial-Old).Size(); Travel+=StepTravel;

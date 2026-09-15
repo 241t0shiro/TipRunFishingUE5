@@ -118,7 +118,11 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 		Command.TargetTick > Coordinator->GetSimulationTime().TickIndex) { return; }
 	LastSequence = Command.Sequence;
 	LastCommandTick = Command.TargetTick;
-	if(bClearRodReservations){Fishing->PendingJerkCount=0;bClearRodReservations=false;}
+	ConsumeInputReset();
+	if (Fishing->GetState() == ETRFishingState::QuickRetrieving && Command.Type != ETRFishingCommandType::EndFishing)
+	{
+		LastCommandResult = ETRCommandResult::RejectedBusy; return;
+	}
 	switch (Command.Type)
 	{
 	case ETRFishingCommandType::RodAim:
@@ -163,8 +167,16 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 	if (StepPhase != ETRSimulationPhase::Fishing || IsActorBeingDestroyed() || (!bCastActive && !RodControl->IsInitialized())) { return; }
 	FTRBoatSnapshot Boat; FTROceanSample Ocean;
 	if (!ReadEnvironment(Boat, Ocean)) { AbortInternal(); return; }
-	if(bClearRodReservations){Fishing->PendingJerkCount=0;bClearRodReservations=false;}
+	ConsumeInputReset();
 	if(bCastActive){Fishing->PrepareStep(Time);}
+	if (bCastActive && Fishing->GetState() == ETRFishingState::QuickRetrieving)
+	{
+		if (!IsValid(ActiveEgi) || ActiveEgi->IsActorBeingDestroyed()) { AbortInternal(); return; }
+		// Tempo return: preserve the last physical sample, do not integrate or lerp the Egi.
+		// Boat continues in its own phase; the snapshot explicitly marks water evaluation inactive.
+		if (Fishing->IsQuickRetrieveComplete(Time)) { FinishInternal(ETRCastOutcome::Retrieved, true, true); }
+		return;
+	}
 	if(RodControl->IsInitialized())
 	{
 		auto RodFishing=Fishing->GetSnapshot();RodFishing.CastId=CurrentCastId;
@@ -211,20 +223,24 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 	if (!ActiveEgi->ApplySimulationSnapshot(Fishing->GetSnapshot(), DestinationOcean.SurfaceZ_M)) { AbortInternal(); }
 }
 void ATRFishingSessionActor::AbortInternal() { FinishInternal(ETRCastOutcome::Aborted, false); }
-void ATRFishingSessionActor::FinishInternal(ETRCastOutcome Outcome, bool bReturnedOnboard)
+void ATRFishingSessionActor::FinishInternal(ETRCastOutcome Outcome, bool bReturnedOnboard, bool bQuickReturned)
 {
 	if (!bCastActive) { return; }
 	bCastActive = false; bHasResult = true;
 	ReleaseEgi();
 	LastResult = {}; LastResult.CastId = CurrentCastId;
+	LastResult.bQuickRetrieved = bQuickReturned;
 	LastResult.EgiId = LockedEquipment.EgiId; LastResult.SinkerId = LockedEquipment.SinkerId;
 	LastResult.Outcome = Outcome; LastResultEquipment = LockedEquipment; bEgiOnboard = bReturnedOnboard; bPendingResultNotification = true;
 	if (Coordinator.IsValid())
 	{
 		LastResult.ElapsedSimSeconds = double(Coordinator->GetSimulationTime().TickIndex - CastStartTick) * Coordinator->GetSimulationTime().StepSeconds;
 	}
-	Fishing->FinishCast(); Phase = ETRSessionPhase::Result;
-	RodControl->InvalidateSnapshot(); bClearRodReservations=false;
+	Fishing->FinishCast(Coordinator.IsValid() ? Coordinator->GetSimulationTime().TickIndex : LastCommandTick, bQuickReturned);
+	Phase = bQuickReturned ? ETRSessionPhase::Ready : ETRSessionPhase::Result;
+	if (bQuickReturned) { bEquipmentLocked = false; }
+	RodControl->InvalidateSnapshot(); bClearRodReservations=false; bClearNormalRetrieve=false;
+	if (Coordinator.IsValid()) { CaptureHUD(Coordinator->GetSimulationTime()); }
 	Unregister(); // Invalidates all queued and already-extracted commands for this registration.
 	if (!IsActorBeingDestroyed()) { Register(); }
 }
@@ -251,7 +267,7 @@ void ATRFishingSessionActor::EndFishing()
 	bFishingStarted = false; bEquipmentLocked = !bEgiOnboard;
 	ReleaseEgi(); LockedEgiMesh = nullptr;
 	Fishing->Stop(); Phase = bInitialized ? ETRSessionPhase::Ready : ETRSessionPhase::Initializing;
-	RodControl->InvalidateSnapshot(); bClearRodReservations=false;
+	RodControl->InvalidateSnapshot(); bClearRodReservations=false; bClearNormalRetrieve=false;
 	// A stopped session has no later Publish phase. Deliver its pending terminal event once.
 	if (bPendingResultNotification && !IsActorBeingDestroyed())
 	{
@@ -299,13 +315,28 @@ bool ATRFishingSessionActor::IsAcceptingPlayerInput() const
 }
 bool ATRFishingSessionActor::IsPlayerPaused() const { return !Coordinator.IsValid() || Coordinator->IsSimulationPaused(); }
 void ATRFishingSessionActor::SetPlayerPaused(bool bPaused) { if (Coordinator.IsValid()) { Coordinator->SetSimulationPaused(bPaused); } }
-void ATRFishingSessionActor::ClearPlayerCommands() { if (Coordinator.IsValid()) { Coordinator->ClearCommands(); } if(RodControl->IsInitialized()){bClearRodReservations=true;} } // Consumed only at fixed update.
+void ATRFishingSessionActor::ClearPlayerCommands()
+{
+	if (Coordinator.IsValid()) { Coordinator->ClearCommands(); }
+	if (RodControl->IsInitialized()) { bClearRodReservations = true; }
+	bClearNormalRetrieve = true; // Safety stop survives a paused/cleared queue, applied only at a fixed boundary.
+}
+void ATRFishingSessionActor::ConsumeInputReset()
+{
+	if (bClearRodReservations) { Fishing->PendingJerkCount = 0; bClearRodReservations = false; }
+	if (bClearNormalRetrieve)
+	{
+		Fishing->StopNormalRetrieve(Coordinator->GetSimulationTime().TickIndex);
+		bClearNormalRetrieve = false;
+	}
+}
 void ATRFishingSessionActor::CaptureHUD(const FTRSimTime& Time)
 {
 	PublishedHUD = {};
 	if (!bInitialized || !Coordinator.IsValid()) { return; }
 	PublishedHUD.Egi = Fishing->GetSnapshot();
 	PublishedHUD.Rod = RodControl->GetSnapshot();
+	PublishedHUD.Retrieval = Fishing->GetRetrievalSnapshot(Time.TickIndex);
 	if (!Coordinator->GetBoatSnapshot(BoatId, PublishedHUD.Boat)) { return; }
 	FTROceanQuery Q; Q.SimTick = Time.TickIndex;
 	Q.PositionXYM = bCastActive ? PublishedHUD.Egi.PositionXYM : FVector2D(PublishedHUD.Boat.RodTipM.X, PublishedHUD.Boat.RodTipM.Y);
@@ -321,6 +352,9 @@ FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
 	Copy.bEgiOnboard = bEgiOnboard; Copy.bCanChangeEquipment = CanChangeEquipment();
 	Copy.Phase = Phase; Copy.CastId = CurrentCastId; Copy.Equipment = GetEquipmentSnapshot();
 	Copy.Egi.FishingState = Fishing->GetState();
+	Copy.Retrieval = Fishing->GetRetrievalSnapshot(PublishedHUD.Retrieval.Tick);
+	Copy.Retrieval.CastId = CurrentCastId;
+	if (!bCastActive && bHasResult && LastResult.bQuickRetrieved) { Copy.Retrieval.QuickRetrieveProgress01 = 1.0; }
 	return Copy;
 }
 

@@ -36,6 +36,11 @@ struct TIPRUNFISHINGUE5_API FTRFishingParameters
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
 	float ReelMps = 0.0f;
 
+	// Zero keeps saved pre-E assets loadable with Quick Retrieve unavailable.
+	// Explicit Prototype/Test configuration enables the fixed-duration return.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun|Retrieve")
+	double QuickRetrieveDurationS = 0.0;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TipRun")
 	float FreeFallSinkScale = 0.0f;
 

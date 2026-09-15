@@ -106,7 +106,9 @@ bool TREquipment::TryBuildSnapshot(const UDataTable* Egis, const UDataTable* Sin
 	if (!Require(TRTime::TrySecondsToTicks(P.HookOpenDelayS, StepSeconds, OpenTicks) &&
 		TRTime::TrySecondsToTicks(P.HookCloseDelayS, StepSeconds, CloseTicks) && CloseTicks > OpenTicks &&
 		TRTime::TrySecondsToTicks(P.JerkDurationS, StepSeconds, OtherTicks) && OtherTicks > 0 &&
-		TRTime::TrySecondsToTicks(P.OverTensionDurationS, StepSeconds, OtherTicks) && OtherTicks > 0,
+		TRTime::TrySecondsToTicks(P.OverTensionDurationS, StepSeconds, OtherTicks) && OtherTicks > 0 &&
+		(P.QuickRetrieveDurationS == 0.0 ||
+			(TRTime::TrySecondsToTicks(P.QuickRetrieveDurationS, StepSeconds, OtherTicks) && OtherTicks > 0)),
 		TEXT("Invalid fixed step or unrepresentable timing window"), Errors)) { return false; }
 	const FTREgiSimulationProfile* Profile = Tuning->FindProfile(Egi->SimulationProfileId);
 	FTREquipmentSnapshot Snapshot;

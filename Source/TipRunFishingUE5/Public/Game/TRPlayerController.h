@@ -8,6 +8,7 @@ class ATRFishingSessionActor;
 class UEnhancedInputComponent;
 class UTRFishingHUDWidget;
 struct FInputActionValue;
+struct FTRFishingCommand;
 
 UCLASS()
 class TIPRUNFISHINGUE5_API ATRPlayerController : public APlayerController
@@ -44,6 +45,7 @@ private:
 	void ReleaseInput();
 	void FlushPendingStop();
 	void SynchronizeSession();
+	void ObserveCommand(const FTRFishingCommand& Command, ETRCommandResult Result);
 	void RemoveInputBindings();
 	void SetMappingContext(bool bEnabled);
 	void Cleanup();
@@ -55,6 +57,7 @@ private:
 	FTRCastId ObservedCast, HeldCast, PendingStopCast;
 	FTRActorSimId ObservedRegistration;
 	FDelegateHandle ActivationHandle;
+	FDelegateHandle CommandHandle;
 	bool bInputFocused = true;
 	bool bRetrieveHeld = false;
 	bool bPendingStop = false;

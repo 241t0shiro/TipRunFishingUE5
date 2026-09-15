@@ -1,5 +1,7 @@
 # UI・入力接続技術設計
 
+2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
+
 2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
 
 2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
@@ -173,7 +175,7 @@ HUDへJerkCount/SeriesJerkCount/StayPenaltyJerkCount/PendingJerkCount、DepthVel
 
 M10の入力・保持解除・装備変更試験とM09回帰は成功。UIのPIE目視、解像度/DPI、実キーボード/ゲームパッド/コンソール操作は未検証。Onboard/Ready条件やメッシュ変更はAutomationで検証している。製品UI・Resultパネルの完成はM15に残す。
 
-## 9. M10.5マウス操作・日本語Prototype UI（Dの竿/右クリック実装、E以降未実装）
+## 9. M10.5マウス操作・日本語Prototype UI（D/E入力実装済み、F以降未実装）
 
 D12改訂: マウス中心を製品の基本方針として採用。数値感度/可動域/演出/最終レイアウトは調整事項。既存キーボードはバックアップとして残せるが、UIの主案内を競合させない。
 
@@ -188,7 +190,7 @@ D12改訂: マウス中心を製品の基本方針として採用。数値感度
 | P | Pause/Resume | 時計停止、保持解除 | 既存P |
 | Readyの装備パネル | エギ/シンカー選択・適用 | 公開APIの許可条件を再検査 | Consoleは任意診断のみ |
 
-H/Hookは未実装と示し主ガイドから外す。Tは既存のPrototype診断用TensionFall要求として残す場合だけ補助欄へ表示する。Nは通常/Quick回収後に必須にせず、既存Result用互換操作として必要な時だけ案内。BackspaceのSession終了は補助欄で「中断・再開にはPIE再起動」と明示し、Q回収と混同させない。
+H/Hookは未実装と示し主ガイドから外す。Tは既存のPrototype診断用TensionFall要求として残す場合だけ補助欄へ表示する。2026-09-15のE依頼に従い、通常回収のResult後はN（NextCast）でReadyへ進み装備解除する。Quick完了は直接Ready/解除でN不要。双方でN不要とする旧案は撤回。BackspaceのSession終了は補助欄で「中断・再開にはPIE再起動」と明示し、Q回収と混同させない。
 
 ### Rod Mouse Controlと入力寿命
 
@@ -235,3 +237,11 @@ Cast中/回収中/船上未確認/Pauseでは変更欄を無効化し、日本�
 - ControllerのPause/Focus/Flush/Unbindで保持と入力キューを解放。復帰時の保持Jerkは解放確認まで再受付せず、Dの未実行Shakuri予約も固定更新境界で取消す。既に開始した動作はPause中に進めず復帰後に継続する。実マウスのOS/PIE操作感は未検証。
 - FTRHUDSnapshot.Rodで基準/最終角、開始時基準、竿先位置/回転/方向、活動フラグ・相・Tick/CastIdを読む。Widgetの日本語化・値配置・新UIは変更なし。Boatの取付基準RodTipと可動Rod.TipWorldPositionMを混同しない。
 - 利用時はRodTuning DataAssetとMouse Rod用InputConfigを明示作成し、SessionConfig.Rod/Inputへ割り当て、FishingはC revision 2にする。GameModeはRod参照をSessionへ渡す。今回Contentを保存変更しておらず、既存Levelを開くだけで新操作へ移行した状態ではない。保存資産移行と新LevelはG、操作感/品質再評価はHに残す。数値とプロファイル契約はFISHING_SYSTEM第11節、結果はROADMAPのD記録を参照する。
+
+### Eで実装した回収入力・HUD接続口（2026-09-15）
+
+- `UTRInputConfigDataAsset::CreateMouseRetrievePrototype`はDの設定を継承し、既存Retrieve ActionへLeftMouseButton（R/パッドと共有）、別のQuickRetrieve ActionへQを割り当てる。通常はStarted/Completed/Canceled、QuickはStartedのみを処理する。保存済み入力資産は自動変更しない。
+- 新設定の利用にはSessionConfig.Inputへの明示割当てと、FishingTuningの正のQuickRetrieveDurationSが必要。0は旧資産互換の「Quick未設定」であり、時間を勝手に補完しない。保存資産への適用はGに残す。
+- 通常回収完了はResult中の装備ロックを維持し、NでReady/解除。Quick完了は直接Ready/解除でN不要。画面側は終端通知だけから常にResultへ遷移せず、SessionPhaseと結果のbQuickRetrievedを読むこと。パネル本体の実装はF以降。
+- `FTRHUDSnapshot.Retrieval`から通常/Quickフラグ、要求/実巻取り速度、残ライン、進捗、物理更新有効性を取得できる。既存bEquipmentLocked/bCanChangeEquipmentも利用する。Quick中のEgiは凍結した最終物理Snapshotであり、最新の水中運動として表示しない。
+- 状態・寿命・数値の契約は[FISHING_SYSTEM第12節](FISHING_SYSTEM.md#12-m105-e-normal--quick-retrieve実装契約2026-09-15)、検証結果は[ROADMAPのE完了記録](ROADMAP.md#m105-e完了記録2026-09-15)を正本とする。実マウスPIE、日本語HUD、装備パネル、新Levelは未実施。

@@ -16,6 +16,11 @@ bool UTRSessionConfigDataAsset::ValidateStartup(TArray<FText>& Errors) const
 		return false;
 	}
 	FTREquipmentSnapshot Equipment;
+	if (Input->Bindings.ContainsByPredicate([](const FTRInputBinding& B) { return B.Command == ETRPlayerAction::QuickRetrieve; }) &&
+		(!IsValid(Fishing) || Fishing->Parameters.QuickRetrieveDurationS <= 0.0))
+	{
+		Errors.Add(FText::FromString(TEXT("Mapped Quick Retrieve requires an explicit positive duration"))); return false;
+	}
 	if(Rod && (!IsValid(Rod) || !Rod->Parameters.Validate(Errors) || !IsValid(Fishing) || Fishing->Parameters.EgiModelRevision!=2 ||
 		!Input->Bindings.ContainsByPredicate([](const FTRInputBinding& B){return B.Command==ETRPlayerAction::RodAim;})))
 	{Errors.Add(FText::FromString(TEXT("Rod startup requires valid Rod tuning, C revision 2 and mapped RodAim input")));return false;}

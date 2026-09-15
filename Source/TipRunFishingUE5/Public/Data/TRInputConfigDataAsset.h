@@ -6,7 +6,7 @@
 #include "TRInputConfigDataAsset.generated.h"
 
 UENUM(BlueprintType)
-enum class ETRPlayerAction : uint8 { Deploy, Jerk, Fall, TensionFall, Hook, Retrieve, Cancel, NextCast, Pause, RodAim };
+enum class ETRPlayerAction : uint8 { Deploy, Jerk, Fall, TensionFall, Hook, Retrieve, Cancel, NextCast, Pause, RodAim, QuickRetrieve };
 
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRInputBinding
@@ -27,6 +27,7 @@ public:
 	// Explicit opt-in, temporary keyboard/gamepad mappings; never a product default.
 	static UTRInputConfigDataAsset* CreatePrototype(UObject* Outer);
 	static UTRInputConfigDataAsset* CreateMouseRodPrototype(UObject* Outer);
+	static UTRInputConfigDataAsset* CreateMouseRetrievePrototype(UObject* Outer);
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif

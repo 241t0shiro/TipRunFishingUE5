@@ -48,6 +48,23 @@ UTRInputConfigDataAsset* UTRInputConfigDataAsset::CreateMouseRodPrototype(UObjec
 	B.Action=NewObject<UInputAction>(Config,TEXT("IA_TR_MouseRod_Prototype"));B.Action->ValueType=EInputActionValueType::Axis2D;
 	Config->FishingContext->MapKey(B.Action,EKeys::Mouse2D);Config->Bindings.Add(B);return Config;
 }
+UTRInputConfigDataAsset* UTRInputConfigDataAsset::CreateMouseRetrievePrototype(UObject* Outer)
+{
+	auto* Config = CreateMouseRodPrototype(Outer);
+	for (const auto& Binding : Config->Bindings)
+	{
+		if (Binding.Command == ETRPlayerAction::Retrieve)
+		{
+			Config->FishingContext->MapKey(Binding.Action, EKeys::LeftMouseButton);
+		}
+	}
+	FTRInputBinding Quick; Quick.Command = ETRPlayerAction::QuickRetrieve;
+	Quick.Action = NewObject<UInputAction>(Config, TEXT("IA_TR_QuickRetrieve_Prototype"));
+	Quick.Action->ValueType = EInputActionValueType::Boolean;
+	Config->FishingContext->MapKey(Quick.Action, EKeys::Q);
+	Config->Bindings.Add(Quick);
+	return Config;
+}
 #if WITH_EDITOR
 EDataValidationResult UTRInputConfigDataAsset::IsDataValid(FDataValidationContext& Context) const
 {

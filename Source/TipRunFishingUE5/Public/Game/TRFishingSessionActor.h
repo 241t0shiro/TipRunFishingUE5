@@ -79,7 +79,8 @@ private:
 	bool Register();
 	void Unregister();
 	void AbortInternal();
-	void FinishInternal(ETRCastOutcome Outcome, bool bReturnedOnboard);
+	void FinishInternal(ETRCastOutcome Outcome, bool bReturnedOnboard, bool bQuickReturned = false);
+	void ConsumeInputReset();
 	void ResetInternal();
 	void ReleaseSession();
 	void ReleaseEgi();
@@ -109,4 +110,5 @@ private:
 	bool bEgiOnboard = true;
 	bool bPendingResultNotification = false;
 	bool bClearRodReservations=false;
+	bool bClearNormalRetrieve = false;
 };
