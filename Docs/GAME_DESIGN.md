@@ -1,5 +1,13 @@
 # TipRun Fishing — 全体技術設計の正本
 
+2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
+
+2026-09-17 G追加修正: 手動確認済みの表示/入力を保持し、通常HUD8行、Shift+Mouse観測/Home復帰、世界固定5mグリッド/ブイ、Rod可動域拡大、Rod Snap＋戻し中Reel Pulseを実装。連続Shakuriの弛み蓄積を再現し2/3/5回それぞれの作用を試験。UHT・実C++・Development Editor Win64成功、G 6件＋関連回帰36件の最終結果は成功、試験内エラー/警告0。PIEは自動起動せず今回分の手動再評価待ち。G最終合否保留、H・M11以降未着手。現行操作はUI_SPEC末尾、計算契約はFISHING_SYSTEM第13節。以下は履歴。
+
+2026-09-16 G表示修正: 初回の手動PIEで釣り操作/装備は正常、3D可視化/UI配置は不合格。表示専用Mesh・カメラとコンパクトHUD、Tabによる装備開閉へ修正し、自動試験28件成功。Simulation計算は変更なし。自動PIE操作は停止し、修正後はユーザーの手動再確認待ち。Gの最終合格およびH着手はまだ認めない。詳細と手順はUI_SPEC/ROADMAPを参照。
+
+2026-09-16: M10.5-A〜Fの実装・自動検証は完了。Gはrevision 2保存資産とLevelの作成・接続・自動検証まで完了し、PIE入力と解像度の手動確認待ち。G最終合否は未確定、HおよびM11以降は未着手。現行状況はROADMAP、保存Prototypeの起動方法はUI_SPECのG節を参照。以下の完了記録は各時点の履歴。
+
 2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
 
 2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
@@ -25,7 +33,7 @@
 - **暫定案**: ゲーム体験に影響する未承認仕様。実装を必要とする場合は後述の決定IDに紐付け、確認する。
 - **MVP決定**: 今回ユーザーが承認したMVP仕様。再承認を求めず実装時の基準とする。未指定の調整値まで確定した意味ではない。
 - **保留（MVP暫定仕様あり）**: D10/D11とD12の未指定部分。D12のマウス基本操作・日本語Prototype UIはM10.5で決定済み。残る製品仕様はAlpha前に再決定する。
-- **保留（MVP非ブロック）**: D14、D16〜D18。MVP対象外であり、決定を待ってMVP全体を止めない。
+- **保留（MVP非ブロック）**: D14、D17、D18。本格操船も対象外だがD16の簡易NavigationはR対象。これらはMVP対象外であり、決定を待ってMVP全体を止めない。
 - **テスト用値**: 自動試験の再現性を得るための人工的な値。製品のバランス値でも釣りの実測値でもない。
 
 本書を全体の正本とし、釣りは [FISHING_SYSTEM.md](FISHING_SYSTEM.md)、AIは [SQUID_AI.md](SQUID_AI.md)、船は [BOAT_SYSTEM.md](BOAT_SYSTEM.md)、海は [OCEAN_SYSTEM.md](OCEAN_SYSTEM.md)、UIは [UI_SPEC.md](UI_SPEC.md)、実装順は [ROADMAP.md](ROADMAP.md) を参照する。矛盾を発見した場合は本書の確定要件を優先し、詳細文書を修正してから実装する。Codexの作業規約は [../AGENTS.md](../AGENTS.md)。
@@ -47,7 +55,7 @@ MVPの成立条件:
 5. HIT後は簡易テンションと巻上げ進捗を扱い、過大テンションの継続でバラシになる。取り込み成功時は固定テスト重量を含む結果を一度だけ生成する。
 6. MISSでは投を終了せず、STAY継続または再フォールが可能。通常の未釣獲の投はプレイヤーの回収完了で終える。バラシはFightを終了してStayへ戻す技術設計で、回収時の結果理由に残す。釣獲・明示中断は別の投終了経路とし、古いBITEが次の投に持ち越されない。
 
-MVP対象外: SHOP、購入、通貨、船の自由操船、複数エリアの選択、季節進行、天候変化、本格的なライン物理・ロッド物理、詳細ファイト、取り込み操作、永続セーブ、Steam SDK連携、実績、大会。拡張境界は設けるが、未使用クラスを大量に作らない。
+MVP対象外: SHOP、購入、通貨、Rで承認した簡易操船を超える本格操船、複数エリアの選択、季節進行、天候変化、本格的なライン物理・ロッド物理、詳細ファイト、取り込み操作、永続セーブ、Steam SDK連携、実績、大会。拡張境界は設けるが、未使用クラスを大量に作らない。
 
 ## 3. 構成と依存方向
 
@@ -186,7 +194,7 @@ M03でOceanAreaDataAsset、平底SeabedProvider、OceanWorldSubsystemを追加�
 | D13 | MVP決定（2026-09-15 E依頼で明確化） | MISSで投を終了せずStayまたは再Fall。通常回収完了はResult（装備ロック継続）→NextCastでReady/解除。中途停止不可のQuick完了は直接Ready/解除 | 両回収を直接Readyとする旧案を置換。釣獲/バラシ/明示中断の終端処理はFISHING参照 |
 | D14 | 保留 | MVP非対象・非ブロック。境界/岸/根掛かりゲーム仕様を追加しない | Alpha以降。無効データ防御は技術処理として維持 |
 | D15 | MVP決定（M10.5改訂） | 風・表層潮・深度別水平潮を分離。船へ風/表層潮、エギと海中ラインへ深度別潮。一定場と層別場を検証 | 地形/位置に応じたCurrent/Wind Fieldへ拡張可能。波物理/CFD/鉛直潮/実海域場は後続の別設計 |
-| D16 | 保留 | MVP非対象・非ブロック: 自由操船等 | Alpha以降 |
+| D16 | R範囲を承認（2026-09-17） | 簡易Navigation、推進/操舵、ポイント/船首/左右舷選択をR対象へ変更。本格操船は対象外 | 第11節・BOAT_SYSTEM第9節 |
 | D17 | 保留 | MVP非対象・非ブロック: SHOP/経済/セーブ | Alpha以降 |
 | D18 | 保留 | MVP非対象・非ブロック: Steam連携/実績/大会等 | Alpha以降 |
 
@@ -261,3 +269,41 @@ Readyかつ船上・活動Castなし・非Pauseで装備変更を許可。次の
 ユーザーの0.4〜1.0 knotは今回の想定範囲として採用し、実海域全般の実測値とは記載しない。1 knot=1852/3600 m/sより0.4/0.7/1.0 knotは約0.205778/0.360111/0.514444 m/s。内部SI、表示でknotを併記する。風速は独立したm/s設定。
 
 船の風/潮応答・抗力/慣性、エギ/ライン抗力・沈下曲線、繰出し余長、Rod感度/可動域、Quick所要時間（1〜2秒程度の試験案）、安定観測幅は製品未確定。局所的技術選択は各節に案を示し、Prototype/Testで校正する。ROADMAPの受入値は試験用であり、製品バランスの確定ではない。M10.5設計完了を実装合格と称さない。
+
+## 11. M10.5-R Gameplay Architecture Revision（2026-09-17、設計のみ）
+
+本節は相反する旧M10.5/G記述に優先する。Gは最新手動PIEでゲームプレイ品質不合格。自動試験の成功履歴は保持する。R実装・再ビルド・試験は今回行っていない。
+
+### 不合格の構造的原因と再利用
+
+- 起動時にSessionを開始する接続はあるが、操船、ポイント/船首決定、釣り舷選択をまとめるプレイヤーモードがない。既存`StartFishing`はSession初期化の意味を持つため、モード切替と同一視しない。
+- 観測Actorが毎フレームViewTargetを取得する構造は製品操作のカメラと競合する。Shift観測は検査用であり、通常の釣り視点にしない。
+- GのシャクリはUp/Returnと固定約2mの回収を行うが、次のシャクリへ力を伝達できる弛み状態を判定していない。自動試験の特定条件での上昇は、手動での2回目不成立・3回目の再成立・5回の不安定さや過剰回収を否定できない。弛み、姿勢上限、入力間隔、張力の寄与はRで時系列を取り切り分ける。全原因を実測済みとはしない。
+- F1の紫色/描画変化と閉じられない報告を正式な不具合として扱う。原因候補・修正境界はUI_SPECに記す。
+
+Aの環境問い合わせ、Bの船体応答/固定更新、CのWorldPosition/ライン拘束、DのRod/入力キュー、Eの回収/装備寿命、FのSnapshot/UIを再利用する。置換対象はモード接続、カメラ所有、釣り座、入力Context、固定Reel Pulse、表示/Debug経路。全物理モデルの作り直しは行わない。
+
+### プレイヤーモードと寿命
+
+新設予定の`UTRPlayerModeComponent`をSessionが所有し、Navigation/Fishingを管理する。これはFishingStateやSessionPhaseとは別軸。AreaのSessionとBoatはモード間で存続する。モード退出に既存EndFishing（登録解除/終了）を流用しない。
+
+|操作|受理条件|確定する処理|
+|---|---|---|
+|Area開始|参照/環境が有効|Navigation、推進入力0、三人称。活動中Castを作らない|
+|Fishing開始|Ready、船上、Castなし、舷設定有効|推進/舵入力解除、船首を保持、選択舷とカメラ/Rod接続を固定|
+|Navigationへ戻る/舷変更|Ready、船上、装備Unlocked、Castなし|保持入力/古いキューを解除しモードまたは舷を変更|
+|Cast中/Quick中/Resultから退出要求|上の条件を満たさない|拒否理由を表示。勝手にQuick/Abort/船上帰還しない|
+
+Normal完了はResult→NextCast→Ready、Quick完了はReady/Unlockを維持。装備変更条件は既存契約のまま。船首変更/釣り座変更は投の途中で許可しない。Fishing開始時に船速度を0へスナップせず慣性を残す。
+
+モード変更は固定更新で確定しModeEpochを更新する。入力は登録世代/ModeEpoch/固定Tick/Sequenceを検査し、投中コマンドにはCastIdも検査する。Navigationのために架空のCastを作らない。Controller/UIは要求のみ発行。既存単一Input Queueを型付き要求へ拡張し、二つ目の時計や独立Actor Tickによる正本更新を作らない。順序は入力受理→Mode/Boat意図→Boat→Rod→Fishing/Egi→Snapshot。表示カメラはSnapshot読取だけ。
+
+### 改訂ゲームループと対象範囲
+
+`AreaStart → Navigation → PointSearch → Heading決定 → Port/Starboard選択 → FishingStart → 一人称 → Deploy → FreeFall → Bottom → Shakuri Sequence → TensionFall → Stay → Normal Retrieve / Re-Fall / Quick Retrieve → Readyで装備変更 → Next Cast → 必要ならNavigation`
+
+通常回収はResult→NextCastを経てReadyとなる。Quick後はNextCastキー不要。イカ/ATTACK/BITE/Hook/FightはこのRのループへ先行追加しない。
+
+D16は今回の明示依頼で「簡易推進/操舵、三人称、ポイント/船首選択」をRへ昇格。本格船舶物理、燃料、乗降、岸衝突、複数エリア、地形生成は対象外。現行平坦30m環境で移動位置と環境を確認できることから始め、地形差による探索を実装済みと称さない。D12のモード別Prototype操作案はUI_SPEC、船体/舷はBOAT_SYSTEM、SequenceはFISHING_SYSTEM、実装順と受入はROADMAPを正本とする。
+
+RはH前の正式な再実装ゲート。Rの各自動検証とユーザー手動PIEが合格し、次の明示依頼があるまでHへ進めない。M11はHを含むM10.5全体品質ゲート通過まで保留。

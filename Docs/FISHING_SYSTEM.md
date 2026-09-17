@@ -1,5 +1,7 @@
 # 釣りシステム技術設計
 
+2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
+
 2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
 
 2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
@@ -386,3 +388,69 @@ Quickは通常水中物理を凍結するテンポ改善の回収経路。開始
 - FTRRetrievalSnapshotはCastId/Tick、bIsRetrieving/bIsQuickRetrieving、bUnderwaterSimulationActive、RetrieveSpeedMps（直前の実ライン減少/固定dt）、RequestedRetrieveSpeedMps、RemainingLineLengthM、QuickRetrieveProgress01を読取コピーとして提供する。実速度はfloatライン値由来の丸めを含む。非巻取り中は両速度0。HUD集約型にRetrievalを追加し、装備ロック/変更許可は既存フィールドを維持する。FTRCatchResult.bQuickRetrievedはQuick成功のみtrue、Abortはfalse。Range評価・AI・日本語表示は追加しない。
 - Test設定はA/B/C/Dの明示revision 2、平底30m、潮(0.2,0,0)m/s、風(0,2)m/s、Dと同じ竿、要求巻取り1m/s、Quick1.5秒=60Hzで90Tick。製品値/実測値ではない。長いライン2/30/80/100mは投入時余長の隔離条件で、標準FreeFallの過大繰出しを許す試験ではない。
 - E 7件と必要回帰54件が成功。通常回収停止境界、Enhanced Action押下/保持/解放、幾何、Quick全開始状態/期限/拒否、Pause/Focus、装備変更/次投、旧Cast/登録世代/破棄、30/60/120fps、読取非破壊、設定検証/シリアライズを確認。実マウス・PIE・保存資産移行は未実施。ログ/ファイル一覧はROADMAPのE完了記録を参照。
+
+## 13. G追加修正・Shakuri interaction revision（2026-09-17）
+
+この節はD当時の「Rod有効時は巻取り0」を更新する。M11以降の評価は追加しない。
+
+- 原因: Upでライン拘束が上向き速度を与えた後、Returnで竿先が戻ってもライン長は固定だった。エギの上昇慣性と竿の戻しで弛みが蓄積し、次のあおりがラインを張れなくなる。旧D試験の「一連で一度でも上昇」では各回の非作用を検出できなかった。
+- 1右押下=1Action、保持連打なし、既存PendingJerkCount/固定Tick/Sequenceを維持。Upは従来のRod Snap、Return開始から短いReel Pulseを適用する。上げ速度ピークへ巻取り速度を重ねず、戻し中の弛み回収を優先する。
+- RodTuningへShakuriReelSpeedMpsとShakuriReelSecondsを追加。0/0は旧設定互換で無効。正値は有限・float速度表現可能・時間<=Return時間を要求し、初期化時に凍結する。時間は既存ceil整数Tick換算で、[UpTicks, UpTicks+ReelTicks)だけ要求速度を出す。予約Actionごとに同じプロファイルを再開する。
+- 保存Gの仮設定は8m/s×0.25秒（60Hzで15Tick、海面制約のない条件で2m/Action）。実測/製品巻取り速度ではなくゲーム近似のPrototype調整値。通常回収のReelMps=1m/sとは別。係数が不足すると弛みを回収しきれないため、製品バランスはH以後の評価で扱う。
+- SessionはRodの要求巻取りをFTREgiActionへ渡し、旧LiftMpsは常に0。EgiのWorldPosition/Velocityへの追加インパルスは導入しない。Cの既存LineLength短縮→位置/速度拘束だけで作用する。
+- Shakuri中はReelIn経路を使い、Up中の要求速度は0。竿先が海面から離れるときの最小ライン長（竿先の海面上高さ）を維持する。海面では最小長が増えることがあり、無理な短縮はしない。Eの海面交差円による巻取り要求制限をShakuriにも適用し、浅場の水平ワープ/異常終了を防ぐ。Retrieved通知は通常Retrievingだけであり、Shakuriが勝手にCastを終了しない。
+- 通常回収中のJerkは受理し、通常巻取りを停止して複合Actionへ切替、完了後はTF→Stay。通常巻取りを再開するには左を離して再押下する。Shakuri中の左ReleaseはPulseを取消さない。逆順でRetrieveStartedが後なら通常回収へ切替え未実行Jerkを取消す。同TickでもSequence順、両巻取り速度は加算しない。
+- Pause中はPulse時間/ラインを進めない。Focus Lostは従来どおり保持/未実行予約を解除し、開始済みActionは再開後に完了する。旧Cast/破棄Sessionの入力契約は維持する。
+
+## 14. M10.5-R Shakuri Sequence / Slack-aware Reel（2026-09-17、設計のみ）
+
+第13節はG実装・自動試験の履歴として保持する。最新手動PIEでは2回目以降の作用が不安定で、約2m/Actionは過剰回収。Rでは固定Reel Pulseを置換する。今回コード/調整値は変更していない。
+
+### 原因の切り分け
+
+現行Rodは時間だけでUp/Returnを進め固定Pulseを要求する。Fishingは各Action終端から次を開始できるが、Rod復帰とラインの伝達準備を一つの条件として扱わない。静水・一定姿勢の試験成功だけでは実マウス姿勢、ドリフト、連打間隔の品質を保証できない。R実装時は各TickのBase/FinalPose、Phase、要求/実行回数、L、RodTip-Egi距離D、Slack、Constraint補正、TensionProxy、Egi位置/速度を記録し、無Pulse/旧Pulse/新方式を比較する。姿勢上限でSnapが潰れる場合も区別する。
+
+### 状態と責務
+
+`Stay/Bottom → [必要なら初期Slack準備] → Jerk1(Up) → Recover(Return + ReelSlack) → Jerk2 → Recover → … → TensionFall → Stay`
+
+- 外側FishingStateは一連中Jerking。内部SequencePhaseをPreparing/Up/Recoverとして管理し、各Jerk間にStay/TensionFallを挟まない。新設予定`UTRShakuriSequenceComponent`はPhaseと受付済みActionを担当し、物理式はCへ置く。Fishingは状態遷移、Rodは姿勢、Egi/Lineは位置・拘束を担当する。
+- 1右Down=1要求。Held/Repeatで増やさない。固定Tick/Sequence順にキューへ積み、Up開始時に実行回数を1増やす。回数制限や予約なしの自動Upを追加しない。CastId/登録世代/ModeEpoch違い、破棄済みSessionは拒否。
+- UpはDの有限時間プロファイル。RecoverはBasePoseへ戻す処理と必要Slack回収。プレイヤー基準姿勢と一時Offsetは別。戻し中の基準入力も固定順に適用し、当該Actionの基準更新規約を試験する。通常Base最大PitchにはSnap用の余裕を持たせ、上限に貼り付いて無動作となる設定をDataValidationで拒否する。
+- 次のUpはRod復帰とSlack準備が成立してから、予約がある場合だけ開始する。準備できなければ安全な速度/時間予算内で継続し、予算超過は診断付きで操作を停止/予約解除する。成功したJerkや通常Stayを偽装しない。異常停止後はF/回収等の明示操作で復旧できるようにする。
+- 予約なしでRecoverが完了したら即TensionFall、過渡収束後Stay。無入力秒数、AutoStayDelay、連打猶予タイマーは使わない。安全タイムアウトは異常防御でありStay開始タイマーではない。遅れて届いた押下は次のSequenceとして扱う。
+- 既存の一連回数/後続Stay評価用履歴を各Recoverでリセットしない。10回超の将来BITE減衰を実装するのは後続タスク。RにBITE/Range評価を追加しない。
+
+### Slack-aware Reelの計算案
+
+固定長/Actionを廃止する。`Slack = max(0, L - |Egi-RodTip|)` を正本から導出。Preparing/Recoverだけで、目標余長`TargetSlackM`を超える部分を`SlackReelSpeedMps`以内で回収する。Upそのものに固定回収量を重ねない。
+
+Cの同一サブステップで、現在距離Dと拘束前予測距離Dtrialを求め、概念的に次を満たす要求量を計算する。
+
+```
+RequiredLength = max(MinLineLength, RodHeightAboveSurface,
+                     max(D, Dtrial) + TargetSlackM)
+ReelDelta = min(SlackReelSpeedMps * dt, max(0, L - RequiredLength))
+```
+
+この式は実装前の数値方式案。古いHUD Snapshotから計算しない。Rod更新後の同じ座標/海面問い合わせを使い、ラインの唯一の更新担当であるCが短縮と拘束を確定する。RequiredLength>Lだからといって通常時に追加繰出しはしない。FreeFall需要繰出し/海面での物理的最小長の既存契約を保持する。
+
+張っているラインをさらに既定長巻く最低ノルマは設けない。TensionProxyは補正量由来で0でも幾何的に張っていることがあるため、正の張力を準備完了の必須条件にしない。目標余長はSnapで解消可能な幾何範囲に制限する。
+
+UpのRodTip移動→Cライン拘束→Egi作用を唯一の伝達経路とし、直接Egi速度加算・深度ジャンプを追加しない。Recoverの回収だけで毎回のダートを代用しない。なお弛みだけを回収しても、強すぎるUpや残留速度による実際の上昇は残るため、Rod振幅/時間と既存水抵抗も測定し、5回で過剰回収しないことを独立に評価する。
+
+調整項目案: TargetSlackM、SlackReelSpeedMps、RecoverySafetyDuration、RodReturnTolerance、既存Up振幅/Up時間/Return時間。すべてPrototype DataAsset。固定2mを製品値/新方式の受入値として継承しない。
+
+### Normal Retrieveとの優先関係
+
+通常回収はLMB保持中の任意巻取りで、Slack回収とは目的・要求を分離する。Rでは既存Gの安全な明示切替を初期案として維持する: 通常回収中にJerkが受理されれば通常回収を停止してSequenceへ移る。Sequence中の新たなLMB Downは明示通常回収への切替として残り予約を解除する。同TickはSequence順で最後に受理された切替が有効。二つの回収速度を加算しない。
+
+右操作後に通常回収を再開するには左を解放して再押下する。これはPrototype操作案として表示し、手動Rゲートで不自然なら保持意図を別管理する案を再検討する。無断の自動Retrieve再開は追加しない。左Releaseで位置/速度/ラインをリセットしない。Focus/Pause/UI捕捉で保持と予約入力を安全に解除し、復帰後は新Downを要求する。F/Quickによる明示切替も旧Castを更新せず、Quickは途中キャンセル不可。
+
+### 受入と観測
+
+1/2/3/5回それぞれ、間隔を空けた押下/動作中予約の両方を試験。全UpでRodTip変位とライン経由の作用が成立し、右Heldでは1回だけ。Snapを無効化した対照ケースとの比較で、単なる前回慣性を今回の作用として数えない。各回の位置差・ライン補正・回収量を個別報告する。
+
+過剰回収の技術受入案: 水深30m、初期エギ深度20m、35g/シンカー0、G標準環境の制御条件で5回後も船外かつ深度15m以上、Slack回収合計2.5m以下。これは未検証のPrototype試験案であり製品バランス/現実計測ではない。実装着手時に条件一式を凍結し、満たせなければ失敗と原因を報告する。他重量、無潮/0.4/0.7/1.0 knot、左右舷、基準姿勢端、浅場も試験し、全条件へ同じ上昇量を強制しない。
+
+有限数、非負L、海面/海底/ライン整合、30/60/120fps、Pause/Focus/Cast寿命を維持。R5は状態/キュー、R6はこの伝達・回収・過剰回収を受入境界とする。手動で各回のダートと自然なTensionFall→Stayを確認するまで品質合格としない。

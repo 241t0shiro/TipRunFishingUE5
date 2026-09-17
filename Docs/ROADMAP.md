@@ -1,5 +1,7 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
+
 2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
 
 2026-09-14 M10.5-D完了: Mouse Axis2D→固定Input Queue→RodControl、右クリック/Spaceの同一Jerk、基準姿勢＋時間プロファイル、RodTip→Cライン接続を実装。Rod有効時は旧Lift/Reelを重ねない。UHT生成・実C++・Development Editor Win64成功、D 5件＋必要回帰49件成功、各試験エラー/警告0。Rod/Input資産は明示設定、既存保存Prototype移行/実マウスPIEは未実施。E〜H・M11以降は未着手、M10.5全体品質ゲートは未合格。以下のA〜C/設計のみの記録は履歴。
@@ -15,15 +17,15 @@
 
 2026-09-13 M10実装反映: Shakuri/TensionFall/Stay/Re-Fall/Retrieve、一投単位の装備ロックと船上帰還後の次投変更、深度速度・境界接触Snapshotを実装済み。旧AutoStay項目は型/検証/Prototype設定から撤去済み。M06〜M09記録は当時の履歴として保持し、現在の契約・検証範囲はROADMAPのM10完了記録を参照。M11以降は未着手。
 
-関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA〜D実装完了・E〜H未着手。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
+関連: [全体正本と要決定事項](GAME_DESIGN.md)、[実装規約](../AGENTS.md)。**M00〜M10は実装・自動試験完了、M10後PIE品質不合格。M10.5はA〜F実装/自動検証完了、Gゲームプレイ不合格、R設計のみ完了・実装未着手、H保留。M11〜M18は未着手で進行保留。** 工数・発売日・担当者は未決。
 
-更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10/D11とD12の未指定部分はMVP暫定仕様を使い、残る製品仕様をAlpha前に再決定（マウス基本操作はM10.5で決定済み）、D14/D16〜D18はMVP非ブロック。
+更新: v0.2 / 2026-09-12。MVP決定済みD01〜D09/D13/D15を前提とする。D03は同日の補足「回数上限なし、10回超で後続StayのBITE確率を極端に低下」を優先。D10/D11とD12の未指定部分はMVP暫定仕様を使い、残る製品仕様をAlpha前に再決定（マウス基本操作はM10.5で決定済み）、D16の簡易NavigationはR対象。D14/D17/D18はMVP非ブロック。
 
 ## 1. フェーズ
 
 | フェーズ | 実装範囲 | 完了条件 | 持ち込まないもの |
 |---|---|---|---|
-| MVP | 仮船/風＋表層潮＋深度別潮/空間ライン/1投、上限なしシャクリと10回超減衰、非シャクリ状態のStayとレンジ維持評価、3段階活性AI、0.10〜0.55秒受付、テンション/進捗ファイト、固定重量結果 | Windowsで自然な1投と境界・バラシ・回収試験が再現できる | SHOP、自由操船、波の物理、CFD、季節補正、高度描画、Steam実績 |
+| MVP | 仮船/風＋表層潮＋深度別潮/空間ライン/1投、上限なしシャクリと10回超減衰、非シャクリ状態のStayとレンジ維持評価、3段階活性AI、0.10〜0.55秒受付、テンション/進捗ファイト、固定重量結果 | Windowsで自然な1投と境界・バラシ・回収試験が再現できる | SHOP、Rの簡易操船を超える本格操船、波の物理、CFD、季節補正、高度描画、Steam実績 |
 | Alpha | 自由操船、ポイント探索、地形差、複数エリア、潮の差、ロッドCue改善、実測調整 | エリア選択から釣果まで反復して遊べる | 未決の経済・大会を先行実装しない |
 | 将来版 | 季節/天候、SHOP/装備、詳細ファイト/取り込み、セーブ、Steam配布/実績、大会 | 各仕様決定後の個別受入基準 | オンラインや大会形式を推測で追加しない |
 
@@ -34,7 +36,7 @@
 1. `AGENTS.md` と7設計書を読む。最初の実装タスクを選び、関連D番号の状態を確認する。
 2. 対象リポジトリが `TipRunFishingUE5` であることを確認する。UE 5.8.2 / C++プロジェクトは作成済みであり、既存構成を維持する。
 3. ローカルUE 5.8.2、Windows用コンパイラ/SDK、プロジェクト生成・ビルド手段を確認。導入不足は不足内容を報告する。
-4. MVP決定と使用承認済みのMVP暫定仕様は再承認を求めない。未指定の倍率/係数は調整項目として区別し、試験例は `Prototype/Test` アセットへ隔離する。D14/D16〜D18の保留でMVPを止めない。
+4. MVP決定と使用承認済みのMVP暫定仕様は再承認を求めない。未指定の倍率/係数は調整項目として区別し、試験例は `Prototype/Test` アセットへ隔離する。D14/D17/D18の保留でMVPを止めない。D16はRの限定範囲を実装する。
 
 ## 3. MVPの小タスク
 
@@ -266,7 +268,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 ## 6. Alpha以降の段階
 
 0. **Alpha着手前にD10/D11とD12の未指定部分の製品仕様を再決定する。マウス基本操作はM10.5の決定を維持する。** 重量分布、3種Cue/大型アタリ、製品HUD/入力をMVP暫定仕様から無断昇格させない。
-1. D16を決定して操船/釣り切替と自由移動を実装。BoatSnapshot契約は維持。
+1. Rで導入する簡易操船/釣り切替を基に、本格操船/地形探索を個別設計する。BoatSnapshot契約は維持。
 2. 保留D14とD15のAlpha拡張（波/実海域の位置別環境場）を設計し、地形Provider、エリア選択等を追加。D15のMVP決定を未決へ戻さない。
 3. 実測/経験者レビューでD05/D07を調整し、軽重・潮・レンジの比較記録を残す。
 4. Alpha前に再決定したD11/D12に従い3種アタリ、ロッド表現、製品HUDを実装。
@@ -276,7 +278,7 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 
 ## 7. M10.5 Prototype Realism Revision — 正式品質ゲート
 
-状態（2026-09-16）: **A〜F実装/自動検証完了、G/H未着手、全体品質ゲート未合格。M11〜M18は未着手・進行保留。** M10までの証跡と各段階の完了記録を保持する。保存資産移行・新Level・PIE品質再評価はG/Hの未実施項目であり、自動試験合格で代用しない。
+状態（2026-09-17）: **A〜F実装/自動検証完了。Gは最新手動PIEでゲームプレイ品質不合格。Rの設計のみ完了、実装未着手。HおよびM11以降は保留。** 証跡は保持し、第8節のRをH前の正式ゲートとする。
 
 ### Codex実装単位
 
@@ -290,8 +292,9 @@ M10は旧AutoStay用の設定・期限・HUD契約・タイマー前提テスト
 | M10.5-D（完了） | Fishing/TRRodControlComponent（予定新規）、Data/TRRodTuningDataAsset（予定新規）、TRInputConfigDataAsset、Game/TRPlayerController/TRFishingSessionActor/TRSimulationWorldSubsystem。Axis2Dキュー、RodSnapshot、Pitch/Yaw/あおり、一入力一動作 | B/C、M09/M10 | R06/R11。旧Boolean固定数検証を意味/型別へ移行、入力/寿命/回数回帰 |
 | M10.5-E（完了） | Data/TRTypes/TREvents等の該当共通コマンド/イベント型、Fishing/TRFishingComponent/TREgiSimulationComponent、Game/TRFishingSessionActor、操作Tuning。通常解放→Stay、Quick状態/期限 | C/D、M06/M10 | R07/R08/R09のAPI・数値試験合格。2026-09-15依頼を優先: 通常完了はResult→NでReady/解除、Quick完了は直接Ready/解除。GUI部分はF/G/Hへ残す |
 | M10.5-F（実装・自動検証完了） | UI/TRFishingHUDWidget/TRHUD、Data/TRHUDSnapshot、Game/TRPlayerController、Session/Fishingの操作可否読取口。日本語ガイド/装備パネル/拒否理由/色分離/カーソルContext | D/E | R09/R10のAPI・UMG・入力試験合格。F 6件＋関連回帰27件成功。解像度/DPI/日本語欠字・実マウスの目視確認と保存移行はG/Hへ残す |
-| M10.5-G | Game/TRGameModeBase、TRSessionConfigDataAsset、Prototype設定/入力/メッシュ参照の明示移行、L_TR_M105_PrototypeをUEで作成。最小船/竿/エギ/ライン/方向表示 | A〜F | 保存後の別プロセス再読込、Levelを開きPlayだけで起動。旧M09設定を無言で新係数扱いしない |
-| M10.5-H | Private/TestsのM10.5 Automation/Functional Test、必要回帰、PIEチェック票/結果をDocsへ記録、調整はPrototype限定 | A〜G | R01〜R12、UHT/実C++/Development Editor Win64成功、ユーザーPIE再評価合格 |
+| M10.5-G（品質不合格） | Game/TRGameModeBase、TRSessionConfigDataAsset、Prototype設定/入力/メッシュ参照の明示移行、L_TR_M105_PrototypeをUEで作成。最小船/竿/エギ/ライン/方向表示 | A〜F | 保存後の別プロセス再読込、Levelを開きPlayだけで起動。旧M09設定を無言で新係数扱いしない |
+| M10.5-R（設計のみ） | 第8節のMode/Camera/Sequence/Slack/品質改訂 | A〜F、G不合格分析 | R1〜R9自動検証＋ユーザー手動PIE合格（未実施） |
+| M10.5-H（保留） | Private/TestsのM10.5 Automation/Functional Test、必要回帰、PIEチェック票/結果をDocsへ記録、調整はPrototype限定 | R9手動合格＋明示依頼 | R01〜R12とR改訂契約、UHT/実C++/Development Editor Win64成功、ユーザーPIE再評価合格 |
 
 A/B/C/D/Eは各段階で反射変更を通常ビルド/UHTと関連Automationで確認する。F/GはUI/アセットの保存・読込と目視を追加する。Hで変更由来の警告を解消し、未解消の既存警告と区別する。既存テスト名だけを通過させず、変えた契約の期待値・理由を記録する。M11のAIや評価計算をテスト用に仮実装しない。
 
@@ -507,3 +510,98 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 - AGENTS.md
 - Docs/UI_SPEC.md
 - Docs/ROADMAP.md
+
+### M10.5-G進捗（2026-09-16、保存移行・自動検証済み／手動確認待ち）
+
+- 新規8資産: `/Game/TipRun/Prototype/M105/L_TR_M105_Prototype`、同フォルダの`BP_TR_M105GameMode_Prototype`、`Data/DA_TR_M105{Ocean,Boat,Fishing,Rod,Input,Session}_Prototype`。UEのSavePackageを使用。旧5資産はSHA256一致で変更なし。
+- Ocean FieldRevision/Boat ModelRevision/Fishing EgiModelRevisionはすべて2。Rod/Input/Quick設定を明示接続し、Tableは旧装備定義を共用。初期条件は海面Z=0m、水深30m、風+Y 2m/s、表層/深度潮+X 0.7knot（0.360111m/s、Constant field）、船首+X、船初期XY=(0,0)m。風と潮は独立し、Ocean資産で方向/深度プロファイルを変更可能。
+- 係数はC/D/E試験を基にしたG用のゲーム近似。BoatのWindResponse=.1、CurrentResponse=1、Drag=1kg/s、Inertia=10kg、Bow/Stern/Side=1/.5/2、安全速度1m/s。Rod長2m、Pitch0〜1.2rad/Yaw±.6rad、感度.01/.02rad、Shakuri .3rad・上げ.15秒/戻し.25秒。通常巻取り1m/s、Quick1.5秒、固定更新1/60秒、最大catch-up8、seed20260916。製品値/実測値には昇格しない。その他の調整値は保存DataAssetを正本とする。
+- `ATRPrototypeViewActor`を追加し、Snapshot読取だけの観測カメラ/船/竿/ライン/エギ/深度目盛を接続。`ATRHUD`は当観測Actorがある場合のみ右側配置にする。ConfigはEditorStartupMapのみ追加。通常起動手順はUI_SPECのG節。
+- UHT実行（新規生成3ファイル）・変更コードの実C++・Development Editor Win64成功。初回コンパイルの単位変換ヘッダー不足、Level保存のRF_Standalone不足は修正済み。作成済みDataAssetを再生成せずLevel作成だけを再開した。
+- 保存後の別プロセスでG 2件（SavedAssetReferences / SavedSetupInputAndEquipmentSmoke）成功。D 5件＋E 7件＋F 6件の関連回帰18件成功。計20件、試験内エラー/警告0。保存参照、revision、専用GameMode/Controller/HUD、入力注入、Quick→Ready、Table選択/次Deployロックを確認。A〜C全統合回帰は依頼どおりHに残す。
+- 証跡（生成物・Git対象外）: `Saved/Logs/M105GBuild.log`（UHT）、`M105GBuildFinal.log`/`M105GMapBuild.log`（実コンパイル成功）、`Saved/Automation/M105GRegression/index.json`（20件成功）、`Saved/M105GLegacyHashes.json`（旧資産照合）。ビルドに既知のMSVC非推奨版/旧include順通知あり。試験起動時の既知Engine診断は試験内の警告と区別する。
+- 保存MapがEditorStartupMapから開くことは確認済み。PIE操作と1920×1080/2560×1440の視認性/パネル操作確認はユーザーの手動結果待ち。Gはまだ最終合格としない。HおよびM11以降には着手していない。
+
+### GのPIE可視化/UI修正（2026-09-16、手動再確認待ち）
+
+- ユーザー手動結果を受理: 日本語HUD、装備変更/ロック、FreeFall、過大ラインなし、Mouse値、1クリック1Shakuri、Stay、通常回収/解放、再Fall、Quick→Ready/Unlockは正常。一方、3D黒画面、竿/ライン/エギの観測不能、HUD過大、常時装備パネル、revision不明は不合格。初回Automation成功を可視化の合格証拠にしない。
+- Gだけ修正。`TRPrototypeViewActor`は一時Debug描画から、Collisionなしの永続StaticMesh Componentへ変更。船/竿/竿先/ライン/エギを色分けし、海面枠・30m海底・背景を追加。新規`/Game/TipRun/Prototype/M105/M_TR_Observation_Prototype`（Unlit/Colorパラメータ）をUEで作成し、保存Levelへ明示参照。近距離Perspectiveカメラと毎フレームのViewTarget確認でGameMode接続後も観測カメラを維持する。旧方式の黒画面原因すべてを実PIEで特定できたとは主張しない。
+- RodTip/WorldPositionから表示Transformだけを導出。Simulation/海/船/エギ/ラインの数値コード・Tuning値は変更なし。表示Meshの太さ・色・カメラはPrototype専用。既存G資産8件のうちLevelのみ変更、材質1資産追加。旧revision1資産は維持。
+- `TRHUD`/`TRFishingHUDWidget`/`TRPrototypePresentation`をコンパクト化。主要11項目、短い7操作、F1で詳細/Debugキーを折りたたむ。右上幅最大420・通常高さ560 Slate単位（DPI/画面幅上限あり）。Env/Boat/Egi revision欄を常設、実値が2以外なら警告。船上Egiは投入設定と明記。
+- `TRPlayerController`のReady/Result自動パネル表示を廃止。初期Closed、Tab/閉じるで開閉、Quick後もClosed。既存入力遮断/保持解除・Session装備APIは維持。新規F1は表示だけを切替。Fの旧自動表示期待を今回の明示仕様に合わせて改訂し、Tab操作を試験へ追加した。
+- UHTは4ファイルを生成。初回の表示コードの型エラー/浮動小数リテラル警告を修正後、実C++/Development Editor Win64成功。証跡: `Saved/Logs/M105GVisualBuild.log`（UHT）、`M105GVisualBuild2.log`（成功）。残存は既知の非推奨MSVC 14.51/旧include順通知。G由来のC++警告なし。
+- UE保存移行単独1件成功後、別プロセスでG 3件＋D 5/E 7/F 6/M09 7の関連回帰25件、計28件成功。各試験エラー/警告0。`Saved/Automation/M105GVisualRegression/index.json`。追加検証は保存Mesh/材質参照、Snapshot→表示位置/Line端点の整合、Shakuri中の表示Tip移動、描画が時計を進めないこと、初期Closed/Tab、主要表示件数、F1による実UMG行の折りたたみ、revision不一致警告。A〜C全物理回帰/Hは未実施。
+- 保存移行は`-TRMigrateM105GView`を付けた`TipRun.M105G.SavedAssetReferences`のみがContentを書込む。通常試験は読取。新規環境で8資産から生成する場合は既存生成フラグに同移行フラグを併用する。保存済みの正しいDataAssetを作り直さない。
+- 自動PIEで強制終了するとのユーザー申告を受け、自動Editor入力を停止。保存LevelのEditor読込までは確認したが、修正後の3D視認・マウス動作・1920×1080配置は未確認。手順/正常基準はUI_SPEC末尾。Gの合格は保留、手動結果を得てから判定し、H・M11以降には進まない。
+
+### G追加修正・Shakuri interaction revision（2026-09-17）
+
+- ユーザー手動正常報告: 背景/海面/海底、Boat/Rod/Line/Egi、Mouse Rod、Tab/F1、Rev2、FreeFall、Normal/Quick Retrieve。これらを保持。追加不合格はHUD過大、狭い竿範囲、観測視点/固定基準不足、連続Shakuriの作用低下。
+- コードと比較試験で弛み蓄積を確認。巻取りなし5連続の上昇量は約1.536/0.788/0.277/0.049/0m。旧試験は一連で一度の上昇だけを確認していた。通常回収とは独立したReturn同期Pulseを導入し、毎回のライン拘束を検査。現行5連続は約2.313/1.606/2.000/2.000/2.110m（静水・35g・試験初期条件、製品性能値ではない）。ライン短縮は海面制約なしで約2m/Action。2/3回も全Actionで作用し、保持連打なし。
+- 最初の試験用0.6m/Actionでは5回目が弱く、上げ中も巻く1.2m/Actionでは毎回の拘束が成立しなかった。受入条件を緩めず、戻し中の短い巻取りへ変更。詳細はFISHING_SYSTEM第13節。海面で旧Locked長が竿先高さを満たせない境界も修正し、既存ReelIn最小長/海面円制約を共用する。新しいEgi直接速度注入なし。
+- 表示専用Camera Look、固定グリッド/ブイ、船首/船室とエギ形状、8行/短いガイドのHUD。操作と仮値はUI_SPEC末尾を正本とする。正常revision詳細はF1、不一致警告は通常時も表示する。SimulationはCamera/Gridから変更されない。
+- UE保存手段でRod DataAssetと保存Levelを明示更新（`-TRMigrateM105GInteraction`）。旧5資産はSHA256一致を確認。通常のAutomationはContentを書き換えない。既存GameMode/Input/Environment/Boat/Fishing/Equipment参照を維持。
+- ビルド成功: `Saved/Logs/M105GInteractionBuild.log`でUHT生成5ファイルと実C++、最終変更は`M105GInteractionFinalBuild.log`で実C++コンパイル/リンク成功。UE5.8.2、Development Editor Win64。途中の試験参照名のコンパイルエラーは修正済み。
+- 最終の一意な試験42件が成功: G 6（既存3拡張＋新規3）、D 5、E 7、F 6、M09 7、M10 8、Cの水/需要繰出しと安全Snapshot 2、M04キュー1。Hの全物理統合回帰は実施していない。2/3/5連続の各回の拘束/上昇/ライン短縮、旧Lift/Reel値を極端に変えても結果不変、海面/浅場/底、30/60/120fps、Pause/Focus、通常回収とのSequence競合を確認。
+- 証跡: `Saved/Automation/M105GInteractionRegression/index.json`のF以外36件成功。Fでは2件不一致を検出し、詳細値の確認をF1へ移し、保持試験の左右Actionを同じ入力フレームへ注入するよう修正（別フレームでは他方の擬似Releaseを発生させていた）。`Saved/Automation/M105GInteractionUIFinal/index.json`でF全6件成功。合格済み試験内のエラー/警告0。UIクリック遮断の期待値は維持した。
+- 残存は既知の非推奨MSVC/旧include順通知とEditor起動時のCondition failed 19件・Layout通知。Gの試験内エラーと混同しない。`git diff --check`成功。修正後PIE/1920×1080の目視は未実施、ユーザー手動再評価が必要。コード/自動検証は合格、G全体の最終合否は保留。H・M11以降未着手。
+
+今回の主な変更ファイル（以前のG差分も保持）:
+
+- `Data/TRRodTuningDataAsset.h/.cpp`、`Fishing/TRRodControlComponent.h/.cpp`、`Fishing/TRFishingComponent.cpp`、`Fishing/TREgiSpatialSimulation.cpp`、`Game/TRFishingSessionActor.cpp`。
+- `Game/TRPlayerController.h/.cpp`、`Game/TRPrototypeViewActor.h/.cpp`、`UI/TRFishingHUDWidget.h/.cpp`、`UI/TRPrototypePresentation.cpp`、`UI/TRHUD.cpp`。
+- `Tests/TRRodTests.cpp`、`Tests/TRPrototypeSetupTests.cpp`、`Tests/TRPrototypeUITests.cpp`。
+- `Content/TipRun/Prototype/M105/Data/DA_TR_M105Rod_Prototype.uasset`、`Content/TipRun/Prototype/M105/L_TR_M105_Prototype.umap`。
+- `AGENTS.md`、`Docs/GAME_DESIGN.md`、`Docs/FISHING_SYSTEM.md`、`Docs/UI_SPEC.md`、`Docs/ROADMAP.md`。Configは今回追加変更なし。
+
+## 8. M10.5-R Gameplay Architecture Revision — H前の再実装ゲート
+
+2026-09-17: **Gはゲームプレイ品質不合格**。A〜Fの基盤とGの保存資産/自動検証結果は保持するが、最新手動PIEの不自然な視点/釣り座、操船ループ欠如、速いドリフト、連続Shakuri不安定/過剰回収、視認品質、F1異常を正式な不合格理由とする。旧「G手動結果待ち」は履歴。今回は設計文書のみ更新し、以下のR実装は全て未着手。H/M11も未着手。
+
+### 小タスクと依存関係
+
+以下の型名は予定名。各行を独立依頼単位とし、既存正しいコードを作り直さない。Sourceパスは`Source/TipRunFishingUE5`配下のPublic/Privateを指す。
+
+|単位|依存|対象・変更予定|Automationの受入/必要回帰|手動確認・停止境界|
+|---|---|---|---|---|
+|R1 Mode architecture|A〜F|Game/TRPlayerModeComponent新設、TRFishingSessionActor/TRGameModeBase、DataのMode要求/Snapshot|Navigation/Fishing、ModeEpoch、同Tick順、古いCast/Session、Pause、投中退出拒否、Normal Result/Quick Ready。M04/M06/E寿命回帰|モードと拒否理由の確認。推進・Camera・Sequenceはまだ追加しない|
+|R2a Navigation motion|R1/B|Boat/TRBoatNavigationComponent新設、TRBoatDriftComponent、Boat Tuning、固定配送|単一積分、推力/舵、慣性、Heading/Velocity分離、釣り移行で推進0/速度連続、無効環境。B/M04該当回帰|推進/操舵を記録で確認。三人称品質はR2b待ち|
+|R2b Navigation camera/input|R2a|Game/TRPlayerCameraManager新設、TRPlayerController、Input/Camera設定、TRPrototypeViewActorのViewTarget所有解除|Mouse LookがBoat正本を書かない、Input Context排他、Focus/Pause、30/60/120fps。D/M09入力回帰|三人称で移動・船首選択が自然。Fishing視点はR3bへ|
+|R3a Fishing stations|R1/R2a/C/D|Data/TRFishingStationDataAsset新設、Boat/Rod/Session設定接続|左右舷の位置/方位、船移動後Eye/Mount/Tip整合、投中舷変更拒否、選択参照不備。CのTip接続/D回帰|左右舷識別。カメラ自然さはR3bへ|
+|R3b First-person camera|R2b/R3a|CameraManager、Camera Tuning、Rod/Reel表示参照|選択舷Eye、角度制限、表示のみ補間、ViewTarget競合なし|Rod/Reel/海面中心、真上真下なし。入力仕上げはR4|
+|R4 Fishing input/aim|R3b|Controller、Input設定、RodControl、Modeキュー接続|Mouse基準Aim/Camera読取、Snap余裕、UI遮断、保持解除、Cast/ModeEpoch/30-120fps。D/E/M09/F関連回帰|通常釣りにShift不要。右/左操作維持。Sequenceは旧挙動と明示|
+|R5 Shakuri Sequence|R4|Fishing/TRShakuriSequenceComponent新設、TRFishingComponent/TRRodControlComponent、Snapshot|1/2/3/5要求、Repeat拒否、Recoverと予約順、終了時だけTF、無AutoStay、割込/寿命。D/M10/E関連回帰|状態管理まで。R6前に保存Prototypeへ新Sequenceを有効化して物理合格としない|
+|R6 Slack-aware Reel|R5/C|TREgiSpatialSimulationのライン要求、Sequence接続、Rod/Fishing Tuning|全Jerkの因果対照試験、必要余長だけ回収、5回過剰回収なし、拘束/境界/有限数、30-120fps、左との競合。C該当/D/E/M10回帰|間隔違いの1〜5回すべて作用。固定2mや直接速度注入で代用不可|
+|R7 Drift measurement/tuning|R2a/R3a/B|Prototype Boat設定、測定Snapshot/試験、必要な表示|0.4/.7/1 knot、風/潮方向別、10/30/60秒変位、停止/航行後比較、決定性。B関連回帰|固定基準に対する体感評価。式を無条件に置換せず係数調整を記録|
+|R8a F1/HUD fix|F/G、独立着手可|Controller/Widget/TRHUD/TRPrototypePresentation、必要ならConfig/DefaultInput.iniの限定除外|実入力経路1押下1toggle、UI/Pause/Close、ViewMode等不変、20往復、HUD値。F/M09回帰|紫表示なし/閉じられる実キー確認。Engine設定編集禁止|
+|R8b Visual/readability|R3b/R4/R8a|表示Actor、Prototype Mesh/Material/Level、モード別HUD|Snapshot→表示、釣り座/Rod/Reel/Line参照、Asset load、UI/Input非干渉|塗りの船/左右舷/海中/固定基準、1080p/1440p。物理値を表示都合で変更しない|
+|R9 Integration / PIE gate|R1〜R8全て|保存R Prototypeの明示参照移行、GameMode/Input/Session接続、統合試験と記録|保存後別プロセスload、全モード往復、投入〜回収〜装備〜再投入、全Jerk、古い世代/破棄、関連機能統合|下記全項目をユーザー手動確認。Hの全統合試験を先取りしない|
+
+推奨主順序はR1→R2a→R2b→R3a→R3b→R4→R5→R6→R7→R8b→R9。R8aは独立して早期実施でき、R7は依存成立後に別単位で実施できる。複数単位を暗黙に一括実装しない。R5/R6の純粋な状態試験は可能だが、片方だけで新Shakuriの実プレイ合格とはしない。
+
+### 共通の品質境界
+
+- 各実装単位は着手前差分確認→必要なコード/設定だけ変更→新規試験＋直接影響する回帰→文書へ証跡。C++変更時はUHT・変更コードの実コンパイル・Development Editor Win64を行う。Contentのみでも保存/別プロセス読込と参照検証、常にgit diff --checkを行う。
+- A〜Fを毎回全部再実行しない。正本の環境/船/エギ契約に変更があれば該当試験を追加。A〜Cを含む全物理統合回帰はHに残す。R9はRで変えたゲームループの統合を省略しない。
+- 新しい設定はPrototype/Test値として管理。旧資産の意図しない上書きを避け、R用コピーまたは明示移行を選び参照を検証する。Environment/Boat/Egiのrevision 2をRという理由だけで3へ変更しない。Rod旧固定Pulseとの互換/新設定選択を明示し、保存移行をR9で確認する。
+- Sequenceの詳細式/調整項目/試験案はFISHING_SYSTEM第14節、船の測定はBOAT_SYSTEM第9節、UIの操作/目視手順はUI_SPEC末尾が正本。テスト値を製品値へ昇格しない。
+- Gで成功した旧固定Pulseの試験は履歴として保存。Rの仕様変更による置換理由と新受入を明記し、テストを通すためだけに期待値を緩めない。操作感はAutomation成功だけで合格にしない。
+
+### 最終ユーザー手動PIEゲート
+
+|確認|合格条件|
+|---|---|
+|Navigation|海域を移動しポイントと船首を決められる|
+|三人称|Mouse周囲確認と操船が競合せず自然|
+|Fishing Side|左右舷を選べ、竿元/目線が選択側にある|
+|一人称|Rod/Reel/海面が自然。Shift観測を要求しない|
+|1〜5回Shakuri|毎回Rod→Line→Egi作用。Held自動連打なし|
+|過剰回収|5回程度で船上へ回収されず、各回の必要Slackだけ巻く|
+|TF/Stay|Sequence終了後に自然に移行。AutoStayなし|
+|ドリフト|Headingと方向を分離。10/30/60秒変位と体感が許容される|
+|視認品質|Boat/左右舷/Rod/Reel/Line/Egi/水面/水中/海底/固定基準を識別|
+|HUD/F1|1080p/1440pで視界を塞がず、紫表示なし/詳細を閉じられる|
+|既存ループ|Normal解放、Re-Fall、Quick Ready、装備変更/再Lockが維持|
+|寿命/切替|UI/Focus/Pause/Mode変更で残留入力なし。Cast中操船拒否|
+
+ビルド識別・保存Map/設定・環境・入力間隔・左右舷・解像度と結果を記録する。自動PIEは再実行せずユーザーが手動評価する。不合格はRの該当単位へ戻す。**R自動検証＋全手動合格の明示報告＋次の明示依頼**がH開始条件。R合格だけでM11へ進まない。今回の設計更新をR実装完了やPIE合格と記録しない。

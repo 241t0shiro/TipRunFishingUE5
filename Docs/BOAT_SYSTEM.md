@@ -1,12 +1,14 @@
 # 船・ドリフト技術設計
 
+2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
+
 2026-09-14 M10.5-B完了: 風/表層潮を別々に評価する船体方向別応答、抗力/慣性、解析的な固定更新とBoat Snapshot拡張を実装。UHT生成・実C++・Development Editor Win64成功、B 5件＋A/M03/M04/M05/M08回帰26件成功、各試験エラー/警告0。旧保存設定はModelRevision=1で互換維持、新モデルは明示revision 2。保存Prototypeの移行/PIE再評価は未実施。C〜HおよびM11以降は未着手、M10.5全体の品質ゲートは未合格。以下のA完了/設計のみの記録は履歴。
 
 2026-09-13 M10.5設計改訂（実装未着手）: M00〜M10の実装・自動試験成功は履歴として保持するが、ユーザーのM10後PIE評価は再現性・操作性の品質不合格。M11への進行はM10.5品質ゲート合格まで保留する。本書のM10.5改訂契約を旧記述より優先し、M03〜M10完了記録は旧実装の証跡として読む。今回はMarkdownのみ更新し、改訂機能の実装・ビルド・試験は行っていない。
 
-関連: [全体正本](GAME_DESIGN.md)、[海](OCEAN_SYSTEM.md)、[エギ](FISHING_SYSTEM.md)。MVPはプレイヤー自由操船を実装せず、将来も同じBoatSnapshotを釣り側へ供給する。
+関連: [全体正本](GAME_DESIGN.md)、[海](OCEAN_SYSTEM.md)、[エギ](FISHING_SYSTEM.md)。M10.5-Rで簡易操船を設計。BoatSnapshotを釣り側へ供給する責務は維持する。
 
-更新: v0.2 / 2026-09-12。D15改訂によりM10.5で風＋表層潮に船体応答を導入する。第2節の旧式とM05記録は移行前の履歴。波物理は対象外。D14/D16は保留、MVP非ブロック。
+更新: v0.2 / 2026-09-12。D15改訂によりM10.5で風＋表層潮に船体応答を導入する。第2節の旧式とM05記録は移行前の履歴。波物理は対象外。D14は保留・非ブロック。D16の簡易操船はRで承認済み（第9節）。
 
 ## 1. 責務とクラス
 
@@ -116,3 +118,27 @@ Kw=BoatWindResponse、Kc=BoatCurrentResponse、Kd=BoatDragは非負の有効係�
 - `TipRun.M105B`全5試験成功。解析解の独立比較は位置/速度1e-10許容（R02の1e-4より厳しい）。無風無潮、風のみ、潮のみ、同/逆/直交、船首/横/船尾、慣性増、開始/停止/反転、0.4/0.7/1.0 knot、1e-10〜1000秒刻みの有限性、防御上限、NaN/Inf、設定凍結/シリアライズ、Pause、30/60/120fps一致、Rod/Actor/M08同Tick接続、Session/Boat/World寿命を確認した。
 - 代表試験値: 風2m/s、WindResponse=0.1、CurrentResponse=1、Drag=1 kg/s、Inertia=10kg、Bow/Stern/Side=1/0.5/2、上限1m/s。3潮速×3方向で10 sim秒間の船速が0.5m/s未満かつ防御停止なしを確認。解析専用条件はWindResponse=0.2、CurrentResponse=0.8、Drag=1、Inertia=4、方向倍率すべて1、風2m/s・潮0.5m/sで、目標0.4m/s・時定数2秒。いずれもゲーム近似のTest受入値であり実船の実測値・製品既定値ではない。
 - UHT 9生成ファイル、実C++/Development Editor Win64成功。詳細な回帰件数・警告・証跡はROADMAPのB完了記録を参照。PIE操作感/実測校正/パッケージは未実施。Bは合格、Cへ接続可能だがC以降には着手していない。
+
+## 9. M10.5-R 操船・釣り座・ドリフト再評価（設計のみ）
+
+Rは簡易Navigationを承認された対象とする。旧「自由操船は全てAlpha」「環境速度と推進速度を合成」は本節で改訂。Bの風/表層潮を別評価するモデルを保持する。
+
+### 単一の船体更新
+
+新設予定`UTRBoatNavigationComponent`は固定入力から推進力/操舵要求を作る。独立TickでPawnを動かさない。`UTRBoatDriftComponent`を船位置・速度・Headingの唯一の積分担当として拡張する。従来Bの軸別風/潮抗力へHeading方向の推進力を加える。概念式は `I dv/dt = Fwind + FsurfaceCurrent - Drag*v + Fthrust`。別計算の推進速度を後で加算しない。舵は調整可能な角速度/応答時間を持つ簡易モデルとし、Chaos/6自由度船舶物理にはしない。
+
+Navigationでも環境作用は継続。Fishing移行で推進/舵要求を0としHeadingを保持するが、速度と位置は継承する。速度方向へ船首を自動整列しない。釣り中の風による自動Yawは今回追加しない。操船用速度の安全範囲は旧MaxDriftSpeedと区別し、移行時の残留速度をClampして止めたり異常扱いしたりしない。質量相当/推力/操舵速度/応答/速度安全限界はPrototype DataAssetへ分離する。
+
+### Port / Starboard
+
+新設予定`UTRFishingStationDataAsset`に左右舷のLocalPlayer/Eye/Mount位置、基準Facing、Rod参照を持つ。Boatローカル+Xが船首、+Yが右舷、-Yが左舷、+Zが上。釣り座は安定ID付きの配列として持ち、初期要素をPort/Starboardとする。船種ごとの座数変更を可能にするが、今回は左右舷の2要素だけを使用する。船首中央の共通Mountへ戻さない。
+
+`WorldMountM = BoatPositionM + HeadingRotation * LocalMountM`。Eyeも同様。RodTipはこのMountからDのBasePose/一時Offset/長さで計算しCへ渡す。座標はSimulation m、表示境界だけcm。BoatSnapshotの旧固定RodAnchorと、実際に動くRodSnapshotのRodTipを区別し、ラインは後者を使用する。舷選択はFishing開始前だけ、Cast中に変更しない。
+
+### ドリフト速度の測定・再調整
+
+Bを廃棄せず、風と表層潮の応答係数、方向別受風係数、抗力、慣性を個別に測る。0.4/0.7/1.0 knot、無風/風のみ/潮のみ/同方向/逆方向/直交、船首違いで、10/30/60 Simulation秒の位置差(m)、平均/終端速度(m/s・knot)、Heading/移動方位を記録する。停止開始とNavigation残留速度からの開始を別試験とする。
+
+Prototype調整は既存B値との比較表と固定世界基準物を使った手動評価で行う。現実の船舶実測値はないため「ゲーム近似」と明記。見た目の速さをカメラ追従だけで隠さず、単純な速度Clampだけで調整しない。実装前に試験条件と受入速度帯を記録し、失敗後に期待値を都合よく変えない。製品速度の確定はしない。
+
+NavigationとCameraの自然さ、選んだ船首を保つ横流し、左右舷の竿位置を手動ゲートにする。無効環境時は推進を止め最後の有効状態を保持して異常を通知する。架空の水深/船上帰還は作らない。詳細タスクはROADMAP R2/R3/R7。
