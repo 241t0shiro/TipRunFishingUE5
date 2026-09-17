@@ -31,34 +31,29 @@ void UTRFishingHUDWidget::BuildLayout()
 {
  SetIsFocusable(true);
  if (!WidgetTree || WidgetTree->RootWidget) { return; }
- auto* Scale = WidgetTree->ConstructWidget<UScaleBox>(); Scale->SetStretch(EStretch::ScaleToFit);
- auto* Size = WidgetTree->ConstructWidget<USizeBox>(); Size->SetWidthOverride(1120); Size->SetHeightOverride(640); Scale->SetContent(Size);
- auto* Border = WidgetTree->ConstructWidget<UBorder>(); Border->SetPadding(FMargin(12)); Border->SetBrushColor(FLinearColor(.015f,.025f,.04f,.94f)); Size->SetContent(Border);
- auto* Columns = WidgetTree->ConstructWidget<UHorizontalBox>(); Border->SetContent(Columns);
- auto* ReadScroll = WidgetTree->ConstructWidget<UScrollBox>(); ReadScroll->SetConsumeMouseWheel(EConsumeMouseWheel::WhenScrollingPossible);
- auto* ReadSize = WidgetTree->ConstructWidget<USizeBox>(); ReadSize->SetWidthOverride(675); ReadSize->SetContent(ReadScroll); Columns->AddChildToHorizontalBox(ReadSize);
- auto* ReadRows = WidgetTree->ConstructWidget<UVerticalBox>(); ReadScroll->AddChild(ReadRows);
- auto* Side = WidgetTree->ConstructWidget<UVerticalBox>(); auto* SideSlot = Columns->AddChildToHorizontalBox(Side); SideSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); SideSlot->SetPadding(FMargin(12,0,0,0));
+ auto* Border = WidgetTree->ConstructWidget<UBorder>(); Border->SetPadding(FMargin(6)); Border->SetBrushColor(FLinearColor(.015f,.025f,.04f,.78f));
+ auto* Scroll = WidgetTree->ConstructWidget<UScrollBox>(); Scroll->SetConsumeMouseWheel(EConsumeMouseWheel::WhenScrollingPossible); Border->SetContent(Scroll);
+ auto* ReadRows = WidgetTree->ConstructWidget<UVerticalBox>(); Scroll->AddChild(ReadRows);
+ auto* Side = ReadRows;
  auto Text = [&](FText Content, int32 FontSize, FLinearColor Color)
  {
   auto* T = WidgetTree->ConstructWidget<UTextBlock>(); T->SetText(Content);
   T->SetFont(FCoreStyle::GetDefaultFontStyle("Regular", FontSize)); T->SetColorAndOpacity(FSlateColor(Color)); T->SetAutoWrapText(true); return T;
  };
- ReadRows->AddChildToVerticalBox(Text(LOCTEXT("Title", "ティップラン / Prototype観測HUD"),19,ValueColor));
+ ReadRows->AddChildToVerticalBox(Text(LOCTEXT("Title", "ティップラン / Prototype"),13,ValueColor));
+ RevisionStatus=Text(FText(),11,ValueColor); ReadRows->AddChildToVerticalBox(RevisionStatus);
  for (const auto& Row : BuildReadout(DisplaySnapshot))
  {
-  auto* Pair = WidgetTree->ConstructWidget<UHorizontalBox>(); ReadRows->AddChildToVerticalBox(Pair)->SetPadding(FMargin(0,2));
-  auto* Label = Text(Row.Label,15,LabelColor); auto* LabelSize=WidgetTree->ConstructWidget<USizeBox>(); LabelSize->SetWidthOverride(230); LabelSize->SetContent(Label); Pair->AddChildToHorizontalBox(LabelSize);
-  auto* V = Text(Row.Value,15,ValueColor); Pair->AddChildToHorizontalBox(V)->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); Labels.Add(Label); Values.Add(V);
+  auto* Pair = WidgetTree->ConstructWidget<UHorizontalBox>(); ReadRows->AddChildToVerticalBox(Pair)->SetPadding(FMargin(0,1)); ReadoutPairs.Add(Pair);
+  auto* Label = Text(Row.Label,11,LabelColor); auto* LabelSize=WidgetTree->ConstructWidget<USizeBox>(); LabelSize->SetWidthOverride(125); LabelSize->SetContent(Label); Pair->AddChildToHorizontalBox(LabelSize);
+  auto* V = Text(Row.Value,11,ValueColor); Pair->AddChildToHorizontalBox(V)->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); Labels.Add(Label); Values.Add(V);
  }
- Side->AddChildToVerticalBox(Text(LOCTEXT("GuideTitle", "基本操作 / ○使用可・—使用不可"),18,ValueColor));
- for (const auto& Row : BuildGuide(DisplaySnapshot)) { auto* T=Text(Row.Text,15,LabelColor); Side->AddChildToVerticalBox(T); Guides.Add(T); }
- Side->AddChildToVerticalBox(Text(LOCTEXT("Direction", "方向は流れる向き：世界 +X=0°、+Y=90°\n装備パネル中は釣りマウス操作を停止"),12,LabelColor));
+ Side->AddChildToVerticalBox(Text(LOCTEXT("GuideTitle", "操作 / F1：詳細を開閉"),13,ValueColor))->SetPadding(FMargin(0,8,0,0));
+ CompactGuide=Text(LOCTEXT("CompactGuide","Mouse：竿 / 右：シャクリ / 左保持：巻取り\nF：再落下 / Q：回収 / Enter：投入 / Tab：装備\nShift+Mouse：視点 / Home：視点リセット"),10,LabelColor); Side->AddChildToVerticalBox(CompactGuide);
+ for (const auto& Row : BuildGuide(DisplaySnapshot)) { auto* T=Text(Row.Text,12,LabelColor); Side->AddChildToVerticalBox(T); Guides.Add(T); }
  InputStatus=Text(FText(),12,ValueColor);Side->AddChildToVerticalBox(InputStatus);
- Side->AddChildToVerticalBox(Text(LOCTEXT("Debug", "Debug: Space=シャクリ / R=回収 / T=TF\nBackspace=中断（再開はPIE再起動）\nHook / BITE は未実装"),11,DisabledColor));
- auto* EquipmentScroll = WidgetTree->ConstructWidget<UScrollBox>();
- Side->AddChildToVerticalBox(EquipmentScroll)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
- EquipmentPanel = WidgetTree->ConstructWidget<UVerticalBox>(); EquipmentScroll->AddChild(EquipmentPanel);
+ DebugHelp=Text(LOCTEXT("Debug", "Debug: Space=シャクリ / R=回収 / T=TF\nBackspace=中断（再開はPIE再起動）\n方向は流れる向き：+X=0°、+Y=90°\n白=船・橙=竿・黄=ライン・赤=エギ\nHook / BITE は未実装"),11,DisabledColor); Side->AddChildToVerticalBox(DebugHelp);
+ EquipmentPanel = WidgetTree->ConstructWidget<UVerticalBox>(); Side->AddChildToVerticalBox(EquipmentPanel);
  EquipmentPanel->AddChildToVerticalBox(Text(LOCTEXT("EquipmentTitle", "次投の装備（Prototype・購入なし）"),18,ValueColor));
  EquipmentStatus=Text(FText(),13,LabelColor); EquipmentPanel->AddChildToVerticalBox(EquipmentStatus);
  EgiCombo=WidgetTree->ConstructWidget<UComboBoxString>(); EquipmentPanel->AddChildToVerticalBox(EgiCombo);
@@ -74,7 +69,7 @@ void UTRFishingHUDWidget::BuildLayout()
  DeployButton=Button(LOCTEXT("Deploy", "投入（Enter）")); DeployButton->OnClicked.AddDynamic(this,&UTRFishingHUDWidget::OnDeploy);
  NextButton=Button(LOCTEXT("Next", "次投の準備へ（N）")); NextButton->OnClicked.AddDynamic(this,&UTRFishingHUDWidget::OnNext);
  Button(LOCTEXT("Close", "パネルを閉じる（Tab）"))->OnClicked.AddDynamic(this,&UTRFishingHUDWidget::OnClose);
- WidgetTree->RootWidget=Scale;
+ WidgetTree->RootWidget=Border;
  ApplySnapshot(DisplaySnapshot);
 }
 void UTRFishingHUDWidget::BindController(ATRPlayerController* PC)
@@ -172,8 +167,19 @@ void UTRFishingHUDWidget::ApplySnapshot(const FTRHUDSnapshot& S)
 {
  DisplaySnapshot=S;
  if(InputStatus){InputStatus->SetText(S.InputConfigurationNote);}
- const auto Rows=BuildReadout(S);
- for(int32 I=0;I<Rows.Num() && I<Values.Num();++I){Labels[I]->SetText(Rows[I].Label);Labels[I]->SetColorAndOpacity(LabelColor);Values[I]->SetText(Rows[I].Value);Values[I]->SetColorAndOpacity(ValueColor);}
+ const bool Details=Controller.IsValid() && Controller->IsPrototypeDetailsOpen();
+ const auto Rows=Details?BuildReadout(S):BuildCompactReadout(S);
+ if(CompactGuide){CompactGuide->SetVisibility(Details?ESlateVisibility::Collapsed:ESlateVisibility::Visible);}
+ for(int32 I=0;I<Rows.Num() && I<Values.Num();++I)
+ {
+  Labels[I]->SetText(Rows[I].Label); Labels[I]->SetColorAndOpacity(LabelColor);
+  FString Value=Rows[I].Value.ToString();
+  if(!Details){Value.ReplaceInline(TEXT("\n"),TEXT(" / "));}
+  Values[I]->SetText(FText::FromString(Value)); Values[I]->SetColorAndOpacity(ValueColor);
+  ReadoutPairs[I]->SetVisibility(Details || IsPrimaryReadout(I)?ESlateVisibility::Visible:ESlateVisibility::Collapsed);
+ }
+ if(RevisionStatus){RevisionStatus->SetText(FormatRevisions(S));RevisionStatus->SetColorAndOpacity(HasRevisionMismatch(S)?FLinearColor(1,.25f,.15f):LabelColor);RevisionStatus->SetVisibility(Details||HasRevisionMismatch(S)?ESlateVisibility::Visible:ESlateVisibility::Collapsed);}
+ if(DebugHelp){DebugHelp->SetVisibility(Details?ESlateVisibility::Visible:ESlateVisibility::Collapsed);}
  const auto Guide=BuildGuide(S);
  const bool bOpen=Controller.IsValid() && Controller->IsPrototypePanelOpen();
  for(int32 I=0;I<Guide.Num() && I<Guides.Num();++I)
@@ -182,6 +188,7 @@ void UTRFishingHUDWidget::ApplySnapshot(const FTRHUDSnapshot& S)
   const bool Enabled=Guide[I].bAvailable && !(bOpen && I<6);
   Guides[I]->SetText(FText::FromString((Enabled?TEXT("○ "):TEXT("— "))+Guide[I].Text.ToString()));
   Guides[I]->SetColorAndOpacity(Enabled?ValueColor:DisabledColor);
+  Guides[I]->SetVisibility(Details || IsPrimaryGuide(I)?ESlateVisibility::Visible:ESlateVisibility::Collapsed);
  }
  UpdatePanel();
 }
@@ -210,6 +217,7 @@ FReply UTRFishingHUDWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry,con
  {
   const FKey Key=Event.GetKey();
   if(Key==EKeys::Tab){if(!Event.IsRepeat()){OnClose();}return FReply::Handled();}
+  if(Key==EKeys::F1){if(!Event.IsRepeat()){Controller->TogglePrototypeDetails();ApplySnapshot(DisplaySnapshot);}return FReply::Handled();}
   if(Key==EKeys::P){if(!Event.IsRepeat()){Controller->SetPauseRequested(!DisplaySnapshot.bPaused);}return FReply::Handled();}
   // Let an open combo consume Enter to finish editing, never deploy that same key.
   if(Key==EKeys::Enter && ((EgiCombo && EgiCombo->IsOpen()) || (SinkerCombo && SinkerCombo->IsOpen()))){return Super::NativeOnPreviewKeyDown(Geometry,Event);}

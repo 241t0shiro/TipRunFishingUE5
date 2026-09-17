@@ -69,14 +69,14 @@ TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapsho
  TArray<FTRPrototypeGuideRow> Rows;
  auto Add = [&](FText Text, ETRFishingCommandType Command) { Rows.Add({Text,S.bSessionValid && !S.bPaused && S.AvailableCommands.Contains(Command) && !S.UnmappedPrimaryInputs.Contains(Command)}); };
  Add(LOCTEXT("GuideMouse", "マウス移動：竿操作"),ETRFishingCommandType::RodAim);
- Add(LOCTEXT("GuideRight", "右クリック：シャクリ（1押下1回）"),ETRFishingCommandType::Jerk);
+ Add(LOCTEXT("GuideRight", "右クリック：シャクリ"),ETRFishingCommandType::Jerk);
  Add(LOCTEXT("GuideLeft", "左クリック長押し：巻き上げ"),ETRFishingCommandType::RetrieveStarted);
  Add(LOCTEXT("GuideRelease", "左クリックを離す：巻き上げ停止"),ETRFishingCommandType::RetrieveStopped);
  Add(LOCTEXT("GuideFall", "F：再フォール"),ETRFishingCommandType::Fall);
- Add(LOCTEXT("GuideQuick", "Q：クイック回収（途中停止不可）"),ETRFishingCommandType::QuickRetrieve);
- Add(LOCTEXT("GuideDeploy", "Enter：投入（適用済み装備を使用）"),ETRFishingCommandType::Deploy);
+ Add(LOCTEXT("GuideQuick", "Q：クイック回収"),ETRFishingCommandType::QuickRetrieve);
+ Add(LOCTEXT("GuideDeploy", "Enter：投入"),ETRFishingCommandType::Deploy);
  Add(LOCTEXT("GuideNext", "N：次投の準備へ"),ETRFishingCommandType::NextCast);
- Rows.Add({LOCTEXT("GuideEquipment", "Tab：装備パネルを開く／閉じる"),S.bSessionValid});
+ Rows.Add({LOCTEXT("GuideEquipment", "Tab：装備"),S.bSessionValid});
  Rows.Add({LOCTEXT("GuidePause", "P：一時停止／再開"),S.bSessionValid});
  return Rows;
 }
@@ -85,5 +85,48 @@ FText UTRFishingHUDWidget::FormatSnapshot(const FTRHUDSnapshot& S)
  FString Text;
  for (const auto& Row : BuildReadout(S)) { Text += Row.Label.ToString()+TEXT(": ")+Row.Value.ToString()+TEXT("\n"); }
  return Value(Text);
+}
+bool UTRFishingHUDWidget::IsPrimaryReadout(int32 Index)
+{
+ switch(Index){case 1:case 2:case 5:case 7:case 11:case 14:case 17:case 18:return true;default:return false;}
+}
+bool UTRFishingHUDWidget::IsPrimaryGuide(int32 Index) { return false; } // One compact block; detailed eligibility stays under F1.
+TArray<FTRPrototypeReadoutRow> UTRFishingHUDWidget::BuildCompactReadout(const FTRHUDSnapshot& S)
+{
+ auto Rows=BuildReadout(S);
+ Rows[2].Label=LOCTEXT("CompactDepth","深度 / 水深");
+ Rows[5].Label=LOCTEXT("CompactDistance","船からの水平距離");
+ Rows[7].Label=LOCTEXT("CompactLine","ライン長 / 角度");
+ Rows[11].Label=LOCTEXT("CompactDrift","船ドリフト");
+ Rows[14].Label=LOCTEXT("CompactCurrent","エギ地点の潮");
+ FString State=Rows[1].Value.ToString(); int32 Parenthesis;
+ if(State.FindChar(TEXT('('),Parenthesis)){State=State.Left(Parenthesis).TrimEnd();}
+ Rows[1].Value=Value(State);
+ if(S.bSessionValid && S.bEnvironmentValid)
+ {
+  Rows[2].Value=Value(FString::Printf(TEXT("%s / %.1f m"),S.bEgiValid?*FString::Printf(TEXT("%.1f"),S.Egi.DepthM):TEXT("船上"),S.Ocean.BottomDepthM));
+  const FVector V=S.Boat.VelocityMps;
+  Rows[11].Value=Value(FString::Printf(TEXT("%.2f m/s  %.0f°"),V.Size2D(),FMath::RadiansToDegrees(FMath::Atan2(V.Y,V.X))));
+ }
+ if(S.bSessionValid && S.bEgiValid)
+ {
+  Rows[5].Value=Value(FString::Printf(TEXT("%.1f m"),S.Egi.HorizontalDistanceFromBoatM));
+  Rows[7].Value=Value(FString::Printf(TEXT("%.1f m / %.0f°"),S.Egi.LineLengthM,FMath::RadiansToDegrees(S.Egi.LineAngleRad)));
+  const FVector V=S.Egi.CurrentAtEgiDepthMps;
+  Rows[14].Value=Value(FString::Printf(TEXT("%.2f m/s  %.0f°"),V.Size2D(),FMath::RadiansToDegrees(FMath::Atan2(V.Y,V.X))));
+ }
+ return Rows;
+}
+bool UTRFishingHUDWidget::HasRevisionMismatch(const FTRHUDSnapshot& S)
+{
+ const int32 Egi=S.bEgiValid ? S.Egi.EgiModelRevision : S.Equipment.Parameters.EgiModelRevision;
+ return S.bSessionValid && ((S.bEnvironmentValid && (S.Ocean.FieldRevision!=2 || S.Boat.ModelRevision!=2)) || Egi!=2);
+}
+FText UTRFishingHUDWidget::FormatRevisions(const FTRHUDSnapshot& S)
+{
+ if(!S.bSessionValid || !S.bEnvironmentValid){return LOCTEXT("RevPending","Model Rev：未取得（接続確認中）");}
+ const int32 Egi=S.bEgiValid ? S.Egi.EgiModelRevision : S.Equipment.Parameters.EgiModelRevision;
+ return Value(FString::Printf(TEXT("%sEnv %d / Boat %d / Egi %d%s"),HasRevisionMismatch(S)?TEXT("警告：Rev2不一致！ "):TEXT("Model Rev: "),
+  S.Ocean.FieldRevision,S.Boat.ModelRevision,Egi,S.bEgiValid?TEXT(""):TEXT("（投入設定）")));
 }
 #undef LOCTEXT_NAMESPACE

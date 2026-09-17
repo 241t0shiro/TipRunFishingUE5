@@ -47,7 +47,7 @@ ETRCommandResult UTRFishingComponent::GetCommandAvailability(ETRFishingCommandTy
 	}
 	if (Command == ETRFishingCommandType::RetrieveStopped && State == ETRFishingState::Retrieving) { return ETRCommandResult::Accepted; }
 	if (Command == ETRFishingCommandType::RetrieveStarted && (bFishing || State == ETRFishingState::Retrieving)) { return ETRCommandResult::Accepted; }
-	if (bFishing && Command == ETRFishingCommandType::Jerk)
+	if ((bFishing || State == ETRFishingState::Retrieving) && Command == ETRFishingCommandType::Jerk)
 	{
 		return State == ETRFishingState::Jerking && PendingJerkCount == MAX_int64 ? ETRCommandResult::RejectedBusy : ETRCommandResult::Accepted;
 	}
@@ -76,6 +76,8 @@ ETRCommandResult UTRFishingComponent::HandleCommand(const FTRFishingCommand& Com
 	}
 	if (Command.Type == ETRFishingCommandType::Jerk)
 	{
+		// A new action replaces normal retrieve; never sum two independent reel rates.
+		bReeling=false;
 		if (State == ETRFishingState::Jerking)
 		{
 			++PendingJerkCount;

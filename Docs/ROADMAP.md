@@ -1,5 +1,7 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
+
 2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
 
 2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
@@ -564,7 +566,7 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 
 |単位|依存|対象・変更予定|Automationの受入/必要回帰|手動確認・停止境界|
 |---|---|---|---|---|
-|R1 Mode architecture|A〜F|Game/TRPlayerModeComponent新設、TRFishingSessionActor/TRGameModeBase、DataのMode要求/Snapshot|Navigation/Fishing、ModeEpoch、同Tick順、古いCast/Session、Pause、投中退出拒否、Normal Result/Quick Ready。M04/M06/E寿命回帰|モードと拒否理由の確認。推進・Camera・Sequenceはまだ追加しない|
+|R1 Mode architecture（完了）|A〜F|Game/TRPlayerModeComponent新設、TRFishingSessionActor/TRGameModeBase、DataのMode要求/Snapshot|Navigation/Fishing、ModeEpoch、同Tick順、古いCast/Session、Pause、投中退出拒否、Normal Result/Quick Ready。M04/M06/E寿命回帰|モードと拒否理由の確認。推進・Camera・Sequenceはまだ追加しない|
 |R2a Navigation motion|R1/B|Boat/TRBoatNavigationComponent新設、TRBoatDriftComponent、Boat Tuning、固定配送|単一積分、推力/舵、慣性、Heading/Velocity分離、釣り移行で推進0/速度連続、無効環境。B/M04該当回帰|推進/操舵を記録で確認。三人称品質はR2b待ち|
 |R2b Navigation camera/input|R2a|Game/TRPlayerCameraManager新設、TRPlayerController、Input/Camera設定、TRPrototypeViewActorのViewTarget所有解除|Mouse LookがBoat正本を書かない、Input Context排他、Focus/Pause、30/60/120fps。D/M09入力回帰|三人称で移動・船首選択が自然。Fishing視点はR3bへ|
 |R3a Fishing stations|R1/R2a/C/D|Data/TRFishingStationDataAsset新設、Boat/Rod/Session設定接続|左右舷の位置/方位、船移動後Eye/Mount/Tip整合、投中舷変更拒否、選択参照不備。CのTip接続/D回帰|左右舷識別。カメラ自然さはR3bへ|
@@ -605,3 +607,24 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 |寿命/切替|UI/Focus/Pause/Mode変更で残留入力なし。Cast中操船拒否|
 
 ビルド識別・保存Map/設定・環境・入力間隔・左右舷・解像度と結果を記録する。自動PIEは再実行せずユーザーが手動評価する。不合格はRの該当単位へ戻す。**R自動検証＋全手動合格の明示報告＋次の明示依頼**がH開始条件。R合格だけでM11へ進まない。今回の設計更新をR実装完了やPIE合格と記録しない。
+
+### R1完了記録（2026-09-18）
+
+- R1は実装・自動検証範囲で合格。`ETRPlayerMode`、`ETRFishingSide`（未選択含む）、`ETRModeChangeRejection`、`FTRPlayerModeSnapshot`、Session所有の`UTRPlayerModeComponent`を追加。初期Navigation、明示固定CommandでFishingへ入る。詳しいAPI/条件はGAME_DESIGNのR1実装契約。
+- Fishing→NavigationはReady/船上/Cast終了/Unlocked/有効環境に限定。FreeFall/Stay/Retrieving/Quick中とNormal Resultを拒否。Quick帰還後は直接戻れ、NormalはNextCast後に戻れる。位置・速度・Headingを書き換えず、後続R2向け推進停止/Heading保持ポリシーをSnapshotへ公開する。
+- Input QueueへModeEpochを追加。既存Tick/Sequence/CastId/登録世代を保持し、同Tick/未来の旧モード入力を拒否。Controllerは要求だけ送り、受理後に保持解除とFishingContext切替。Navigationの操船Context、Side実位置、Camera、Sequenceは未実装。
+- 初回29件中27件成功・2件失敗。M09保存設定試験が旧来の自動Fishing開始を仮定していたため明示Mode Commandを追加。新規Quick試験はQuick無効の旧Assetを使用していたため、一時Test Tuningへ1.5秒を明示。ゲーム側の拒否条件/回収処理や試験の合格条件は緩めていない。
+- 最終の一意な36件成功: R1 4件（InitialAndTransitions / CastGuardsAndReturns / OrderEpochAndFrameRates / PauseFocusAndLifetime）＋回帰32件（M04 6、M06 5、M09 7、E 7、F 6、保存G入力/装備Smoke 1）。全成功試験内errors/warnings=0。初回成功のM04/M06/E計18件は以後コード変更なしで結果を保持し、最終18件でR1/M09と追加F/Gを検証した。A〜C全物理回帰/Hは実施していない。
+- R1試験は初期Mode、Controller経由の固定遷移、同TickのBoat位置/速度/Heading不変、NavigationでDeploy拒否、各Cast状態の退出拒否、Normal/Quick帰還、旧Cast/ModeEpoch、Pause/Focus、保持解除、停止/再起動/破棄、Snapshotコピー非破壊、30/60/120fpsのTick/Sequence/結果一致を確認。
+- UE5.8.2、MSVC14.51.36257、Windows SDK10.0.22621.0。初回UHTで16生成ファイルを書込み、変更コードを含む25 C++コンパイル＋リンク等28アクション成功。試験準備修正後も3 C++コンパイル＋リンク等6アクションのDevelopment Editor Win64成功。up-to-dateだけではない。
+- 証跡: `Saved/Logs/M105R1Build.log`（UHT/実C++）、`M105R1FinalBuild.log`（再コンパイル）、`Saved/Automation/M105R1/index.json`（初回失敗も保持）、`Saved/Automation/M105R1Final/index.json`（18件成功）。ビルド/Automationプロセス終了コード0。ただしUEの終了コードだけで合否を判断せずJSONも確認した。
+- R1由来の残存警告0。既存の非推奨MSVC/旧include順通知、試験起動前Condition failedのError表記19件・Editorレイアウト警告1件、対象外SDK不足は残る。試験内errors/warningsとは区別する。git diff --check成功。
+- 今回Config/Content/Boat/Egi/Rodの数値式に追加変更なし。開始時点のG差分・未追跡資産を保持。PIEは自動実行も手動確認もしていない。R2へ接続可能だが、R2以降/H/M11へ着手していない。G品質不合格とR全体の手動ゲート保留は維持。
+
+R1変更ファイル（SourceはSource/TipRunFishingUE5配下）:
+
+- 新規: `Public/Data/TRPlayerModeTypes.h`、`Public/Game/TRPlayerModeComponent.h`、`Private/Game/TRPlayerModeComponent.cpp`、`Private/Tests/TRPlayerModeTests.cpp`。
+- 更新: `Public/Data/TRTypes.h`、`TREvents.h`、`TRHUDSnapshot.h`。
+- 更新: `Public/Game`と`Private/Game`の`TRFishingSessionActor`、`TRPlayerController`、`TRSimulationWorldSubsystem`各h/cpp。
+- 試験準備更新: `Private/Tests/TRSessionTestFixture.h`、`TRSessionTests.cpp`、`TREgiTests.cpp`、`TRInputHUDTests.cpp`、`TRPrototypeSetupTests.cpp`（既存G未追跡ファイルへの最小追記）。
+- 文書: `AGENTS.md`、`Docs/GAME_DESIGN.md`、`Docs/FISHING_SYSTEM.md`、`Docs/UI_SPEC.md`、`Docs/ROADMAP.md`。

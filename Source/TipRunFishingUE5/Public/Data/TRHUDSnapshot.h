@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "Data/TRSnapshots.h"
 #include "Data/TREquipmentData.h"
+#include "Data/TRPlayerModeTypes.h"
 #include "TRHUDSnapshot.generated.h"
 
 // Display copies only. No simulated state or future AI metrics are owned by UI.
@@ -9,6 +10,7 @@ USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 {
 	GENERATED_BODY()
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRPlayerModeSnapshot PlayerMode;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bSessionValid = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bEgiValid = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bEnvironmentValid = false;

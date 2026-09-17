@@ -29,7 +29,9 @@ namespace
    if(!PC->InstallInputBindings(Input.Get()) || !PC->BindSession(F.Session.Get())){return false;}
    UI.Reset(CreateWidget<UTRFishingHUDWidget>(F.World,UTRFishingHUDWidget::StaticClass()));
    if(!Test.TestNotNull(TEXT("Runtime UMG widget created"),UI.Get())){return false;}
-   UI->TakeWidget();UI->BindController(PC.Get());return true;
+   UI->TakeWidget();UI->BindController(PC.Get());
+   Test.TestFalse(TEXT("Initial equipment panel is closed"),PC->IsPrototypePanelOpen());
+   PC->TogglePrototypePanel();UI->RefreshFromController();return true;
   }
   void Inject(FKey Key,bool Down)
   {
@@ -37,6 +39,17 @@ namespace
    {if(M.Key==Key){PlayerInput->InjectInputForAction(M.Action,FInputActionValue(Down));PlayerInput->ProcessInputStack({Input.Get()},1.f/60,false);return;}}
   }
   void Refresh(){UI->RefreshFromController();}
+  void InjectMouse(bool Left,bool Right)
+  {
+   // Both held actions belong to the same input frame; separate ProcessInputStack
+   // calls synthesize a release of the action omitted from the other frame.
+   for(const auto& M:PC->InputConfig->FishingContext->GetMappings())
+   {
+    if(M.Key==EKeys::LeftMouseButton){PlayerInput->InjectInputForAction(M.Action,FInputActionValue(Left));}
+    if(M.Key==EKeys::RightMouseButton){PlayerInput->InjectInputForAction(M.Action,FInputActionValue(Right));}
+   }
+   PlayerInput->ProcessInputStack({Input.Get()},1.f/60,false);
+  }
  };
  FString RowValue(const FTRHUDSnapshot& S,const TCHAR* Label)
  {
@@ -47,7 +60,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRPrototypeHUDTest,"TipRun.M105F.JapaneseSnaps
 bool FTRPrototypeHUDTest::RunTest(const FString& Parameters)
 {
  FPrototypeUI R;if(!R.Start(*this)){return false;}
- TestTrue(TEXT("Ready automatically opens equipment"),R.PC->IsPrototypePanelOpen());
+ TestTrue(TEXT("Tab opens equipment in Ready"),R.PC->IsPrototypePanelOpen());
  const auto Before=R.F.Sim()->GetSimulationTime();const int32 Queue=R.F.Sim()->GetQueuedCommandCount();
  for(int32 I=0;I<20;++I){R.Refresh();}
  TestEqual(TEXT("UI reads do not advance clock"),R.F.Sim()->GetSimulationTime().TickIndex,Before.TickIndex);
@@ -64,7 +77,7 @@ bool FTRPrototypeHUDTest::RunTest(const FString& Parameters)
  const auto Text=UTRFishingHUDWidget::FormatSnapshot(S).ToString();
  for(const TCHAR* Label:{TEXT("キャストID"),TEXT("エギ深度"),TEXT("水深"),TEXT("深度変化速度"),TEXT("船からの水平距離"),TEXT("竿先からの水平距離"),TEXT("ライン長"),TEXT("ライン角度"),TEXT("ライン弛み"),TEXT("張力Proxy"),TEXT("船ドリフト"),TEXT("風向／風速"),TEXT("表層潮"),TEXT("エギ深度の潮流"),TEXT("エギ重量"),TEXT("シンカー重量"),TEXT("総重量"),TEXT("装備ロック状態"),TEXT("装備変更可否"),TEXT("Normal Retrieve"),TEXT("クイック回収／進捗")}){TestTrue(Label,Text.Contains(Label));}
  TestTrue(TEXT("Snapshot values formatted, independent vectors"),Text.Contains(TEXT("12.345 m")) && Text.Contains(TEXT("6.250 m")) && Text.Contains(TEXT("7.500 m")) && Text.Contains(TEXT("0.500 m/s")) && Text.Contains(TEXT("2.000 m/s")) && Text.Contains(TEXT("0.400 m/s")) && Text.Contains(TEXT("0.200 m/s")) && Text.Contains(TEXT("45.0 g")) && Text.Contains(TEXT("上昇")));
- R.UI->ApplySnapshot(S);
+ R.PC->TogglePrototypeDetails();R.UI->ApplySnapshot(S); // Full precision lives under F1.
  TArray<UWidget*> DisplayWidgets;R.UI->WidgetTree->GetAllWidgets(DisplayWidgets);
  bool LabelSeen=false,ValueSeen=false;
  for(UWidget* W:DisplayWidgets){if(auto* T=Cast<UTextBlock>(W))
@@ -115,8 +128,9 @@ bool FTRPrototypeEquipmentTest::RunTest(const FString& Parameters)
  R.Refresh();TestTrue(TEXT("Normal Result"),R.F.Session->GetSessionPhase()==ETRSessionPhase::Result);
  TestFalse(TEXT("Result equipment refused"),R.UI->ApplyEquipmentSelection());
  TestTrue(TEXT("Result explains NextCast"),R.UI->GetSelectionMessage().ToString().Contains(TEXT("次投")));
+ R.PC->TogglePrototypePanel();R.Refresh();
  TestTrue(TEXT("Result UI NextCast"),R.UI->RequestNextCast());R.F.Step();R.Refresh();
- TestTrue(TEXT("Ready unlocked"),R.UI->DisplaySnapshot.bCanChangeEquipment && R.PC->IsPrototypePanelOpen());
+ TestTrue(TEXT("Ready unlocked without auto-opening panel"),R.UI->DisplaySnapshot.bCanChangeEquipment && !R.PC->IsPrototypePanelOpen());
  return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRPrototypeQuickUITest,"TipRun.M105F.QuickReadyAndStaleRequests",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
@@ -129,7 +143,8 @@ bool FTRPrototypeQuickUITest::RunTest(const FString& Parameters)
  TestTrue(TEXT("Quick flags"),R.UI->DisplaySnapshot.Retrieval.bIsQuickRetrieving);
  TestEqual(TEXT("Quick no fishing operations available"),R.UI->DisplaySnapshot.AvailableCommands.Num(),0);
  R.F.Step(90);R.Refresh();
- TestTrue(TEXT("Quick auto opens Ready"),R.PC->IsPrototypePanelOpen() && R.UI->DisplaySnapshot.bCanChangeEquipment);
+ TestTrue(TEXT("Quick returns Ready without opening UI"),!R.PC->IsPrototypePanelOpen() && R.UI->DisplaySnapshot.bCanChangeEquipment);
+ R.PC->TogglePrototypePanel();R.Refresh();
  TArray<FText> Errors;
  TestTrue(TEXT("Old UI request rejected"),R.PC->SubmitUIEquipment(TEXT("Egi_4"),TEXT("Sinker_10"),OldCast,OldReg,Errors)!=ETRCommandResult::Accepted);
  R.UI->SelectEquipment(TEXT("Egi_3"),TEXT("Sinker_5"));TestTrue(TEXT("Immediate Quick equipment change"),R.UI->ApplyEquipmentSelection());
@@ -147,7 +162,7 @@ bool FTRPrototypeConflictTest::RunTest(const FString& Parameters)
  R.PC->SetPrototypePanelOpen(true);R.Refresh();R.F.Step();
  TestFalse(TEXT("Opening UI releases held retrieve"),R.PC->IsRetrieveHeld());
  const auto Before=R.F.Session->Fishing->GetSnapshot();const int32 Count=R.F.Sim()->GetQueuedCommandCount();
- for(int32 I=0;I<4;++I){R.Inject(EKeys::LeftMouseButton,true);R.Inject(EKeys::RightMouseButton,true);}
+ for(int32 I=0;I<4;++I){R.InjectMouse(true,true);}
  TestFalse(TEXT("UI mouse delta not delivered"),R.PC->SubmitMouseDelta(FVector2D(5,5)));
  TestEqual(TEXT("UI action clicks never enqueue fishing"),R.F.Sim()->GetQueuedCommandCount(),Count);
  R.F.Step();TestEqual(TEXT("No Shakuri from UI"),R.F.Session->Fishing->GetSnapshot().JerkCount,Before.JerkCount);
@@ -157,10 +172,10 @@ bool FTRPrototypeConflictTest::RunTest(const FString& Parameters)
  for(UWidget* W:Widgets){if(auto* B=Cast<UButton>(W)){auto* T=Cast<UTextBlock>(B->GetContent());if(T && T->GetText().ToString().Contains(TEXT("選択した装備"))){B->OnClicked.Broadcast();}}}
  TestFalse(TEXT("UMG click cannot retrieve"),R.PC->IsRetrieveHeld());
  R.PC->SetPrototypePanelOpen(false);
- R.Inject(EKeys::LeftMouseButton,true);R.Inject(EKeys::RightMouseButton,true);R.F.Step();
+ R.InjectMouse(true,true);R.F.Step();
  TestFalse(TEXT("Closing UI never resumes held retrieve"),R.PC->IsRetrieveHeld());
  TestEqual(TEXT("Closing UI never repeats held jerk"),R.F.Session->Fishing->GetSnapshot().JerkCount,Before.JerkCount);
- R.Inject(EKeys::LeftMouseButton,false);R.Inject(EKeys::RightMouseButton,false);
+ R.InjectMouse(false,false);
  R.Inject(EKeys::LeftMouseButton,true);R.F.Step();TestTrue(TEXT("Fresh press after release works"),R.PC->IsRetrieveHeld());
  R.PC->SetInputFocus(false);R.PC->SetPauseRequested(true);R.Refresh();const auto Tick=R.F.Sim()->GetSimulationTime().TickIndex;R.F.Step(30);
  TestEqual(TEXT("Paused clock"),R.F.Sim()->GetSimulationTime().TickIndex,Tick);TestFalse(TEXT("Focus/pause clears held"),R.PC->IsRetrieveHeld());

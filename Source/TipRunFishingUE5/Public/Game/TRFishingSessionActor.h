@@ -6,6 +6,7 @@
 #include "Data/TRSnapshots.h"
 #include "Game/TRSimulationWorldSubsystem.h"
 #include "Data/TRHUDSnapshot.h"
+#include "Game/TRPlayerModeComponent.h"
 #include "TRFishingSessionActor.generated.h"
 
 class UTRFishingComponent;
@@ -23,6 +24,10 @@ class TIPRUNFISHINGUE5_API ATRFishingSessionActor : public AActor
 	GENERATED_BODY()
 public:
 	ATRFishingSessionActor();
+	UFUNCTION(BlueprintPure, Category="TipRun|Mode") FTRPlayerModeSnapshot GetPlayerModeSnapshot() const;
+	ETRModeChangeRejection GetModeChangeRejection(ETRPlayerMode Target) const;
+	bool SubmitModeChange(ETRPlayerMode Target, int64 ExpectedEpoch, FTRActorSimId ExpectedRegistration, int64 TargetTick = -1);
+	bool IsInputModeAllowed(ETRPlayerMode RequiredMode) const;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodTuningDataAsset> RodTuning;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodControlComponent> RodControl;
 	bool SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1);
@@ -73,6 +78,7 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Destroyed() override;
 private:
+	UPROPERTY() TObjectPtr<UTRPlayerModeComponent> PlayerMode;
 	void FixedStep(ETRSimulationPhase StepPhase, const FTRSimTime& Time);
 	void HandleCommand(const FTRFishingCommand& Command);
 	void ProcessCommand(const FTRFishingCommand& Command);

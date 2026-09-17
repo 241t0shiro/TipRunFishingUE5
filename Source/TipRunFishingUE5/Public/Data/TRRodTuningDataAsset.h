@@ -25,6 +25,9 @@ struct TIPRUNFISHINGUE5_API FTRRodParameters
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double ShakuriAmplitudeRad=0;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double ShakuriUpSeconds=0;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double ShakuriReturnSeconds=0;
+	// Zero/zero preserves old assets. Explicit Prototype pulse, independent of normal retrieve.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double ShakuriReelSpeedMps=0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double ShakuriReelSeconds=0;
 	bool Validate(TArray<FText>& Errors) const;
 };
 

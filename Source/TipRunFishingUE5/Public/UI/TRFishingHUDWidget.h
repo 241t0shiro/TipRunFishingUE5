@@ -20,8 +20,13 @@ public:
 	void RefreshFromController();
 	void ApplySnapshot(const FTRHUDSnapshot& Snapshot);
 	static TArray<FTRPrototypeReadoutRow> BuildReadout(const FTRHUDSnapshot& Snapshot);
+	static TArray<FTRPrototypeReadoutRow> BuildCompactReadout(const FTRHUDSnapshot& Snapshot);
 	static TArray<FTRPrototypeGuideRow> BuildGuide(const FTRHUDSnapshot& Snapshot);
 	static FText FormatSnapshot(const FTRHUDSnapshot& Snapshot);
+	static bool IsPrimaryReadout(int32 Index);
+	static bool IsPrimaryGuide(int32 Index);
+	static FText FormatRevisions(const FTRHUDSnapshot& Snapshot);
+	static bool HasRevisionMismatch(const FTRHUDSnapshot& Snapshot);
 	bool SelectEquipment(FName EgiId, FName SinkerId);
 	bool ApplyEquipmentSelection();
 	bool RequestDeploy();
@@ -51,6 +56,10 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> Labels;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> Values;
 	UPROPERTY() TArray<TObjectPtr<UTextBlock>> Guides;
+	UPROPERTY() TArray<TObjectPtr<UWidget>> ReadoutPairs;
+	UPROPERTY() TObjectPtr<UTextBlock> RevisionStatus;
+	UPROPERTY() TObjectPtr<UTextBlock> DebugHelp;
+	UPROPERTY() TObjectPtr<UTextBlock> CompactGuide;
 	UPROPERTY() TObjectPtr<UVerticalBox> EquipmentPanel;
 	UPROPERTY() TObjectPtr<UComboBoxString> EgiCombo;
 	UPROPERTY() TObjectPtr<UComboBoxString> SinkerCombo;

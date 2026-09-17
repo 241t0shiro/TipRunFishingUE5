@@ -1,5 +1,7 @@
 # TipRunFishingUE5 — Codex実装規約
 
+2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
+
 2026-09-17 M10.5-R設計改訂: 最新のユーザー手動PIEによりGはゲームプレイ品質不合格。過去の自動試験成功を取り消すものではないが、合格の代用にはしない。今回更新したのは設計文書のみ。Rの実装は未着手。Navigation/Fishingの分離、三人称操船/左右舷一人称釣り、Shakuri Sequenceと弛み量に応じた回収を設計した。D16の簡易操船は今回の明示依頼で対象内へ変更。現行設計はGAME_DESIGN第11節、BOAT_SYSTEM第9節、FISHING_SYSTEM第14節、UI_SPEC末尾、ROADMAP第8節を優先する。Gの固定Reel Pulse、Shift観測カメラ、F1正常記録は旧実装の履歴。Rの自動試験とユーザー手動PIE合格後もHへ自動進行しない。H・M11以降は保留。
 
 2026-09-17 G追加修正: 手動確認済みの表示/入力を保持し、通常HUD8行、Shift+Mouse観測/Home復帰、世界固定5mグリッド/ブイ、Rod可動域拡大、Rod Snap＋戻し中Reel Pulseを実装。連続Shakuriの弛み蓄積を再現し2/3/5回それぞれの作用を試験。UHT・実C++・Development Editor Win64成功、G 6件＋関連回帰36件の最終結果は成功、試験内エラー/警告0。PIEは自動起動せず今回分の手動再評価待ち。G最終合否保留、H・M11以降未着手。現行操作はUI_SPEC末尾、計算契約はFISHING_SYSTEM第13節。以下は履歴。

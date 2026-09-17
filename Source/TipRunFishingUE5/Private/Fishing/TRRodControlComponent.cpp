@@ -6,6 +6,8 @@ bool UTRRodControlComponent::Initialize(const FTRRodParameters& P,double StepSec
 	if(bInitialized || !P.Validate(Errors) || !TRTime::TrySecondsToTicks(P.ShakuriUpSeconds,StepSeconds,UpTicks) ||
 		!TRTime::TrySecondsToTicks(P.ShakuriReturnSeconds,StepSeconds,ReturnTicks) || UpTicks<=0 || ReturnTicks<=0 || UpTicks>MAX_int64-ReturnTicks)
 	{return false;}
+	ReelTicks=0;
+	if(P.ShakuriReelSeconds>0 && (!TRTime::TrySecondsToTicks(P.ShakuriReelSeconds,StepSeconds,ReelTicks) || ReelTicks<=0 || ReelTicks>ReturnTicks)){return false;}
 	Frozen=P; Snapshot={}; Snapshot.BasePitchRad=P.InitialPitchRad; Snapshot.BaseYawRad=P.InitialYawRad;
 	bInitialized=true; return true;
 }
@@ -48,7 +50,13 @@ bool UTRRodControlComponent::Step(const FTRSimTime& Time,const FTRBoatSnapshot& 
 	if(TRUnits::MetersToCentimeters(Next.TipWorldPositionM).ContainsNaN() || Next.TipWorldPositionM.Z<SurfaceZ){return false;}
 	Snapshot=Next;return true;
 }
-void UTRRodControlComponent::Reset(){bInitialized=false;Snapshot={};Frozen={};UpTicks=ReturnTicks=0;BudgetTick=-1;UsedAimRad={};ObservedCast={};ObservedJerkCount=0;}
+float UTRRodControlComponent::GetReelPulseMps(const FTRSimTime& Time,const FTREgiSnapshot& Fishing) const
+{
+	const int64 Elapsed=Time.TickIndex-Fishing.StateEnteredTick;
+	// Recover slack during rod return, not on top of the upward tip-speed peak.
+	return bInitialized && Time.IsValid() && Fishing.FishingState==ETRFishingState::Jerking && Elapsed>=UpTicks && Elapsed-UpTicks<ReelTicks ? float(Frozen.ShakuriReelSpeedMps) : 0.f;
+}
+void UTRRodControlComponent::Reset(){bInitialized=false;Snapshot={};Frozen={};UpTicks=ReturnTicks=ReelTicks=0;BudgetTick=-1;UsedAimRad={};ObservedCast={};ObservedJerkCount=0;}
 void UTRRodControlComponent::ObserveOperationStart(const FTREgiSnapshot& Fishing)
 {
 	if(ObservedCast!=Fishing.CastId){ObservedCast=Fishing.CastId;ObservedJerkCount=0;}

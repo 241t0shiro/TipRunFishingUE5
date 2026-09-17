@@ -257,6 +257,8 @@ bool FTRInputPrototypeAssetsTest::RunTest(const FString& Parameters)
 	if (!Mode || !TestTrue(TEXT("Saved setup starts session"), Mode->InitializeSession(Errors))) { return false; }
 	auto* PC = F.World->SpawnActor<ATRPlayerController>(); PC->InputConfig = Config->Input;
 	TestTrue(TEXT("Saved setup accepts input connection"), PC->BindSession(Mode->GetSession()));
+	TestTrue(TEXT("Saved setup starts in Navigation"), PC->GetDebugSnapshot().PlayerMode.Mode == ETRPlayerMode::Navigation);
+	TestTrue(TEXT("Explicit Fishing start queued"), PC->RequestPlayerMode(ETRPlayerMode::Fishing)); F.Step();
 	TestTrue(TEXT("Saved setup queues deploy"), PC->ActionStarted(ETRPlayerAction::Deploy)); F.Step();
 	TestTrue(TEXT("Saved setup publishes live HUD"), PC->GetDebugSnapshot().bEgiValid);
 	return true;

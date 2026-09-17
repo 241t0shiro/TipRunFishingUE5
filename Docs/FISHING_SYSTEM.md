@@ -1,5 +1,7 @@
 # 釣りシステム技術設計
 
+2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
+
 2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
 
 2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
@@ -454,3 +456,7 @@ UpのRodTip移動→Cライン拘束→Egi作用を唯一の伝達経路とし�
 過剰回収の技術受入案: 水深30m、初期エギ深度20m、35g/シンカー0、G標準環境の制御条件で5回後も船外かつ深度15m以上、Slack回収合計2.5m以下。これは未検証のPrototype試験案であり製品バランス/現実計測ではない。実装着手時に条件一式を凍結し、満たせなければ失敗と原因を報告する。他重量、無潮/0.4/0.7/1.0 knot、左右舷、基準姿勢端、浅場も試験し、全条件へ同じ上昇量を強制しない。
 
 有限数、非負L、海面/海底/ライン整合、30/60/120fps、Pause/Focus/Cast寿命を維持。R5は状態/キュー、R6はこの伝達・回収・過剰回収を受入境界とする。手動で各回のダートと自然なTensionFall→Stayを確認するまで品質合格としない。
+
+### R1との境界（2026-09-18）
+
+PlayerModeはFishingStateへ追加しない。NavigationではSessionが釣りCommandを拒否し、FishingフェーズのRod/Egi更新を行わない。Fishingへは固定Mode Commandで入り、既存の投入・回収・Quick・装備ロックを使用する。Mode退出はReady/船上/Cast終了/Unlockedに限定するため、海中エギを破棄して操船へ移る経路はない。Shakuri Sequence/Slack-aware Reelは依然R5/R6の未実装設計。R1でその数値式や既存Gシャクリを変更していない。

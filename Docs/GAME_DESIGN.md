@@ -1,5 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
+2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
+
 2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
 
 2026-09-17 G追加修正: 手動確認済みの表示/入力を保持し、通常HUD8行、Shift+Mouse観測/Home復帰、世界固定5mグリッド/ブイ、Rod可動域拡大、Rod Snap＋戻し中Reel Pulseを実装。連続Shakuriの弛み蓄積を再現し2/3/5回それぞれの作用を試験。UHT・実C++・Development Editor Win64成功、G 6件＋関連回帰36件の最終結果は成功、試験内エラー/警告0。PIEは自動起動せず今回分の手動再評価待ち。G最終合否保留、H・M11以降未着手。現行操作はUI_SPEC末尾、計算契約はFISHING_SYSTEM第13節。以下は履歴。
@@ -307,3 +309,15 @@ Normal完了はResult→NextCast→Ready、Quick完了はReady/Unlockを維持�
 D16は今回の明示依頼で「簡易推進/操舵、三人称、ポイント/船首選択」をRへ昇格。本格船舶物理、燃料、乗降、岸衝突、複数エリア、地形生成は対象外。現行平坦30m環境で移動位置と環境を確認できることから始め、地形差による探索を実装済みと称さない。D12のモード別Prototype操作案はUI_SPEC、船体/舷はBOAT_SYSTEM、SequenceはFISHING_SYSTEM、実装順と受入はROADMAPを正本とする。
 
 RはH前の正式な再実装ゲート。Rの各自動検証とユーザー手動PIEが合格し、次の明示依頼があるまでHへ進めない。M11はHを含むM10.5全体品質ゲート通過まで保留。
+
+### R1実装契約（2026-09-18）
+
+- Session所有の`UTRPlayerModeComponent`が`ETRPlayerMode::Navigation/Fishing`を保持する。FishingState/SessionPhaseとは別軸で、独立Tickなし。`StartFishing()`は従来名を互換維持したSession起動APIであり、初期ModeはNavigation。Fishingへの自動移行はしない。
+- `SubmitModeChange(Target, ExpectedEpoch, ExpectedRegistration, TargetTick)`→既存Input Queue→固定Command処理で遷移。`StartFishingMode`/`ReturnNavigationMode`を既存enum末尾へ追加し、保存済みコマンドの番号を変えない。CastId/登録世代/TargetTick/Sequenceに加え`ExpectedModeEpoch`を照合する。変更後に残る旧Epochの同Tick/未来入力は拒否。新しいモードで操作するには確定後のSnapshotから要求する。
+- 双方向ともReady・船上・活動Castなし・装備Unlocked・有効環境を要求。Cast中/Quick中、通常回収後Result、帰還を伴わないAbort後は戻れない。NormalはNextCast後、Quickは完了Readyから直接Navigationへ戻れる。退出でEndFishingを呼ばず、Session登録・装備・Cast採番を保持する。
+- R1依頼に従いSideは`Unselected/Port/Starboard`の表現のみ。R3のSide選択/参照検証は未実装のため、R1のFishing開始ではUnselectedを許容する。位置/Camera接続を済んだことにしない。
+- `GetPlayerModeSnapshot()`は現在Mode、Side、ModeEpoch、変更Tick、反対Modeへの可否/拒否理由、直近処理の拒否理由をコピーで返す。HUD Snapshotにも同じ値を公開。`IsInputModeAllowed()`がSimulation/Sessionのモード別拒否口となり、NavigationではDeploy/Rod等を受理しない。
+- FishingのSnapshotは推進停止要求/Heading保持を表す。R1はBoatへ書き込まず、現在位置・速度・Heading・慣性を維持する。R2はBoatフェーズ前にこのポリシーを読み推進を制御する。操船が実装されたという意味ではない。
+- Controllerは受理通知で保持入力を解除し、Fishingだけ既存FishingContextを有効化する。Navigation Contextの実操作はR2。Mode処理の途中で全Sessionのキューを消さず、Epoch検査で古い入力を拒否する。Pause/Focusでは既存の入力破棄契約を維持する。
+
+検証結果・変更一覧はROADMAP末尾のR1記録を参照。R2以降、H、M11は未着手。

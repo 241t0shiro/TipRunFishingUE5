@@ -102,6 +102,7 @@ bool FTRSessionInvalidTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Invalid equipment change rejected"), F.Session->TrySetEquipment(TEXT("MissingEgi"), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::RejectedMissingData);
 	TestEqual(TEXT("Rejected selection preserves initial equipment"), F.Session->GetEquipmentSnapshot().TotalMassG, 35.0f);
 	TestTrue(TEXT("Start"), F.Session->StartFishing(Errors) == ETRCommandResult::Accepted);
+	if (!F.EnterFishingMode(*this)) { return false; }
 	for (ETRFishingCommandType Type : {ETRFishingCommandType::Jerk, ETRFishingCommandType::Hook, ETRFishingCommandType::NextCast})
 	{
 		F.Session->SubmitCommand(Type, F.Session->GetCastId()); F.Step();

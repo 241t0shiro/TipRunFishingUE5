@@ -1,5 +1,7 @@
 # UI・入力接続技術設計
 
+2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
+
 2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
 
 2026-09-15 M10.5-E完了: 左保持の通常回収／解放後Stayと、固定TickのQuickRetrievingを分離。今回の明示依頼を優先し、通常完了はResult（ロック維持）→NextCastでReady/解除、Quick完了だけ直接Ready/解除。海面近傍のライン拘束・巻取りを修正。UHT生成・実C++・Development Editor Win64成功、E 7件＋回帰54件成功、各試験エラー/警告0。保存資産移行・PIEは未実施。F〜H・M11以降は未着手、全体品質ゲート未合格。下のA〜D記録は履歴。
@@ -368,3 +370,9 @@ Engine標準形状/簡易材質でよいが全面Wireframeだけでは評価し�
 8. 2560×1440でもHUD/パネルを確認。通常操作にShift観測は不要で、Boat/Rod/Reel/Line/Egi/水面/海底を評価できること。
 
 PIEはユーザー手動で行う。自動PIEを再起動しない。失敗項目をRへ戻し、全項目合格の明示結果と次の依頼を得るまでHへ進めない。
+
+### R1期間の接続方法（2026-09-18）
+
+Session起動時はNavigation。`ATRPlayerController::RequestPlayerMode()`がSessionへ要求を送る。後続のモード選択UIは未実装で、R1の開発確認用にConsoleの`TRSetFishingMode true`（Fishing要求）/`TRSetFishingMode false`（Navigation要求）を用意した。これは完成Prototypeの必須操作として採用するものではなく、R2〜R4の操作接続までのAPI確認手段。Fishing移行確定後に既存Enter/Mouse/回収操作が有効になる。Cast中やResultからのNavigation要求は拒否される。
+
+`GetDebugSnapshot().PlayerMode`でMode/Side未選択/可否/拒否理由を取得できる。既存HUDのレイアウト、Camera、保存Input資産、F1は今回変更していない。したがって従来の「起動直後Enterで投入」はR1ではFishingへの明示移行後に読み替える。手動PIEは今回実施していない。

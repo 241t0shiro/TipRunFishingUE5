@@ -4,8 +4,10 @@
 bool FTRRodParameters::Validate(TArray<FText>& Errors) const
 {
 	const double Values[]={MinPitchRad,MaxPitchRad,MinYawRad,MaxYawRad,InitialPitchRad,InitialYawRad,
-		SensitivityXRad,SensitivityYRad,MaxMouseDelta,MaxAimRateRadPerS,LengthM,ShakuriAmplitudeRad,ShakuriUpSeconds,ShakuriReturnSeconds};
+		SensitivityXRad,SensitivityYRad,MaxMouseDelta,MaxAimRateRadPerS,LengthM,ShakuriAmplitudeRad,ShakuriUpSeconds,ShakuriReturnSeconds,ShakuriReelSpeedMps,ShakuriReelSeconds};
 	bool Valid=!MountOffsetM.ContainsNaN();
+	Valid &= (ShakuriReelSpeedMps==0 && ShakuriReelSeconds==0) ||
+		(ShakuriReelSpeedMps>0 && ShakuriReelSpeedMps<=MAX_flt && ShakuriReelSeconds>0 && ShakuriReelSeconds<=ShakuriReturnSeconds && FMath::IsFinite(ShakuriReelSpeedMps*ShakuriReelSeconds));
 	for(double Value:Values){Valid &= FMath::IsFinite(Value);}
 	Valid &= MinPitchRad>=-UE_DOUBLE_PI/2 && MaxPitchRad<=UE_DOUBLE_PI/2 && MinPitchRad<MaxPitchRad &&
 		MinYawRad>=-UE_DOUBLE_PI && MaxYawRad<=UE_DOUBLE_PI && MinYawRad<MaxYawRad &&

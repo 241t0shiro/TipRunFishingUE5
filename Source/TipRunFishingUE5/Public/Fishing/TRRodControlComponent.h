@@ -18,13 +18,14 @@ public:
 	FTRRodSnapshot GetSnapshot() const { return Snapshot; }
 	bool IsInitialized() const { return bInitialized; }
 	int64 GetJerkTicks() const { return UpTicks+ReturnTicks; }
+	float GetReelPulseMps(const FTRSimTime& Time, const FTREgiSnapshot& Fishing) const;
 	void Reset();
 	void InvalidateSnapshot() { Snapshot.bValid=false; Snapshot.bShakuriActive=false; }
 	void ObserveOperationStart(const FTREgiSnapshot& Fishing);
 private:
 	FTRRodParameters Frozen;
 	FTRRodSnapshot Snapshot;
-	int64 UpTicks=0,ReturnTicks=0,BudgetTick=-1;
+	int64 UpTicks=0,ReturnTicks=0,ReelTicks=0,BudgetTick=-1;
 	FVector2D UsedAimRad=FVector2D::ZeroVector;
 	bool bInitialized=false;
 	FTRCastId ObservedCast;

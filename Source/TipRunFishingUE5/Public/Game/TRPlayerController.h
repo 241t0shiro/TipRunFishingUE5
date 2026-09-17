@@ -3,6 +3,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Data/TRInputConfigDataAsset.h"
 #include "Data/TRHUDSnapshot.h"
+#include "Data/TRPlayerModeTypes.h"
 #include "TRPlayerController.generated.h"
 class ATRFishingSessionActor;
 class UEnhancedInputComponent;
@@ -16,6 +17,8 @@ class TIPRUNFISHINGUE5_API ATRPlayerController : public APlayerController
 	GENERATED_BODY()
 public:
 	ATRPlayerController();
+	UFUNCTION(BlueprintCallable, Category="TipRun|Mode") bool RequestPlayerMode(ETRPlayerMode Target);
+	UFUNCTION(Exec) void TRSetFishingMode(bool bFishing);
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="TipRun") TObjectPtr<UTRInputConfigDataAsset> InputConfig;
 	UFUNCTION(BlueprintCallable, Category="TipRun") bool BindSession(ATRFishingSessionActor* Session);
 	UFUNCTION(BlueprintCallable, Category="TipRun") void UnbindSession();
@@ -25,6 +28,8 @@ public:
 	// Device-independent event adapter, shared by Enhanced Input and deterministic tests.
 	bool ActionStarted(ETRPlayerAction Action, int64 TargetTick = -1);
 	bool SubmitMouseDelta(FVector2D Delta,int64 TargetTick=-1);
+	bool RoutePrototypeMouse(FVector2D Delta,bool bCameraLook);
+	void ResetPrototypeCamera();
 	void ActionReleased(ETRPlayerAction Action);
 	void SetInputFocus(bool bFocused);
 	bool IsRetrieveHeld() const { return bRetrieveHeld; }
@@ -34,6 +39,8 @@ public:
 	void TogglePrototypePanel();
 	void SetPrototypePanelOpen(bool bOpen);
 	bool IsPrototypePanelOpen() const { return bPrototypePanelOpen; }
+	void TogglePrototypeDetails();
+	bool IsPrototypeDetailsOpen() const { return bPrototypeDetailsOpen; }
 	bool SubmitUICommand(ETRFishingCommandType Command, FTRCastId ExpectedCast, FTRActorSimId ExpectedRegistration);
 	ETRCommandResult SubmitUIEquipment(FName EgiId, FName SinkerId, FTRCastId ExpectedCast, FTRActorSimId ExpectedRegistration, TArray<FText>& Errors);
 	bool InstallInputBindings(UEnhancedInputComponent* Component);
@@ -64,6 +71,7 @@ private:
 	TSet<ETRPlayerAction> Pressed, BlockedUntilRelease;
 	FTRCastId ObservedCast, HeldCast, PendingStopCast;
 	FTRActorSimId ObservedRegistration;
+	int64 ObservedModeEpoch = 0;
 	FDelegateHandle ActivationHandle;
 	FDelegateHandle CommandHandle;
 	bool bInputFocused = true;
@@ -72,5 +80,6 @@ private:
 	bool bWasPaused = false;
 	bool bPrototypeUIEnabled = false;
 	bool bPrototypePanelOpen = false;
+	bool bPrototypeDetailsOpen = false;
 	ETRSessionPhase PrototypeObservedPhase = ETRSessionPhase::Initializing;
 };

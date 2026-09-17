@@ -20,6 +20,7 @@ bool FTREgiWeightFallTest::RunTest(const FString& Parameters)
 		TArray<FText> Errors;
 		TestTrue(TEXT("Select actual M02 equipment"), F.Session->TrySetEquipment(FName(Ids[I]), TREquipment::NoSinkerId(), Errors) == ETRCommandResult::Accepted);
 		if (!TestTrue(TEXT("Start with selected equipment"), F.Session->StartFishing(Errors) == ETRCommandResult::Accepted)) { return false; }
+		if (!F.EnterFishingMode(*this)) { return false; }
 		const FTREquipmentSnapshot Equipment = F.Session->GetEquipmentSnapshot();
 		TestEqual(TEXT("30/35/40 g"), Equipment.TotalMassG, 30.0f + 5.0f * I);
 		TestEqual(TEXT("Zero grams is valid"), Equipment.SinkerMassG, 0.0f);

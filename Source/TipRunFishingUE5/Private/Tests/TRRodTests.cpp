@@ -182,4 +182,105 @@ bool FTRRodConfigTest::RunTest(const FString& Parameters)
 	TArray<uint8> Bytes;FObjectWriter Writer(R.Tuning.Get(),Bytes);TStrongObjectPtr<UTRRodTuningDataAsset> Copy{NewObject<UTRRodTuningDataAsset>()};FObjectReader Reader(Copy.Get(),Bytes);
 	TestEqual(TEXT("Rod tuning round trip"),Copy->Parameters.ShakuriAmplitudeRad,.3);return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRShakuriPulseGTest,"TipRun.M105G.ShakuriRepeatedPulse",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FTRShakuriPulseGTest::RunTest(const FString& Parameters)
+{
+ for(int32 Clicks:{1,2,3,5})
+ {
+  for(bool Pulse:{false,true})
+  {
+   FRodSession R;
+   if(Pulse){R.Tuning->Parameters.ShakuriReelSpeedMps=8;R.Tuning->Parameters.ShakuriReelSeconds=.25;}
+   if(!R.Start(*this,false)){return false;}
+   R.F.Deploy();R.F.Step(1800);
+   R.F.Session->SubmitCommand(ETRFishingCommandType::TensionFall,R.F.Session->GetCastId());R.F.Step();
+   for(int32 I=0;I<Clicks;++I){TestTrue(TEXT("One click accepted"),R.PC->ActionStarted(ETRPlayerAction::Jerk));TestFalse(TEXT("Held not repeated"),R.PC->ActionStarted(ETRPlayerAction::Jerk));R.PC->ActionReleased(ETRPlayerAction::Jerk);}
+   const auto Initial=R.F.Session->Fishing->GetSnapshot();
+   double StartDepth=Initial.DepthM,MinDepth=StartDepth,StartLine=Initial.LineLengthM,PeakTension=0;
+   int64 Count=0;
+   auto Check=[&]()
+   {
+    const auto S=R.F.Session->Fishing->GetSnapshot();
+    const double Lift=StartDepth-MinDepth;
+    AddInfo(FString::Printf(TEXT("pulse=%d clicks=%d action=%lld lift=%.6fm line=%.6fm slack=%.6fm"),Pulse,Clicks,Count,Lift,double(S.LineLengthM),S.SlackM));
+    if(Pulse){TestTrue(TEXT("Every action lifts via constraint"),Lift>.05);TestTrue(TEXT("Each pulse takes up line"),StartLine-S.LineLengthM>1.1);TestTrue(TEXT("Every action engages line, not just previous momentum"),PeakTension>0);}
+   };
+   for(int32 I=0;I<Clicks*24+1;++I)
+   {
+    const auto Before=R.F.Session->Fishing->GetSnapshot();
+    R.F.Step();const auto S=R.F.Session->Fishing->GetSnapshot();
+    if(!TestFalse(TEXT("Action never aborts"),R.F.Session->HasResult())){return false;}
+    if(S.JerkCount!=Count)
+    {
+     if(Count>0){Check();}
+     Count=S.JerkCount;StartDepth=Before.DepthM;MinDepth=StartDepth;StartLine=Before.LineLengthM;PeakTension=0;
+    }
+    MinDepth=FMath::Min(MinDepth,double(S.DepthM));
+    PeakTension=FMath::Max(PeakTension,double(S.Tension01));
+    if(!R.Geometry(*this)){return false;}
+    TestTrue(TEXT("Finite nonnegative line/slack and bounded proxy"),S.LineLengthM>=0 && FMath::IsFinite(S.LineLengthM) && S.SlackM>=0 && FMath::IsFinite(S.SlackM) && S.Tension01>=0 && S.Tension01<=1);
+   }
+   Check();TestEqual(TEXT("Exact action count"),Count,int64(Clicks));
+   if(!Pulse){TestEqual(TEXT("Disabled pulse retains baseline line"),R.F.Session->Fishing->GetSnapshot().LineLengthM,Initial.LineLengthM);}
+  }
+ }
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRShakuriSequenceGTest,"TipRun.M105G.ShakuriFramesRetrieveAndSafety",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FTRShakuriSequenceGTest::RunTest(const FString& Parameters)
+{
+ FTREgiSnapshot Reference;
+ for(int32 FPS:{30,60,120})
+ {
+  FRodSession R;R.Tuning->Parameters.ShakuriReelSpeedMps=8;R.Tuning->Parameters.ShakuriReelSeconds=.25;
+  if(!R.Start(*this,false)){return false;}R.F.Deploy();R.F.Step(1800);
+  for(int32 I=0;I<5;++I){R.PC->ActionStarted(ETRPlayerAction::Jerk);R.PC->ActionReleased(ETRPlayerAction::Jerk);}
+  for(int32 I=0;I<FPS*3;++I){R.F.Sim()->AdvanceFrame(1.0/FPS);}
+  auto S=R.F.Session->Fishing->GetSnapshot();
+  if(FPS==30){Reference=S;}else{TestTrue(TEXT("30/60/120 exact pulse result"),S.WorldPositionM.Equals(Reference.WorldPositionM,0)&&S.LineLengthM==Reference.LineLengthM&&S.JerkCount==Reference.JerkCount);}
+  R.PC->ActionStarted(ETRPlayerAction::Retrieve);R.F.Step(3);
+  R.PC->ActionStarted(ETRPlayerAction::Jerk);R.PC->ActionReleased(ETRPlayerAction::Jerk);R.F.Step();
+  TestTrue(TEXT("Shakuri replaces normal retrieve"),R.F.Session->Fishing->GetState()==ETRFishingState::Jerking);
+  R.PC->ActionReleased(ETRPlayerAction::Retrieve);R.F.Step(30);
+  TestTrue(TEXT("Release does not cancel pulse, then Stay"),R.F.Session->Fishing->GetState()==ETRFishingState::Stay);
+  R.PC->ActionStarted(ETRPlayerAction::Jerk);R.PC->ActionReleased(ETRPlayerAction::Jerk);R.PC->ActionStarted(ETRPlayerAction::Retrieve);R.F.Step();
+  TestTrue(TEXT("Sequence determines conflicting action"),R.F.Session->Fishing->GetState()==ETRFishingState::Retrieving);
+  R.PC->ActionReleased(ETRPlayerAction::Retrieve);R.F.Step();
+  R.PC->ActionStarted(ETRPlayerAction::Jerk);R.F.Step(4);S=R.F.Session->Fishing->GetSnapshot();
+  R.PC->SetPauseRequested(true);R.F.Step(30);TestEqual(TEXT("Pause does not reel"),R.F.Session->Fishing->GetSnapshot().LineLengthM,S.LineLengthM);
+  R.PC->SetPauseRequested(false);R.PC->SetInputFocus(false);R.PC->SetInputFocus(true);R.F.Step(60);
+  TestEqual(TEXT("Focus does not repeat held jerk"),R.F.Session->Fishing->GetSnapshot().JerkCount,S.JerkCount);
+ }
+ auto P=RodTestParameters();P.ShakuriReelSpeedMps=1;TArray<FText> Errors;TestFalse(TEXT("Partial pulse config rejected"),P.Validate(Errors));
+ P.ShakuriReelSeconds=.5;Errors.Reset();TestFalse(TEXT("Pulse cannot outlive action"),P.Validate(Errors));
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRShakuriBoundaryGTest,"TipRun.M105G.ShakuriBoundaryAndNoDirectLift",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FTRShakuriBoundaryGTest::RunTest(const FString& Parameters)
+{
+ for(int32 FallTicks:{0,240,3000})
+ {
+  FRodSession R;R.Tuning->Parameters.ShakuriReelSpeedMps=8;R.Tuning->Parameters.ShakuriReelSeconds=.25;
+  R.F.Area->Settings.CurrentMps=FVector(.36,0,0);R.F.Area->Settings.WindMps=FVector2D(0,2);
+  if(!R.Start(*this,false)){return false;}R.F.Deploy();R.F.Step(FallTicks);
+  for(int32 I=0;I<5;++I){R.PC->ActionStarted(ETRPlayerAction::Jerk);R.PC->ActionReleased(ETRPlayerAction::Jerk);}
+  for(int32 I=0;I<150;++I)
+  {
+   R.F.Step();if(!TestFalse(TEXT("Surface/shallow/bottom pulse safe"),R.F.Session->HasResult())){return false;}
+   if(!R.Geometry(*this)){return false;}
+  }
+  TestEqual(TEXT("Boundary still counts all clicks"),R.F.Session->Fishing->GetSnapshot().JerkCount,int64(5));
+ }
+ FTREgiSnapshot Reference;
+ for(bool ExtremeLegacy:{false,true})
+ {
+  FRodSession R;R.Tuning->Parameters.ShakuriReelSpeedMps=8;R.Tuning->Parameters.ShakuriReelSeconds=.25;
+  if(ExtremeLegacy){R.F.Tuning->Parameters.JerkLiftMps=1000;R.F.Tuning->Parameters.JerkReelMps=1000;}
+  if(!R.Start(*this,false)){return false;}R.F.Deploy();R.F.Step(1200);
+  R.PC->ActionStarted(ETRPlayerAction::Jerk);R.PC->ActionReleased(ETRPlayerAction::Jerk);R.F.Step(24);
+  const auto S=R.F.Session->Fishing->GetSnapshot();
+  if(!ExtremeLegacy){Reference=S;}else{TestTrue(TEXT("Legacy direct lift/reel cannot affect rod action"),S.WorldPositionM.Equals(Reference.WorldPositionM,0)&&S.VelocityMps.Equals(Reference.VelocityMps,0)&&S.LineLengthM==Reference.LineLengthM);}
+ }
+ return true;
+}
 #endif

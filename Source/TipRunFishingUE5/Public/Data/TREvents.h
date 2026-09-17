@@ -30,6 +30,8 @@ struct TIPRUNFISHINGUE5_API FTRFishingCommand
 	// M06: identity observed when input was submitted; sessions reject stale casts.
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	FTRCastId ExpectedCastId;
+	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
+	int64 ExpectedModeEpoch = 0;
 };
 
 USTRUCT(BlueprintType)

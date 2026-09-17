@@ -107,11 +107,11 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			Line = FMath::Max(FMath::Max(double(P.MinLineM), SurfaceHeight), Line-double(Action.ReelMps)*Dt);
 			const FVector TrialOffset = Trial-Rod;
 			const FVector Constrained = TrialOffset.Size()>Line ? Rod+TrialOffset.GetSafeNormal()*Line : Trial;
-			if (Action.FishingState == ETRFishingState::Retrieving &&
-				(Position.Z>=Local.SurfaceZ_M-EpsilonM || Constrained.Z>=Local.SurfaceZ_M-EpsilonM))
+			if (Position.Z>=Local.SurfaceZ_M-EpsilonM || Constrained.Z>=Local.SurfaceZ_M-EpsilonM)
 			{
 				// Near the surface tangent, constant dL/dt implies unbounded horizontal speed.
-				// Limit spool demand by the surface arc geometry, not by moving the Egi directly.
+				// Applies to both normal retrieval and Shakuri reel pulses. Limit spool demand
+				// by surface arc geometry, not by moving the Egi directly.
 				const double Radius = FMath::Max(0.0,(Position-Rod).Size2D()-double(Action.ReelMps)*Dt);
 				const double SurfaceLine = FMath::Sqrt(SurfaceHeight*SurfaceHeight+Radius*Radius);
 				Line = FMath::Max(Line,FMath::Min(PreviousLine,SurfaceLine));

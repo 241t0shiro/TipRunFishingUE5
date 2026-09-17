@@ -10,6 +10,7 @@
 ATRFishingSessionActor::ATRFishingSessionActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
+	PlayerMode = CreateDefaultSubobject<UTRPlayerModeComponent>(TEXT("PlayerMode"));
 	Fishing = CreateDefaultSubobject<UTRFishingComponent>(TEXT("Fishing"));
 	EgiSimulation = CreateDefaultSubobject<UTREgiSimulationComponent>(TEXT("EgiSimulation"));
 	RodControl = CreateDefaultSubobject<UTRRodControlComponent>(TEXT("RodControl"));
@@ -97,17 +98,18 @@ ETRCommandResult ATRFishingSessionActor::StartFishing(TArray<FText>& Errors)
 	if (Prepared != ETRCommandResult::Accepted) { return Prepared; }
 	if (!Register()) { return ETRCommandResult::RejectedInvalidState; }
 	bFishingStarted = true; bEquipmentLocked = false;
+	PlayerMode->Start();
 	Fishing->Prepare(); Phase = ETRSessionPhase::Ready;
 	CaptureHUD(Coordinator->GetSimulationTime()); return ETRCommandResult::Accepted;
 }bool ATRFishingSessionActor::SubmitCommand(ETRFishingCommandType Type, FTRCastId ExpectedCastId, int64 TargetTick)
 {
 	return bInitialized && bFishingStarted && !IsActorBeingDestroyed() && Coordinator.IsValid() &&
-		Coordinator->EnqueueCommand(RegistrationId, Type, 0.0f, TargetTick, ExpectedCastId);
+		Coordinator->EnqueueCommand(RegistrationId, Type, 0.0f, TargetTick, ExpectedCastId, FVector2D::ZeroVector, PlayerMode->GetSnapshot().ModeEpoch);
 }
 bool ATRFishingSessionActor::SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick)
 {
-	return IsAcceptingPlayerInput() && RodControl->IsInitialized() && ExpectedCastId==CurrentCastId && ExpectedRegistration==RegistrationId &&
-		Coordinator->EnqueueCommand(RegistrationId,ETRFishingCommandType::RodAim,0,TargetTick,ExpectedCastId,Delta);
+	return IsInputModeAllowed(ETRPlayerMode::Fishing) && RodControl->IsInitialized() && ExpectedCastId==CurrentCastId && ExpectedRegistration==RegistrationId &&
+		Coordinator->EnqueueCommand(RegistrationId,ETRFishingCommandType::RodAim,0,TargetTick,ExpectedCastId,Delta,PlayerMode->GetSnapshot().ModeEpoch);
 }
 void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 {
@@ -118,7 +120,32 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 		Command.TargetTick > Coordinator->GetSimulationTime().TickIndex) { return; }
 	LastSequence = Command.Sequence;
 	LastCommandTick = Command.TargetTick;
+	if (Command.ExpectedModeEpoch != PlayerMode->GetSnapshot().ModeEpoch)
+	{
+		PlayerMode->Reject(ETRModeChangeRejection::StaleInput);
+		return;
+	}
 	ConsumeInputReset();
+	if (Command.Type == ETRFishingCommandType::StartFishingMode || Command.Type == ETRFishingCommandType::ReturnNavigationMode)
+	{
+		const ETRPlayerMode Target = Command.Type == ETRFishingCommandType::StartFishingMode ? ETRPlayerMode::Fishing : ETRPlayerMode::Navigation;
+		const ETRModeChangeRejection Rejection = GetModeChangeRejection(Target);
+		if (Rejection != ETRModeChangeRejection::None)
+		{
+			PlayerMode->Reject(Rejection);
+			LastCommandResult = ETRCommandResult::RejectedBusy;
+			return;
+		}
+		PlayerMode->Transition(Target, Coordinator->GetSimulationTime().TickIndex);
+		Fishing->PendingJerkCount = 0;
+		bClearRodReservations = false;
+		bClearNormalRetrieve = false;
+		// Epoch rejects old due/future inputs without clearing another session's queue.
+		// No boat writes: R2 must consume the stop/heading policy before integrating.
+		LastCommandResult = ETRCommandResult::Accepted;
+		return;
+	}
+	if (!IsInputModeAllowed(ETRPlayerMode::Fishing) && Command.Type != ETRFishingCommandType::EndFishing) { return; }
 	if (Fishing->GetState() == ETRFishingState::QuickRetrieving && Command.Type != ETRFishingCommandType::EndFishing)
 	{
 		LastCommandResult = ETRCommandResult::RejectedBusy; return;
@@ -164,7 +191,8 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 		}
 		return;
 	}
-	if (StepPhase != ETRSimulationPhase::Fishing || IsActorBeingDestroyed() || (!bCastActive && !RodControl->IsInitialized())) { return; }
+	if (StepPhase != ETRSimulationPhase::Fishing || IsActorBeingDestroyed() ||
+		PlayerMode->GetSnapshot().Mode != ETRPlayerMode::Fishing || (!bCastActive && !RodControl->IsInitialized())) { return; }
 	FTRBoatSnapshot Boat; FTROceanSample Ocean;
 	if (!ReadEnvironment(Boat, Ocean)) { AbortInternal(); return; }
 	ConsumeInputReset();
@@ -209,7 +237,12 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 	if(RodControl->IsInitialized())
 	{
 		Action.LiftMps=0;
-		if(Action.FishingState==ETRFishingState::Jerking){Action.ReelMps=0;Action.LineMode=ETRLineMode::Locked;}
+		if(Action.FishingState==ETRFishingState::Jerking)
+		{
+			Action.ReelMps=RodControl->GetReelPulseMps(Time,Fishing->GetSnapshot());
+			// Reel mode also preserves the minimum rod-to-surface span during the up phase.
+			Action.LineMode=ETRLineMode::ReelIn;
+		}
 	}
 	const ETREgiStepEvent Event = EgiSimulation->StepEgi(CurrentCastId, Time, Ocean, Boat, Action,
 		[this, &DestinationOcean](const FTROceanQuery& DestinationQuery)
@@ -265,6 +298,7 @@ void ATRFishingSessionActor::EndFishing()
 	if (bCastActive) { AbortInternal(); }
 	Unregister();
 	bFishingStarted = false; bEquipmentLocked = !bEgiOnboard;
+	PlayerMode->Stop();
 	ReleaseEgi(); LockedEgiMesh = nullptr;
 	Fishing->Stop(); Phase = bInitialized ? ETRSessionPhase::Ready : ETRSessionPhase::Initializing;
 	RodControl->InvalidateSnapshot(); bClearRodReservations=false; bClearNormalRetrieve=false;
@@ -348,6 +382,7 @@ FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
 {
 	if (!bInitialized || IsActorBeingDestroyed()) { return {}; }
 	FTRHUDSnapshot Copy = PublishedHUD;
+	Copy.PlayerMode = GetPlayerModeSnapshot();
 	Copy.bSessionValid = true; Copy.bEgiValid = bCastActive; Copy.bEquipmentLocked = bEquipmentLocked;
 	Copy.bEgiOnboard = bEgiOnboard; Copy.bCanChangeEquipment = CanChangeEquipment();
 	Copy.Phase = Phase; Copy.CastId = CurrentCastId; Copy.Equipment = GetEquipmentSnapshot();
@@ -384,7 +419,7 @@ FText ATRFishingSessionActor::GetEquipmentBlockReason() const
 
 bool ATRFishingSessionActor::IsCommandAvailable(ETRFishingCommandType Command) const
 {
-	if (!IsAcceptingPlayerInput() || IsPlayerPaused() || Fishing->GetState() == ETRFishingState::QuickRetrieving) { return false; }
+	if (!IsInputModeAllowed(ETRPlayerMode::Fishing) || Fishing->GetState() == ETRFishingState::QuickRetrieving) { return false; }
 	if (Command == ETRFishingCommandType::Deploy) { return Fishing->GetState() == ETRFishingState::Ready && CanChangeEquipment() && IsValid(SelectedEgiMesh) && NextCastValue < MAX_int64; }
 	if (Command == ETRFishingCommandType::NextCast) { return bHasResult && !bCastActive; }
 	if (Command == ETRFishingCommandType::RodAim) { return (bCastActive || Phase == ETRSessionPhase::Ready) && RodControl->IsInitialized(); }
@@ -401,4 +436,43 @@ void ATRFishingSessionActor::GetEquipmentOptions(TArray<FTREgiSpecRow>& Egis, TA
 	for (const auto* Row : SinkerRows) { if (Row) { Sinkers.Add(*Row); } }
 	Egis.Sort([](const auto& A, const auto& B) { return A.BaseMassG == B.BaseMassG ? A.EgiId.LexicalLess(B.EgiId) : A.BaseMassG < B.BaseMassG; });
 	Sinkers.Sort([](const auto& A, const auto& B) { return A.MassG == B.MassG ? A.SinkerId.LexicalLess(B.SinkerId) : A.MassG < B.MassG; });
+}
+
+ETRModeChangeRejection ATRFishingSessionActor::GetModeChangeRejection(ETRPlayerMode Target) const
+{
+ if (!IsAcceptingPlayerInput() || !PlayerMode->GetSnapshot().bValid) { return ETRModeChangeRejection::SessionUnavailable; }
+ if (IsPlayerPaused()) { return ETRModeChangeRejection::Paused; }
+ if (!StaticEnum<ETRPlayerMode>()->IsValidEnumValue(int64(Target))) { return ETRModeChangeRejection::InvalidTarget; }
+ if (Target == PlayerMode->GetSnapshot().Mode) { return ETRModeChangeRejection::AlreadyInMode; }
+ if (bCastActive) { return ETRModeChangeRejection::ActiveCast; }
+ if (!bEgiOnboard) { return ETRModeChangeRejection::EgiOffboard; }
+ if (Phase != ETRSessionPhase::Ready || Fishing->GetState() != ETRFishingState::Ready) { return ETRModeChangeRejection::NotReady; }
+ if (bEquipmentLocked) { return ETRModeChangeRejection::EquipmentLocked; }
+ FTRBoatSnapshot Boat; FTROceanSample Ocean;
+ if (!ReadEnvironment(Boat, Ocean)) { return ETRModeChangeRejection::InvalidEnvironment; }
+ if (PlayerMode->GetSnapshot().ModeEpoch == MAX_int64) { return ETRModeChangeRejection::SessionUnavailable; }
+ return ETRModeChangeRejection::None;
+}
+FTRPlayerModeSnapshot ATRFishingSessionActor::GetPlayerModeSnapshot() const
+{
+ FTRPlayerModeSnapshot Copy = PlayerMode->GetSnapshot();
+ Copy.bValid = Copy.bValid && IsAcceptingPlayerInput();
+ Copy.ChangeBlockedReason = GetModeChangeRejection(Copy.Mode == ETRPlayerMode::Navigation ? ETRPlayerMode::Fishing : ETRPlayerMode::Navigation);
+ Copy.bCanChangeMode = Copy.ChangeBlockedReason == ETRModeChangeRejection::None;
+ Copy.bNavigationInputAllowed = IsInputModeAllowed(ETRPlayerMode::Navigation);
+ Copy.bStopNavigationThrustRequested = !Copy.bNavigationInputAllowed;
+ Copy.bHoldBoatHeading = !Copy.bNavigationInputAllowed;
+ return Copy;
+}
+bool ATRFishingSessionActor::IsInputModeAllowed(ETRPlayerMode RequiredMode) const
+{
+ const auto State = PlayerMode->GetSnapshot();
+ return State.bValid && IsAcceptingPlayerInput() && !IsPlayerPaused() && State.Mode == RequiredMode;
+}
+bool ATRFishingSessionActor::SubmitModeChange(ETRPlayerMode Target, int64 ExpectedEpoch, FTRActorSimId ExpectedRegistration, int64 TargetTick)
+{
+ if (!IsAcceptingPlayerInput() || IsPlayerPaused() || ExpectedRegistration != RegistrationId ||
+     ExpectedEpoch != PlayerMode->GetSnapshot().ModeEpoch || !StaticEnum<ETRPlayerMode>()->IsValidEnumValue(int64(Target))) { return false; }
+ return SubmitCommand(Target == ETRPlayerMode::Fishing ? ETRFishingCommandType::StartFishingMode : ETRFishingCommandType::ReturnNavigationMode,
+                      CurrentCastId, TargetTick);
 }
