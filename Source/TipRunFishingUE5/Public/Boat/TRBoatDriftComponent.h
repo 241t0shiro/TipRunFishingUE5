@@ -19,8 +19,16 @@ public:
 	bool StepDrift(const FTRSimTime& Time, const FTROceanSample& Ocean,
 		TFunctionRef<bool(const FVector2D&)> IsDestinationValid);
 	FTRBoatSnapshot BuildSnapshot() const { return Snapshot; }
+	bool ConfigureNavigation(double MaxSpeedMps);
+	void SetNavigationForces(double ForceN, double YawRateRadPerS, double LateralResponsePerS=0);
+	// Fixed mode boundary only: preserve transform, rebuild environmental drift from rest.
+	void ResetDynamicVelocityForFishing();
 	void StopMotion() { bInitialized = false; }
 private:
+ double NavigationLateralResponsePerS=0;
+	double NavigationMaxSpeedMps = 0;
+	double EngineForceN = 0;
+	double NavigationYawRateRadPerS = 0;
 	FTRBoatParameters FrozenSettings;
 	FTRBoatSnapshot Snapshot;
 	int64 LastIntegratedTick = -1;

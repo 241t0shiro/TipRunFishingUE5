@@ -35,7 +35,7 @@ bool FTRModeTransitions::RunTest(const FString&)
   bObserved = true;
   TestTrue(TEXT("Accepted before boat phase"), Result == ETRCommandResult::Accepted);
   auto Boat = F.Boat->GetBoatSnapshot();
-  TestTrue(TEXT("Mode transition preserves boat velocity/position/heading"), Boat.VelocityMps == Before.VelocityMps && Boat.PositionM == Before.PositionM && Boat.HeadingRad == Before.HeadingRad);
+  TestTrue(TEXT("Mode transition clears velocity, preserves position/heading"), Boat.VelocityMps == FVector::ZeroVector && Boat.PositionM == Before.PositionM && Boat.HeadingRad == Before.HeadingRad);
  });
  F.Step(); F.Session->OnCommandProcessed.Remove(Handle);
  auto Mode = F.Session->GetPlayerModeSnapshot();

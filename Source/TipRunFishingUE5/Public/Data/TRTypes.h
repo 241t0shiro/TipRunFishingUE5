@@ -123,7 +123,10 @@ enum class ETRFishingCommandType : uint8
 	RodAim,
 	QuickRetrieve,
 	StartFishingMode,
-	ReturnNavigationMode
+	ReturnNavigationMode,
+	NavigationInput,
+	NavigationBoostStarted,
+	NavigationBoostStopped
 };
 
 UENUM(BlueprintType)

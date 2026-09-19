@@ -36,6 +36,9 @@ public:
 	FTRActorSimId RegisterSquid(AActor* Owner, FTRSimulationStep Step);
 	FTRActorSimId RegisterBoat(ATRBoatPawn* Boat, const FVector2D& InitialXYM, float HeadingRad, TArray<FText>& Errors);
 	bool GetBoatSnapshot(FTRActorSimId BoatId, FTRBoatSnapshot& OutSnapshot) const;
+	void ResetBoatForFishing(FTRActorSimId BoatId);
+	bool ConfigureBoatNavigation(FTRActorSimId BoatId, double MaxSpeedMps);
+	void SetBoatNavigationForces(FTRActorSimId BoatId, double ForceN, double YawRateRadPerS, double LateralResponsePerS=0);
 	// Call from participant EndPlay. Repeated removal is safe; dead actors are also pruned.
 	void Unregister(FTRActorSimId Id);
 	bool IsRegistered(FTRActorSimId Id) const;

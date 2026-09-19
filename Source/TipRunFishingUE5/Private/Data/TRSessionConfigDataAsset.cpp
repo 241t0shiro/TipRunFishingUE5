@@ -1,4 +1,5 @@
 #include "Data/TRSessionConfigDataAsset.h"
+#include "Data/TRNavigationTuningDataAsset.h"
 #include "Misc/DataValidation.h"
 #include <limits>
 #include "Data/TROceanAreaDataAsset.h"
@@ -16,6 +17,8 @@ bool UTRSessionConfigDataAsset::ValidateStartup(TArray<FText>& Errors) const
 		return false;
 	}
 	FTREquipmentSnapshot Equipment;
+	if(Navigation && (!IsValid(Navigation) || !Navigation->Parameters.Validate() || Boat->Parameters.ModelRevision!=2 || !Input->NavigationContext))
+	{Errors.Add(FText::FromString(TEXT("Navigation requires explicit revision2 boat, tuning and Navigation input context")));return false;}
 	if (Input->Bindings.ContainsByPredicate([](const FTRInputBinding& B) { return B.Command == ETRPlayerAction::QuickRetrieve; }) &&
 		(!IsValid(Fishing) || Fishing->Parameters.QuickRetrieveDurationS <= 0.0))
 	{
@@ -45,7 +48,7 @@ EDataValidationResult UTRSessionConfigDataAsset::IsDataValid(FDataValidationCont
 {
 	TArray<FText> Errors;
 	// Clock-only assets remain valid for M04. Any startup reference opts into full validation.
-	const bool bValid = (Ocean || Boat || Input || Fishing || Egis || Sinkers || Rod) ? ValidateStartup(Errors) : Validate(Errors);
+	const bool bValid = (Ocean || Boat || Input || Fishing || Egis || Sinkers || Rod || Navigation) ? ValidateStartup(Errors) : Validate(Errors);
 	for (const FText& Error : Errors) { Context.AddError(Error); }
 	return bValid ? EDataValidationResult::Valid : EDataValidationResult::Invalid;
 }

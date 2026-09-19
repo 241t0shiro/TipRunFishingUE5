@@ -84,6 +84,8 @@ void ATRPrototypeViewActor::ApplyCameraLook(FVector2D Delta)
 }
 void ATRPrototypeViewActor::ApplyObservation(const FTRHUDSnapshot& S,const FTRRodParameters& Rod,double SurfaceM,double DepthM)
 {
+ const bool FishingVisible=S.bSessionValid && S.PlayerMode.bValid && S.PlayerMode.Mode==ETRPlayerMode::Fishing && S.bEnvironmentValid;
+ RodVisual->SetVisibility(false);TipVisual->SetVisibility(false);LineVisual->SetVisibility(false);EgiVisual->SetVisibility(false);
  if(!S.bEnvironmentValid || S.Boat.PositionM.ContainsNaN() || !FMath::IsFinite(SurfaceM) || !FMath::IsFinite(DepthM)){return;}
  CameraCenterM=S.Boat.PositionM;
  BoatVisual->SetWorldLocation(TRUnits::MetersToCentimeters(S.Boat.PositionM));
@@ -106,6 +108,7 @@ void ATRPrototypeViewActor::ApplyObservation(const FTRHUDSnapshot& S,const FTRRo
  Segment(SurfaceEdges[3],O+FVector(12,-8,0),O+FVector(12,8,0),.04);
  SeabedVisual->SetWorldLocation(TRUnits::MetersToCentimeters(FVector(O.X,O.Y,SurfaceM-DepthM-.2)));
  BackgroundVisual->SetWorldLocation(TRUnits::MetersToCentimeters(O+FVector(0,100,0)));
+ if(!FishingVisible){return;}
  const FVector Mount=S.Boat.PositionM+FQuat(FVector::UpVector,S.Boat.HeadingRad).RotateVector(Rod.MountOffsetM);
  // Before first Deploy the configured base pose is a labelled onboard display only.
  const FVector InitialDirection=FRotator(FMath::RadiansToDegrees(Rod.InitialPitchRad),FMath::RadiansToDegrees(S.Boat.HeadingRad+Rod.InitialYawRad),0).Vector();
@@ -126,7 +129,7 @@ void ATRPrototypeViewActor::Tick(float DeltaSeconds)
  if(!Controller.IsValid()){Controller=Cast<ATRPlayerController>(GetWorld()->GetFirstPlayerController());}
  if(!Controller.IsValid()){return;}
  // GameMode may select the boat after the observer first binds: ensure the observation camera remains active.
- if(Controller->GetViewTarget()!=this){Controller->SetViewTarget(this);}
+ Controller->SetPrototypeObserver(this); // Registers once; the camera manager owns Navigation POV.
  const auto* Mode=GetWorld()->GetAuthGameMode<ATRGameModeBase>();
  const auto* Config=Mode?Mode->SessionConfig.Get():nullptr;
  if(Config && Config->Ocean && Config->Rod)

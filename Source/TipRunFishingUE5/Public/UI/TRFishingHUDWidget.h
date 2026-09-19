@@ -22,6 +22,7 @@ public:
 	static TArray<FTRPrototypeReadoutRow> BuildReadout(const FTRHUDSnapshot& Snapshot);
 	static TArray<FTRPrototypeReadoutRow> BuildCompactReadout(const FTRHUDSnapshot& Snapshot);
 	static TArray<FTRPrototypeGuideRow> BuildGuide(const FTRHUDSnapshot& Snapshot);
+	static FText BuildCompactGuide(const FTRHUDSnapshot& Snapshot);
 	static FText FormatSnapshot(const FTRHUDSnapshot& Snapshot);
 	static bool IsPrimaryReadout(int32 Index);
 	static bool IsPrimaryGuide(int32 Index);

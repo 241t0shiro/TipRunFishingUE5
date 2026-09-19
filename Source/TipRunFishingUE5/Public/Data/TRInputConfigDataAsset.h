@@ -6,7 +6,7 @@
 #include "TRInputConfigDataAsset.generated.h"
 
 UENUM(BlueprintType)
-enum class ETRPlayerAction : uint8 { Deploy, Jerk, Fall, TensionFall, Hook, Retrieve, Cancel, NextCast, Pause, RodAim, QuickRetrieve };
+enum class ETRPlayerAction : uint8 { Deploy, Jerk, Fall, TensionFall, Hook, Retrieve, Cancel, NextCast, Pause, RodAim, QuickRetrieve, FishingStart, ReturnNavigation, NavigationBoost };
 
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRInputBinding
@@ -21,6 +21,14 @@ class TIPRUNFISHINGUE5_API UTRInputConfigDataAsset : public UDataAsset
 {
 	GENERATED_BODY()
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputMappingContext> NavigationContext;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationThrottle;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationSteering;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationLook;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationZoom;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationFishingStart;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationBoost;
+	void CreateNavigationPrototype();
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun") TObjectPtr<UInputMappingContext> FishingContext;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun") TArray<FTRInputBinding> Bindings;
 	bool Validate(TArray<FText>& Errors) const;

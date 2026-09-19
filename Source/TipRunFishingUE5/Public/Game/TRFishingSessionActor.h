@@ -7,6 +7,7 @@
 #include "Game/TRSimulationWorldSubsystem.h"
 #include "Data/TRHUDSnapshot.h"
 #include "Game/TRPlayerModeComponent.h"
+#include "Boat/TRBoatNavigationComponent.h"
 #include "TRFishingSessionActor.generated.h"
 
 class UTRFishingComponent;
@@ -24,6 +25,10 @@ class TIPRUNFISHINGUE5_API ATRFishingSessionActor : public AActor
 	GENERATED_BODY()
 public:
 	ATRFishingSessionActor();
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UTRNavigationTuningDataAsset> NavigationTuning;
+	FTRNavigationSnapshot GetNavigationSnapshot() const { return Navigation->GetSnapshot(); }
+	FTRNavigationParameters GetNavigationParameters() const { return Navigation->GetParameters(); }
+	bool SubmitNavigationInput(FVector2D Input, int64 ExpectedEpoch, FTRActorSimId ExpectedRegistration, int64 TargetTick=-1);
 	UFUNCTION(BlueprintPure, Category="TipRun|Mode") FTRPlayerModeSnapshot GetPlayerModeSnapshot() const;
 	ETRModeChangeRejection GetModeChangeRejection(ETRPlayerMode Target) const;
 	bool SubmitModeChange(ETRPlayerMode Target, int64 ExpectedEpoch, FTRActorSimId ExpectedRegistration, int64 TargetTick = -1);
@@ -79,6 +84,8 @@ protected:
 	virtual void Destroyed() override;
 private:
 	UPROPERTY() TObjectPtr<UTRPlayerModeComponent> PlayerMode;
+	UPROPERTY() TObjectPtr<UTRBoatNavigationComponent> Navigation;
+	bool bClearNavigationInput = false;
 	void FixedStep(ETRSimulationPhase StepPhase, const FTRSimTime& Time);
 	void HandleCommand(const FTRFishingCommand& Command);
 	void ProcessCommand(const FTRFishingCommand& Command);

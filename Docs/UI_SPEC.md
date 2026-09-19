@@ -376,3 +376,95 @@ PIEはユーザー手動で行う。自動PIEを再起動しない。失敗項�
 Session起動時はNavigation。`ATRPlayerController::RequestPlayerMode()`がSessionへ要求を送る。後続のモード選択UIは未実装で、R1の開発確認用にConsoleの`TRSetFishingMode true`（Fishing要求）/`TRSetFishingMode false`（Navigation要求）を用意した。これは完成Prototypeの必須操作として採用するものではなく、R2〜R4の操作接続までのAPI確認手段。Fishing移行確定後に既存Enter/Mouse/回収操作が有効になる。Cast中やResultからのNavigation要求は拒否される。
 
 `GetDebugSnapshot().PlayerMode`でMode/Side未選択/可否/拒否理由を取得できる。既存HUDのレイアウト、Camera、保存Input資産、F1は今回変更していない。したがって従来の「起動直後Enterで投入」はR1ではFishingへの明示移行後に読み替える。手動PIEは今回実施していない。
+
+### R2 Navigation操作・手動PIE手順（2026-09-18）
+
+保存Levelは `/Game/TipRun/Prototype/M105/L_TR_M105_Prototype`、GameModeは同フォルダの`BP_TR_M105GameMode_Prototype`を継続。Session/Input資産へNavigation参照/専用Contextを明示追加し、同Dataフォルダに`DA_TR_M105Navigation_Prototype`を新設した。旧Fishing Contextは保持し、Mode確定通知で排他的に交換する。新revisionへ番号変更はしていない。
+
+Navigation操作は **W/S:前進/後退、A/D:操舵、Mouse:周囲を見る、Wheel:距離、Home:現在船首の後方基準へ戻す、P:Pause**。Camera LookはSteeringへ接続しない。MouseにはShift不要。Fishing操作は従来Contextのまま。キー/設定はPrototype用で製品確定ではない。Focus/Pause/UI解除で操船要求を破棄し、保持キーは一度離して再入力する。
+
+Camera設定もNavigation DataAssetで調整可能。距離14m（6〜35m）、注視点の船位置からの高さ1m、初期Pitch -25°、Pitch -65〜-10°、Look感度.25°/入力単位、Zoom 1m/入力単位。Yawは世界方位を保持して船位置に追従し、Homeで現在船首の後方へ戻る。Mouseだけでは船首を変更しない。SnapshotはYaw/Pitch/Distance/Activeを取得可能。既存HUDのモード別レイアウト変更/F1問題修正はR8へ残す。
+
+自動PIEは実行しない。次の項目は**ユーザー手動確認待ち**であり、Automation成功を目視成功の代用にしない。
+
+1. Editorで保存Levelを開き、1920×1080のNew Editor Window (PIE)でPlay。画面をクリックして操作を捕捉。初期Navigationで船の後方視点、既存海面Grid/ブイを確認。
+2. W/Sを各数秒保持→解放し、固定基準に対する前後移動/慣性を確認。A/Dで船首が変わり、移動方向と必ずしも一致しないことを確認。
+3. 操舵を離してMouseだけを動かす。周囲を見られ、Boat Headingは不変。Wheelで距離、Homeで船首後方への復帰とPitch制限を確認。
+4. 移動中にConsoleで`TRSetFishingMode true`。Consoleを閉じ、推力/舵/航行慣性が解除され、位置/船首を維持して風/表層潮のDriftを再形成すること（2026-09-19改訂）。W/S/A/Dでは操船できないこと。Fishing視点は旧観測CameraでありR3一人称ではない。
+5. Readyなら`TRSetFishingMode false`でNavigationへ戻り、キーを離して再操作。Cast中のNavigation要求は拒否されること。Pause/Focus切替でも勝手に再加速しないこと。
+
+今回の保存資産読込・Session生成・操船要求・Fishing後拒否は画面なしAutomationで確認済み。実キーの到達、Camera自然さ、Gridに対する見やすさは上記PIEで判定する。R3以降/H/M11は未実施。
+
+### R2手動指摘修正後の操作（2026-09-18、上記旧R2手順より優先）
+
+ユーザー手動結果: 前後進/Steering/Mouse三人称/風潮中操船は正常。操船が遅い、釣り開始不可、旧Shiftガイド、Home案内不足、モード別案内欠落は不合格。正常箇所は維持し、R2修正だけ実施した。
+
+- 原因: Navigation ContextにFishing開始Actionがなく、既存EnterはFishingContextのDeployだけだった。Console/APIによる遷移試験は成功していたが、通常プレイヤーの開始導線を検証できていなかった。HUDの通常ガイドも生成時の固定文言で、Mode変化を読んでいなかった。
+- **Navigation: Enter＝釣り開始**。独立`NavigationFishingStart` ActionのStartedを既存R1のMode Change Queueへ送る。**Fishing Ready: Enterを一度離して押し直す＝投入**。Contextごとに意味を分離し、一押しでMode変更とDeployを同時処理しない。保持/Repeatによる自動投入は禁止。新キーは追加せずEnterを状態別利用するPrototype配置。
+- Navigation通常ガイドは「W/S：前進／後退、A/D：操舵、Mouse：視点、Wheel：距離、Home：視点リセット、Enter：釣り開始」の3行。操船中は状態欄に操船を表示。Fishingへ移行したら竿/シャクリ/巻取り/F/Q/Enter投入/Tab装備の2行へ即更新し、Navigation案内を消す。詳細ガイドもModeを読み、Sessionの許可情報で有効/無効を表示する。旧Shift+Mouseを通常案内から除去したが、Fishingの旧観測機能そのものは今回変更しない。
+- Homeは既存のControllerキー接続を維持。Navigationで現在のBoat Heading後方へYawを合わせ、Pitchと距離もNavigation DataAssetの初期値へ戻す。Cameraだけを動かしBoat Headingを書き換えない。Mode別HUD以外のF1修正やR3一人称は今回対象外。
+- 保存Map/GameModeは従来と同じ。更新資産は`/Game/TipRun/Prototype/M105/Data/DA_TR_M105Input_Prototype`と`DA_TR_M105Navigation_Prototype`のみ。通常の釣り開始にConsoleは不要。`TRSetFishingMode`はDebug互換として残す。
+
+手動再PIE（自動起動しない）:
+
+1. Editor再起動後、`/Game/TipRun/Prototype/M105/L_TR_M105_Prototype`を開き、1920×1080のNew Editor Window (PIE)で開始、画面をクリック。操船モードと新しい3行ガイドを確認。
+2. W/SとA/Dで前後進/旋回。旧版より明確に速く操作できるか、Grid/ブイに対する移動を確認。自然Driftの調整とは別に操作感を評価する。
+3. MouseとWheelで視点/距離を変更→Home。船後方、初期Pitch/距離へ戻り、Boat Headingが勝手に変わらないこと。
+4. 操船中にEnterを1回押す。Fishingへ移行、推力/舵は解除、船首は保持、船位置/船首は保持し、航行速度を解除して環境Driftへ移行（2026-09-19改訂）。釣り用ガイドへ切替。Enterを保持しても投入されないこと。
+5. Enterを離し、もう一度押してDeploy。FreeFallへ進み、Fishing中のW/S/A/Dで推進/操舵しないこと。Q/通常釣り操作は既存どおり。
+
+Automationでは保存InputのEnterマッピングからEnhanced Actionを配送し、固定Mode遷移→押し直しDeploy、実Widgetのガイド交換、Home計算を確認した。OS/Viewportの実キー捕捉とContext交換時の保持キー抑制、Camera/操船の体感は手動項目として残す。手動再確認完了まではR2ゲームプレイ合否保留、R3以降/H/M11には進まない。
+
+### R2最終3点修正後の現行操作（2026-09-18）
+
+最新ユーザー手動PIEでは前後進/Steering/HeadingとVelocity分離、Mouse/Zoom/Home、Navigation HUD、EnterでFishing、慣性/自然Drift継承、Fishing操船拒否、Fishing HUD、Deploy、Enter保持の誤投入なしは合格。残る横滑り・退出操作・詳細HUDキーだけ今回修正。以下を旧F1/R8保留/旧R2手順より優先する。
+
+- **FishingのE：Navigationへ戻る**。InputのBoolean Action→Controller→Session/Input Queue→固定Mode判定。Ready・船上・活動Castなし・Unlockedでのみ成功。投中のFreeFall/Bottom/Shakuri/TF/Stay/通常回収/Quickは拒否。通常回収ResultではNでReadyにしてからE、Quick完了Readyは直接E。HUDに操作を常設、詳細ガイドの有効性はMode Snapshotから取得する。モード変更後は既存Navigation Context/Cameraに復帰する。
+- **Insert：詳細HUD開閉**。ControllerのPressedとWidgetのPreviewKeyDownを更新し、Repeatでは切替えない。Widgetが処理した入力はHandledで二重配送しない。F1はPrototype HUD操作から除去。HUDのラベルもInsertへ更新。
+- 原因はUE5.8 `Engine/Config/BaseInput.ini`のF1→`viewmode wireframe`と旧HUD F1の重複。F2にも`viewmode unlit`があるため代替には使わない。Insertは同設定/Engine Editorの明示キー割当/プロジェクト内で競合なしと確認。`Config/DefaultInput.ini`でF1のDebugExecBindingを限定除外し、Engineファイルは変更しない。詳細開閉はUI表示だけでViewMode/EngineShowFlags/Cameraを操作しない。
+- 旋回補助は推進中だけ有効な横減衰。係数はNavigation DataAssetの1.5/sというPrototype値。推進解放/釣り移行で止まり、Fishing Driftは従来のまま。既存速度・Camera・Rodの調整値は保持。
+
+最終手動再確認（自動PIEなし）:
+
+1. **Configと保存資産を読み直すためEditorを再起動**。`/Game/TipRun/Prototype/M105/L_TR_M105_Prototype`でPIE。
+2. Wを保持してA/Dで曲がり、従来より横滑りが短く滑らかに追従すること、速度方向が瞬時に船首へスナップしないことを確認。W解放では通常減速、Enterで釣り開始した際は航行慣性を解除して風潮ドリフトを再形成すること（2026-09-19改訂）。
+3. Fishing ReadyでE→操船と三人称へ戻る。Enterで再度Fishing→押し直しDeploy。投中のEでは戻らない。Q回収完了後はNなしでEが成功すること。
+4. Insertを押す→詳細表示、再度押す→閉じる。20回程度、通常/装備パネル/Pauseでも確認。Wireframe/色/Cameraが変わらず、F1でPrototype詳細HUDが開かないこと。
+
+Automationでは生キー入力→PlayerInput/InputComponent経路のInsert20回/Repeat、F1の未割当、Config反映後のDebugExecBinding除外、ViewMode/全ShowFlags/ViewTarget不変を確認。OS/実Editorでの表示と今回の旋回体感は手動再評価待ち。R2正式合否はこの結果まで保留。R3の釣り舷/一人称やH/M11は未着手。
+
+### R2追加修正：Mode表示とShift Boost（2026-09-19）
+
+- Navigation専用Input ContextのLeftShift/RightShift保持を高速航行へ割当。W/Sと併用し、Shift単独では推進しない。Navigationガイドに「Shift：高速航行」を表示し、Fishingガイドには表示しない。Fishingの既存Shift観測Camera経路は維持し、Boostとしては受理しない。
+- Controller→Session Input Queue→固定SimulationでBoost開始/終了を処理。Mode退出時は要求解除、保持入力は再押下まで抑制。Pause/Focus/UI入力遮断も既存解除契約を使用する。
+- 表示Actorは有効なFishing Mode SnapshotのときだけRod/Tipを表示し、活動中Egi SnapshotがあるときだけLine/Egiを表示。Navigationではすべて隠す。専用CameraマーカーとしてのTip表示も同時に隠す。Boat/海/世界基準物は継続。Actor/Componentを破棄・再生成せず、再Fishingで同じ部品を表示する。
+
+手動再確認（今回のPIEは自動実行しない）:
+
+1. Editorを再起動して保存Level `/Game/TipRun/Prototype/M105/L_TR_M105_Prototype` からPIE。NavigationでRod/Tip/Line/Egiが見えず、Boatと世界基準物は見えること。
+2. W単独→W＋Shift→Shift解放を比較。Shift単独は推進せず、W＋Shiftで速く、解放後は滑らかに通常航行へ戻ること。A/D併用で旋回できること。
+3. W＋Shiftを保持してEnterでFishingへ移行。Rod/Tipが再表示され、Engine/Boostは停止、Navigation慣性が解除され、環境Driftだけになること（2026-09-19改訂）。
+4. ReadyでEによりNavigationへ戻る。Rod/Tip等が消え、Shiftを保持したままWを押し直してもBoost再開しないこと。Shiftを一度離して押し直せば有効になること。
+5. Enter→Eを数回往復し、表示の重複や残留がないこと。FishingでEnterを押し直してDeployし、Line/Egiの表示と同期も確認。Q回収後Eで全Fishing表示が消えること。
+6. Navigationだけに高速航行ガイドがあること。Focus喪失/復帰、Pause解除後もBoostが勝手に再開しないこと。
+
+自動試験は表示切替・同一部品再利用・Enhanced Action配送・固定更新・保持入力防御を検証。実Viewportのキー捕捉と体感は上記手動結果まで保留。R3/H/M11へは進まない。
+
+### R2最終Mode Transition / Boost（2026-09-19、現行手順）
+
+前回の表示往復・重複なし、通常/Boost航行と操舵はユーザー手動合格。今回は速度持込み防止、物理Shift再入力、Boost状態表示のみ修正した。以下を過去の「慣性継承」「Context交換だけで保持抑制」の説明より優先する。
+
+- Navigation HUDの操作ガイドに `高速航行: OFF` / `高速航行: ON` / `高速航行: 再入力待ち` を追加。ONはSimulationがBoostを要求中かつThrottleが0以外、OFFは非要求/無Throttle、再入力待ちはControllerの物理Shiftラッチ。解放時の推力は従来どおり滑らかに通常へ戻るため、OFFは速度が瞬時に通常へ戻った意味ではない。Fishing HUDへは状態を出さない。`Shift：高速航行`の操作案内は保持。
+- `InputKey`で左右Shiftの物理Pressed/ReleasedをContextとは独立に追跡する。Mode/Focus/Pause/UI/Flushで保持を破棄した場合は再入力待ちを設定。EnhancedのCompleted/CanceledはBoost停止要求だけで、ラッチを解除しない。左右両キーが実際にReleasedになるまで、Repeat/Context再有効化のStartedを拒否する。
+- Focus外で解放イベントを受け取れなかった場合も推測で再アームしない。復帰後にShiftを押して離し、その後押し直せば再開できる。Pause中の物理解放は記録可能だが、Pause中の再押下を復帰後の推進として再生しない。
+
+手動PIE再確認（自動PIEは実行しない）:
+
+1. Editorを再起動し `/Game/TipRun/Prototype/M105/L_TR_M105_Prototype` で開始。初期OFF→W＋ShiftでON、Shift解放でOFF。通常/Boost速度と操舵は前回どおり。
+2. W＋Shiftで十分加速しEnterでFishingへ移行。位置/船首が跳ばず、高速の滑りがその場で解除され、その後は風・表層潮の緩いDriftだけとなること。Fishingの操作案内にBoost状態がないこと。
+3. Shiftを離さずReadyでE→Navigation。再入力待ちでBoostが再開しないこと。Wを押し直しても通常速度のみ。Shiftを離すとOFF、もう一度押すとON。
+4. 左右Shiftを両方保持して同じ操作を行い、一方だけの解放では再入力待ちが残り、両方解放後の再押下でONとなること。
+5. W＋Shift中にPでPause/解除、またはFocusを外して戻す。保持だけで再開せず、Shift解放/再押下が必要なこと。
+6. Enter/Eの表示往復と、Fishingで押し直しEnterによるDeployは前回合格動作のままであること。
+
+上記今回分の手動合否は未確認。R2正式完了は再PIE結果待ち、R3/H/M11へ進まない。

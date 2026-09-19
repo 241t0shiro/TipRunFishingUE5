@@ -1,5 +1,15 @@
 # TipRunFishingUE5 — Codex実装規約
 
+2026-09-19 R2 Mode Transition/Boost最終改訂: ユーザー指示により旧Velocity/慣性保持契約を廃止。Fishing確定時に動的速度と全Navigation応答を解除し、位置/Headingを保持して環境Driftを0から再形成する。Shiftは物理ReleasedとContextのCompleted/Canceledを分離し、左右両キー解放まで再入力待ち。Navigation HUDにOFF/ON/再入力待ち。UHT4生成・実C++/Development Editor Win64成功、R2 14件＋回帰28件の最終結果成功。今回の実PIE未確認、R2正式合否保留。R3以降/H/M11未着手。以下の速度継承/保持解除成功記録は旧契約の履歴。最新契約と再手順は各設計書末尾を参照。
+
+2026-09-19 R2追加2点: Fishing→Navigation後のRod/Tip/Line/Egi表示をModeで遮断し再利用、Navigation専用Shift Boostを固定入力/推力応答へ追加。保存Input/Navigationのみ明示更新。UHT11生成・実C++・Development Editor Win64成功、R2 12件＋関連回帰29件成功、試験内エラー/警告0。今回の表示/Boost手動再PIEは未実施、R2正式合否保留。R3以降/H/M11未着手。現行操作はUI_SPEC末尾、計算はBOAT_SYSTEM末尾、証跡はROADMAP末尾。以下は履歴。
+
+2026-09-18 R2最終修正: ユーザー手動で操船/Camera/Enter遷移/Deploy等は合格。残る旋回時の横滑り、Fishing退出入力欠落、F1競合を修正。推進中だけ横減衰補助（Prototype 1.5/s）、Fishing ReadyからEでNavigation、詳細HUDはInsertへ変更しプロジェクト設定で旧F1 Wireframe割当を除外。UHT8生成・実C++・Development Editor Win64成功、R2 9件＋関連回帰35件成功、試験内エラー/警告0。今回3点の手動再確認は未実施、R2正式合否保留。R3以降/H/M11未着手。現行キー/再試験はUI_SPEC末尾、計算はBOAT_SYSTEM末尾、証跡はROADMAP末尾。以下は履歴。
+
+2026-09-18 R2手動指摘への修正: Navigationの釣り開始入力欠落、モード非対応の固定HUDガイド、遅い操船Prototype値を修正。Navigation Enter=釣り開始、Fishingで押し直したEnter=投入。推力/旋回だけを再調整し自然Drift係数は維持。保存Input/Navigationを明示更新。UHT3生成ファイル・実C++・Development Editor Win64成功、R2 6件＋R1/B/M09/F回帰22件成功、試験内エラー/警告0。手動再PIEは未実施、操作感合否は保留。今回の契約/結果はUI_SPEC・BOAT_SYSTEM・ROADMAP末尾を優先。R3以降/H/M11未着手。
+
+2026-09-18 R2実装・自動検証完了: Navigation専用固定入力、推力/操舵と既存Driftの単一積分、三人称Cameraを追加。保存PrototypeへNavigation DataAssetと独立Input Contextを明示接続。UHT19生成ファイル・実C++・Development Editor Win64成功、R2 4件＋R1/B/D/M04/M09回帰27件成功、試験内エラー/警告0。手動PIE未確認で操作感の合否は保留。計算はBOAT_SYSTEM末尾、手動手順はUI_SPEC末尾、証跡/変更一覧はROADMAP末尾。R3以降/H/M11は未着手。以下は各時点の履歴。
+
 2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
 
 2026-09-17 M10.5-R設計改訂: 最新のユーザー手動PIEによりGはゲームプレイ品質不合格。過去の自動試験成功を取り消すものではないが、合格の代用にはしない。今回更新したのは設計文書のみ。Rの実装は未着手。Navigation/Fishingの分離、三人称操船/左右舷一人称釣り、Shakuri Sequenceと弛み量に応じた回収を設計した。D16の簡易操船は今回の明示依頼で対象内へ変更。現行設計はGAME_DESIGN第11節、BOAT_SYSTEM第9節、FISHING_SYSTEM第14節、UI_SPEC末尾、ROADMAP第8節を優先する。Gの固定Reel Pulse、Shift観測カメラ、F1正常記録は旧実装の履歴。Rの自動試験とユーザー手動PIE合格後もHへ自動進行しない。H・M11以降は保留。
@@ -113,7 +123,7 @@
 
 ## 9. M10.5 Prototype Realism Revision
 
-- 今回はRの設計改訂のみ。A〜Fの基盤を保持し、G不合格を受けてROADMAPのR1〜R9を後続の明示依頼ごとに実装する。R手動合格前にHへ進まず、M11以降のAI/ATTACK/BITE/Hook/Fight/Range評価を先行実装しない。
+- R1/R2の実装・自動検証まで完了。A〜Fの基盤を保持し、G不合格を受けたROADMAPのR3〜R9は後続の明示依頼ごとに実装する。R手動合格前にHへ進まず、M11以降のAI/ATTACK/BITE/Hook/Fight/Range評価を先行実装しない。
 - M10までの自動試験成功と、ユーザーPIEの品質不合格を両方記録する。M10.5は自動試験とPIE再評価が両方合格するまで未完了。旧「M11へ進める」という記録を進行許可に使わない。
 - 位置正本の移行、風/表層潮/深度別潮の分離、船体応答、需要に応じたFreeFall繰出し、通常回収停止の連続性を一体で検証する。水深30mで80m以上のラインが出る問題を表示値や80m clampで隠さない。
 - 右クリックは1押下1シャクリ。左保持で通常回収、解放で位置/ラインを引き継ぐStay相当、F再Fall、Q Quick Retrieve、Enter投入。マウス竿入力もCastId/登録世代/固定Tick/Sequenceを通し、Actor/Widget Tickから正本を動かさない。

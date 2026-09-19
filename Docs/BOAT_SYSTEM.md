@@ -127,7 +127,7 @@ Rは簡易Navigationを承認された対象とする。旧「自由操船は全
 
 新設予定`UTRBoatNavigationComponent`は固定入力から推進力/操舵要求を作る。独立TickでPawnを動かさない。`UTRBoatDriftComponent`を船位置・速度・Headingの唯一の積分担当として拡張する。従来Bの軸別風/潮抗力へHeading方向の推進力を加える。概念式は `I dv/dt = Fwind + FsurfaceCurrent - Drag*v + Fthrust`。別計算の推進速度を後で加算しない。舵は調整可能な角速度/応答時間を持つ簡易モデルとし、Chaos/6自由度船舶物理にはしない。
 
-Navigationでも環境作用は継続。Fishing移行で推進/舵要求を0としHeadingを保持するが、速度と位置は継承する。速度方向へ船首を自動整列しない。釣り中の風による自動Yawは今回追加しない。操船用速度の安全範囲は旧MaxDriftSpeedと区別し、移行時の残留速度をClampして止めたり異常扱いしたりしない。質量相当/推力/操舵速度/応答/速度安全限界はPrototype DataAssetへ分離する。
+Navigationでも環境作用は継続。Fishing移行で推進/Boost/舵要求と動的速度を0とし、位置とHeadingだけを保持して環境Driftを再構築する。速度方向へ船首を自動整列しない。釣り中の風による自動Yawは今回追加しない。操船用速度の安全範囲は旧MaxDriftSpeedと区別し、通常航行の速度はClampしない。Fishing確定時だけ意図的に動的速度を解除する。質量相当/推力/操舵速度/応答/速度安全限界はPrototype DataAssetへ分離する。
 
 ### Port / Starboard
 
@@ -137,8 +137,58 @@ Navigationでも環境作用は継続。Fishing移行で推進/舵要求を0と�
 
 ### ドリフト速度の測定・再調整
 
-Bを廃棄せず、風と表層潮の応答係数、方向別受風係数、抗力、慣性を個別に測る。0.4/0.7/1.0 knot、無風/風のみ/潮のみ/同方向/逆方向/直交、船首違いで、10/30/60 Simulation秒の位置差(m)、平均/終端速度(m/s・knot)、Heading/移動方位を記録する。停止開始とNavigation残留速度からの開始を別試験とする。
+Bを廃棄せず、風と表層潮の応答係数、方向別受風係数、抗力、慣性を個別に測る。0.4/0.7/1.0 knot、無風/風のみ/潮のみ/同方向/逆方向/直交、船首違いで、10/30/60 Simulation秒の位置差(m)、平均/終端速度(m/s・knot)、Heading/移動方位を記録する。停止開始とNavigation/BoostからのFishing移行を別試験とし、後者にも航行慣性が残らないことを確認する。
 
 Prototype調整は既存B値との比較表と固定世界基準物を使った手動評価で行う。現実の船舶実測値はないため「ゲーム近似」と明記。見た目の速さをカメラ追従だけで隠さず、単純な速度Clampだけで調整しない。実装前に試験条件と受入速度帯を記録し、失敗後に期待値を都合よく変えない。製品速度の確定はしない。
 
 NavigationとCameraの自然さ、選んだ船首を保つ横流し、左右舷の竿位置を手動ゲートにする。無効環境時は推進を止め最後の有効状態を保持して異常を通知する。架空の水深/船上帰還は作らない。詳細タスクはROADMAP R2/R3/R7。
+
+### R2実装: Navigation作用（2026-09-18）
+
+- Session所有Navigation Componentは入力Throttle/Steering（各-1〜1）を保持し、指数応答 `x += (target-x)*(1-exp(-response*dt))` で推力N/旋回角速度rad/sを更新する。後退だけReverseScaleを適用。Navigation以外/Focus解除等では要求を0にする。通常の運動は独立Tickや速度の直接代入で進めない。Fishing確定時の動的速度解除は明示的な例外とする。
+- Drift ComponentだけがHeadingとWorld位置/速度を積分。各固定ステップでHeadingを角速度から更新し、そのForwardへEngineForceを加える。Bの軸別解析解の目標へ長手方向だけ `EngineForce/K` を追加する（Kは風/表層潮/抗力の係数和）。船首はVelocity方向へ揃えない。無風無潮でも相対流体抗力と慣性は作用するゲーム近似。
+- B SnapshotのWind/Current/Drag寄与は引き続き各環境作用の速度変化。Engine有効時は3寄与だけで全速度差にはならず、推力の寄与 `Forward*EngineForce*dt/Inertia` を含む。新Navigation Snapshotから推力を参照できる。船座標/速度/固定RodTipは既存公開口を維持する。
+- 操船要求はBoatステップ後に消費し、次ステップは生存Sessionから再送する。Session破棄・登録解除後に推力/舵が残留しない。Fishing移行時は推力/Boost/舵/補助と動的速度を即解除し位置/Headingを保持。Bの環境Driftを停止状態から再構築する。
+- `MaxSpeedMps`は通常目標をClampする値ではなく、非有限/範囲外の候補を棄却する安全限界。明示設定した船では旧Drift上限との大きい方を使用し、Fishing移行後も保持する。上限は値検証用であり、Fishing開始時の速度解除とは独立する。範囲違反/無効海の既存Disabled・最終有効Snapshot保持を維持。
+- Prototype専用Navigation DataAsset: EngineForce=8N、ReverseScale=.5、EngineResponse=2/s、SteeringRate=.45rad/s、SteeringResponse=3/s、安全限界8m/s。全てゲーム近似の仮値で、実船実測/製品値ではない。Bの保存Boat調整値は変更していない。Drift最終調整はR7へ残す。
+
+### R2操船Prototype値の再調整（2026-09-18）
+
+手動PIEで前後進/操舵/三人称/風潮中の航行は正常だったが、移動と旋回が遅いとの結果を受け、上記の旧Navigation値だけを改訂した。積分式、Boatの風/潮応答・抗力・慣性、Fishing中の自然Drift係数は変更しない。
+
+|Navigation項目|旧値|改訂値|
+|---|---:|---:|
+|EngineForceN|8|20|
+|ReverseScale|0.5|0.6|
+|EngineResponsePerS|2|4|
+|SteeringRateRadPerS|0.45|1.0|
+|SteeringResponsePerS|3|6|
+|MaxSpeedMps（候補の安全限界）|8|14|
+
+保存`DA_TR_M105Navigation_Prototype`へ明示適用。Camera設定は保持。これらは移動を快適にするためのPrototypeゲーム近似であり、製品値/実船値ではない。最大速度を強制設定する変更ではなく、既存の力・抗力・慣性に応答する。Fishing移行時は航行慣性を解除するため、環境Driftは0速度から再形成する。
+
+無風無潮、Bの試験船係数（慣性10kg、CurrentResponse/Drag各1kg/s、WindResponse .1）の独立比較: 5秒後前進2.322641→6.012489m/s、後退1.172509→3.643671m/s、1秒操舵のHeading変化.311002→.841921rad。新旧とも安全限界未満。体感の最終合否は保存Prototypeの手動再PIE待ち。
+
+### R2最終修正: 推進中の旋回補助（2026-09-18）
+
+ユーザー再PIEで前後進/操舵は合格だが、旋回中の横滑り慣性が強いとの指摘。従来は船首を回しても横速度はBの弱い抗力だけで減衰していた。推力/SteeringRateを再増加せず、Navigation専用の横減衰を追加する。
+
+`NavigationLateralResponsePerS`は有限0〜20/s、0で無効、保存Prototypeは1.5/s。有効値はNavigationかつ推力有効時の`設定値 * abs(Throttle)`。Throttle解放・Pause/Focus解除・Session終了・Fishingへの遷移で0となる。推力応答に残量があってもThrottle=0なら補助を止める。公開Navigation Snapshotの`LateralResponsePerS`で確認可能。
+
+船体横軸の係数和へ`InertiaKg * 有効Response`を足し、既存の軸別解析解で位置と速度を一度だけ積分する。横方向の追加力は`-InertiaKg * Response * 横速度`。速度の方向を直接書き換える/スナップする処理ではない。船首はSteeringだけで決まり、風・表層潮の独立した外力、通常抗力、慣性を継続。環境の寄与を0へ置き換えない。Bの3寄与Snapshotは既存の環境作用で、補助分の速度変化`-横軸 * Response * 横移動量`は別項として扱う。
+
+固定要求は各Boatステップで消費し、Fishingでは0を配送する。補助0の経路は従来Bの計算と同一。係数0/1.5の2つの同条件WorldをFishingで600ステップ進め、位置・速度の完全一致を確認。環境ありの旋回比較で2秒操舵後の船首/速度方位差は補助なし82.766°、補助あり33.480°。最初の1ステップの速度変化は.25m/s未満で瞬間整列なし。30/60/120fps・寿命/PauseとB回帰も成功。係数はゲーム近似のPrototype値、今回の手動操作感再評価は保留。
+
+### R2追加修正：Navigation Boost（2026-09-19）
+
+- Shift保持＋ThrottleでNavigation推力だけを増幅。Shift単独では加速しない。Steering/横減衰補助、Wind/SurfaceCurrent、Drag/Inertiaの既存単一積分は維持する。
+- 固定更新でBoostBlendを目標0/1へ `1-exp(-BoostResponsePerS*dt)` で近づける。目標推力は通常推力×`1+(BoostThrustMultiplier-1)*BoostBlend`、その後既存EngineResponseを通す。Velocityの瞬間倍率変更は行わない。解放後は滑らかに通常推力へ戻る。
+- Navigation DataAssetのPrototype値は倍率2、応答2/s、BoostMaxSpeedMps=24。通常のEngineForceN=20、MaxSpeedMps=14は保持。24m/sは速度目標やClampではなく、通常/Boost航行の既存異常速度検出の上限。Fishingへ移行後も上限設定は保持するが推力・Boost・横減衰補助・動的速度を0とし、自然Driftを再形成する。
+- Mode/Focus/Pause境界ではBoost要求とBlendを解除。FishingでBoost Commandを直接投入してもSessionが拒否。入力はModeEpoch/CastId/Sequence/登録寿命を通す。製品値/実測船舶モデルではない。
+
+### R2 Mode Transition速度契約の改訂（2026-09-19、旧慣性継承を廃止）
+
+- ユーザーPIEでBoost航行の残留慣性が釣り開始後も高速移動を続けると確認されたため、旧「Navigation→FishingでVelocity/inertiaを保持」は廃止。
+- 現行モデルは環境と推力を単一Velocityへ積分しており、由来別の履歴分離は行わない。今回許可された簡潔な方式として、受理されたFishing開始Command内でCoordinator→Boat Driftへ`ResetDynamicVelocityForFishing`を依頼し、Velocity/Speedと前Tickの速度寄与を0へ戻す。Navigation ComponentのEngine/Throttle/BoostBlend/Steering/Assistも解除する。
+- Position/Heading/Forward/RodTip、環境設定、登録、固定時計は保持。Command確定時点で位置/Headingは完全に同じ。後続Boatフェーズから既存BのWind/SurfaceCurrent/船体応答/Drag/Inertiaだけで自然Driftを再形成する。無風無潮では静止、環境ありでは環境による変位だけが生じる。拒否されたMode変更では速度をリセットしない。
+- Boost係数/通常Navigation速度/表示の手動合格箇所は変更しない。速度の減算推定やClampで高速残量を隠さず、Fishing開始という明示境界で動的状態を解除する。Navigationへの復帰時にはFishingの自然Driftをリセットしない。

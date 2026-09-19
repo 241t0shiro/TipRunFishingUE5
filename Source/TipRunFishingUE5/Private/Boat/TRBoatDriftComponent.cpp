@@ -27,7 +27,7 @@ namespace
 			FMath::IsFinite(Ocean.WindMps.SizeSquared()) && FMath::IsFinite(Ocean.SurfaceCurrentMps.SizeSquared());
 	}
 	bool IntegrateWindCurrent(const FTRBoatParameters& P, const FTROceanSample& Ocean,
-		const FTRBoatSnapshot& Previous, double Dt, FTRBoatSnapshot& Next)
+		const FTRBoatSnapshot& Previous, double Dt, FTRBoatSnapshot& Next, double ForceN, double SpeedLimit, double LateralResponsePerS)
 	{
 		const FVector Forward = Previous.ForwardVector;
 		const FVector Side(-Forward.Y, Forward.X, 0);
@@ -43,13 +43,13 @@ namespace
 			// Relative wind arriving from the bow travels towards -Forward.
 			const double Scale = Axis == 1 ? P.SideWindScale : (W - V < 0 ? P.BowWindScale : P.SternWindScale);
 			const double Kw = P.WindResponseKgPerS * Scale;
-			const double K = Kw + P.CurrentResponseKgPerS + P.DragKgPerS;
+			const double K = Kw + P.CurrentResponseKgPerS + P.DragKgPerS + (Axis==1 ? P.InertiaKg*LateralResponsePerS : 0);
 			const double Rate = K / P.InertiaKg;
 			const double X = Rate * Dt;
 			if (!FMath::IsFinite(X)) { return false; }
 			const double Alpha = -std::expm1(-X);
 			// Weighted velocities avoid overflowing Kw*W before dividing by K.
-			const double Target = (Kw / K) * W + (P.CurrentResponseKgPerS / K) * U;
+			const double Target = (Kw / K) * W + (P.CurrentResponseKgPerS / K) * U + (Axis == 0 ? ForceN / K : 0);
 			const double NewV = V * (1.0 - Alpha) + Target * Alpha;
 			// phi=(1-exp(-x))/x; series preserves small response increments and displacement.
 			const double Phi = X < 1.e-5 ? 1.0 - X/2.0 + X*X/6.0 - X*X*X/24.0 : Alpha / X;
@@ -67,8 +67,8 @@ namespace
 		}
 		Next.SpeedMps = std::hypot(Next.VelocityMps.X, Next.VelocityMps.Y);
 		// A guard failure is reported by BoatPawn and disables motion. Never silently clamp bad tuning.
-		if (!FMath::IsFinite(Next.SpeedMps) || Next.SpeedMps > P.MaxDriftSpeedMps ||
-			DeltaPosition.Size2D() / Dt > P.MaxDriftSpeedMps) { return false; }
+		if (!FMath::IsFinite(Next.SpeedMps) || Next.SpeedMps > SpeedLimit ||
+			DeltaPosition.Size2D() / Dt > SpeedLimit) { return false; }
 		Next.PositionM += DeltaPosition;
 		return true;
 	}
@@ -79,6 +79,8 @@ bool UTRBoatDriftComponent::InitializeMotion(const FTRBoatParameters& Settings, 
 	float HeadingRad, const FTROceanSample& Ocean, TArray<FText>& Errors)
 {
 	bInitialized = false;
+	NavigationLateralResponsePerS=0;
+	NavigationMaxSpeedMps = EngineForceN = NavigationYawRateRadPerS = 0;
 	if (!Settings.Validate(Errors)) { return false; }
 	if (!ValidOcean(Ocean) || (Settings.ModelRevision == 2 && !ValidWindCurrent(Ocean)) ||
 		!FMath::IsFinite(InitialXYM.X) || !FMath::IsFinite(InitialXYM.Y) || !FMath::IsFinite(HeadingRad))
@@ -116,7 +118,16 @@ bool UTRBoatDriftComponent::StepDrift(const FTRSimTime& Time, const FTROceanSamp
 	Next.Tick = Time.TickIndex;
 	if (FrozenSettings.ModelRevision == 2)
 	{
-		if (!ValidWindCurrent(Ocean) || !IntegrateWindCurrent(FrozenSettings, Ocean, Snapshot, Time.StepSeconds, Next)) { return false; }
+		if (NavigationYawRateRadPerS != 0)
+		{
+			Next.HeadingRad = float(FMath::UnwindRadians(double(Snapshot.HeadingRad) + NavigationYawRateRadPerS * Time.StepSeconds));
+		}
+		if (!FMath::IsFinite(Next.HeadingRad) || !FMath::IsFinite(EngineForceN)) { return false; }
+		Next.ForwardVector = FVector(FMath::Cos(double(Next.HeadingRad)), FMath::Sin(double(Next.HeadingRad)), 0);
+		const FTRBoatSnapshot IntegrationStart = Next;
+		const double SpeedLimit = FMath::Max(FrozenSettings.MaxDriftSpeedMps, NavigationMaxSpeedMps);
+		if (!FMath::IsFinite(NavigationLateralResponsePerS) || NavigationLateralResponsePerS<0 || NavigationLateralResponsePerS>20 ||
+			!ValidWindCurrent(Ocean) || !IntegrateWindCurrent(FrozenSettings, Ocean, IntegrationStart, Time.StepSeconds, Next, EngineForceN, SpeedLimit, EngineForceN!=0 ? NavigationLateralResponsePerS : 0)) { return false; }
 		Next.WindMps = Ocean.WindMps;
 		Next.SurfaceCurrentMps = Ocean.SurfaceCurrentMps;
 	}
@@ -141,4 +152,22 @@ bool UTRBoatDriftComponent::StepDrift(const FTRSimTime& Time, const FTROceanSamp
 	Snapshot = Next;
 	LastIntegratedTick = Time.TickIndex;
 	return true;
+}
+
+bool UTRBoatDriftComponent::ConfigureNavigation(double MaxSpeedMps)
+{
+ if(!bInitialized||FrozenSettings.ModelRevision!=2||!FMath::IsFinite(MaxSpeedMps)||MaxSpeedMps<=0||MaxSpeedMps>100){return false;}
+ NavigationMaxSpeedMps=MaxSpeedMps;return true;
+}
+void UTRBoatDriftComponent::SetNavigationForces(double ForceN,double YawRateRadPerS,double LateralResponsePerS)
+{
+ EngineForceN=ForceN;NavigationYawRateRadPerS=YawRateRadPerS;NavigationLateralResponsePerS=LateralResponsePerS;
+}
+
+void UTRBoatDriftComponent::ResetDynamicVelocityForFishing()
+{
+ SetNavigationForces(0,0,0);
+ Snapshot.VelocityMps=FVector::ZeroVector;Snapshot.SpeedMps=0;
+ Snapshot.WindDeltaVelocityMps=Snapshot.CurrentDeltaVelocityMps=Snapshot.DragDeltaVelocityMps=FVector::ZeroVector;
+ // Position, heading, registration, environment and integration clock remain intact.
 }

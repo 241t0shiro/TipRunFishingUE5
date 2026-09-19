@@ -8,6 +8,7 @@
 class ATRFishingSessionActor;
 class UEnhancedInputComponent;
 class UTRFishingHUDWidget;
+class ATRPrototypeViewActor;
 struct FInputActionValue;
 struct FTRFishingCommand;
 
@@ -17,6 +18,9 @@ class TIPRUNFISHINGUE5_API ATRPlayerController : public APlayerController
 	GENERATED_BODY()
 public:
 	ATRPlayerController();
+	bool SubmitNavigationInput(FVector2D Input,int64 TargetTick=-1);
+	bool ApplyNavigationLook(FVector2D Delta);
+	void SetPrototypeObserver(ATRPrototypeViewActor* Observer);
 	UFUNCTION(BlueprintCallable, Category="TipRun|Mode") bool RequestPlayerMode(ETRPlayerMode Target);
 	UFUNCTION(Exec) void TRSetFishingMode(bool bFishing);
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="TipRun") TObjectPtr<UTRInputConfigDataAsset> InputConfig;
@@ -46,6 +50,7 @@ public:
 	bool InstallInputBindings(UEnhancedInputComponent* Component);
 	// Internal MVP console control; the session applies the same onboard/Ready guard as UI.
 	UFUNCTION(Exec) void TRSetEquipment(FName EgiId, FName SinkerId);
+	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
 	virtual void FlushPressedKeys() override;
 	virtual void PlayerTick(float DeltaTime) override;
 protected:
@@ -54,6 +59,17 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Destroyed() override;
 private:
+	void EnhancedNavigationThrottle(const FInputActionValue& Value);
+	void EnhancedNavigationSteering(const FInputActionValue& Value);
+	void EnhancedNavigationLook(const FInputActionValue& Value);
+	void EnhancedNavigationZoom(const FInputActionValue& Value);
+	void SendNavigationAxes();
+	FVector2D NavigationAxes=FVector2D::ZeroVector;
+	bool bNavigationBlockedUntilNeutral=false;
+	bool bPhysicalLeftShift=false, bPhysicalRightShift=false;
+	bool bBoostRearmRequired=false;
+	void InvalidateBoostInput();
+	TWeakObjectPtr<ATRPrototypeViewActor> PrototypeObserver;
 	void EnhancedStarted(ETRPlayerAction Action);
 	void EnhancedRodAim(const FInputActionValue& Value);
 	void EnhancedReleased(ETRPlayerAction Action);

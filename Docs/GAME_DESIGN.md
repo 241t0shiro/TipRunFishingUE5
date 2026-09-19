@@ -292,11 +292,11 @@ Aの環境問い合わせ、Bの船体応答/固定更新、CのWorldPosition/�
 |操作|受理条件|確定する処理|
 |---|---|---|
 |Area開始|参照/環境が有効|Navigation、推進入力0、三人称。活動中Castを作らない|
-|Fishing開始|Ready、船上、Castなし、舷設定有効|推進/舵入力解除、船首を保持、選択舷とカメラ/Rod接続を固定|
+|Fishing開始|Ready、船上、Castなし、舷設定有効|推進/Boost/舵/航行慣性解除、位置/船首を保持、選択舷とカメラ/Rod接続を固定|
 |Navigationへ戻る/舷変更|Ready、船上、装備Unlocked、Castなし|保持入力/古いキューを解除しモードまたは舷を変更|
 |Cast中/Quick中/Resultから退出要求|上の条件を満たさない|拒否理由を表示。勝手にQuick/Abort/船上帰還しない|
 
-Normal完了はResult→NextCast→Ready、Quick完了はReady/Unlockを維持。装備変更条件は既存契約のまま。船首変更/釣り座変更は投の途中で許可しない。Fishing開始時に船速度を0へスナップせず慣性を残す。
+Normal完了はResult→NextCast→Ready、Quick完了はReady/Unlockを維持。装備変更条件は既存契約のまま。船首変更/釣り座変更は投の途中で許可しない。Fishing開始時はNavigation由来の推進/慣性を解除する。現行R2は位置/Headingを保持したまま動的速度を0へ戻し、環境Driftを再構築する（2026-09-19改訂）。
 
 モード変更は固定更新で確定しModeEpochを更新する。入力は登録世代/ModeEpoch/固定Tick/Sequenceを検査し、投中コマンドにはCastIdも検査する。Navigationのために架空のCastを作らない。Controller/UIは要求のみ発行。既存単一Input Queueを型付き要求へ拡張し、二つ目の時計や独立Actor Tickによる正本更新を作らない。順序は入力受理→Mode/Boat意図→Boat→Rod→Fishing/Egi→Snapshot。表示カメラはSnapshot読取だけ。
 
@@ -317,7 +317,29 @@ RはH前の正式な再実装ゲート。Rの各自動検証とユーザー手�
 - 双方向ともReady・船上・活動Castなし・装備Unlocked・有効環境を要求。Cast中/Quick中、通常回収後Result、帰還を伴わないAbort後は戻れない。NormalはNextCast後、Quickは完了Readyから直接Navigationへ戻れる。退出でEndFishingを呼ばず、Session登録・装備・Cast採番を保持する。
 - R1依頼に従いSideは`Unselected/Port/Starboard`の表現のみ。R3のSide選択/参照検証は未実装のため、R1のFishing開始ではUnselectedを許容する。位置/Camera接続を済んだことにしない。
 - `GetPlayerModeSnapshot()`は現在Mode、Side、ModeEpoch、変更Tick、反対Modeへの可否/拒否理由、直近処理の拒否理由をコピーで返す。HUD Snapshotにも同じ値を公開。`IsInputModeAllowed()`がSimulation/Sessionのモード別拒否口となり、NavigationではDeploy/Rod等を受理しない。
-- FishingのSnapshotは推進停止要求/Heading保持を表す。R1はBoatへ書き込まず、現在位置・速度・Heading・慣性を維持する。R2はBoatフェーズ前にこのポリシーを読み推進を制御する。操船が実装されたという意味ではない。
+- FishingのSnapshotは推進停止要求/Heading保持を表す。旧R1時点は速度/慣性も保持していたが、現行R2はBoatフェーズ前に動的速度を解除し、位置/Headingのみ保持する。操船が実装されたという意味ではない。
 - Controllerは受理通知で保持入力を解除し、Fishingだけ既存FishingContextを有効化する。Navigation Contextの実操作はR2。Mode処理の途中で全Sessionのキューを消さず、Epoch検査で古い入力を拒否する。Pause/Focusでは既存の入力破棄契約を維持する。
 
 検証結果・変更一覧はROADMAP末尾のR1記録を参照。R2以降、H、M11は未着手。
+
+### R2実装契約（2026-09-18）
+
+R1のMode正本を保持し、Session所有`UTRBoatNavigationComponent`が固定入力から推力/舵要求を生成する。Command→Timersで要求更新→Boatで単一積分→Publishの順。操船CommandはCastId/ModeEpoch/登録世代/Tick/Sequenceを照合し、FishingではSession入口と固定処理の両方で拒否する。Navigation→Fishing時は要求と動的速度を解除し、船位置・Headingを保持して環境Driftへ移行する（2026-09-19改訂）。
+
+`UTRNavigationTuningDataAsset`は明示設定時だけ有効。既存の風/表層潮/抗力/慣性を保持し、Boat revision 2へ推力を加える。旧設定に暗黙の操船値を補わない。`FTRNavigationSnapshot`で入力・推力・旋回速度・EngineActive、既存Boat Snapshotで位置/速度/Headingを公開。ControllerのDebug Snapshotは表示専用`FTRNavigationCameraSnapshot`（Active/Yaw/Pitch/Distance）を追加する。
+
+`ATRPlayerCameraManager`がNavigationの表示視点を担当する。Camera Lookは船体正本を書かず、既存Prototype表示Actorの毎Tick ViewTarget上書きも解除した。Fishingは既存観測視点を保持し、一人称/釣り舷はR3へ残す。R2自動検証は完了、手動PIEとR全体の品質ゲートは保留。詳細はBOAT_SYSTEM/UI_SPEC/ROADMAP末尾を参照。
+
+R2手動指摘への修正（2026-09-18）: Navigation Contextに独立BooleanのFishingStartを追加し、Enter Started→Controller→既存Session Mode Command→固定更新でFishingへ入る。Fishing ContextのEnter Deployと同じActionにはしない。Mode交換時の保持キー無視により押し直しを要求する。Mode/Ready/Castの拒否契約と、移行時は推力/舵と動的速度を解除し、位置/Headingを保持する（2026-09-19の新契約）。HUDはMode Snapshotを読んで操作案内を交換するだけで、Modeを変更しない。新Prototype値はBOAT_SYSTEM末尾、キーと再PIE手順はUI_SPEC末尾を正本とする。R3以降は未実装。
+
+R2最終修正（2026-09-18）: Fishing ContextのEを既存ReturnNavigationModeへ接続。Ready/Onboard/Cast終了/Unlockedの既存固定判定でのみ帰還可能。投中/Quick中は拒否し、Quick完了ReadyならN不要で戻れる。受理後にNavigation Context/三人称へ復帰する。Navigationの推進中だけ横減衰補助を加え、Fishing中は必ず無効。今回の明示依頼に限り従来R8保留だった詳細HUDキー競合を修正しInsertへ移した。その他のR3以降の機能には着手しない。
+
+### R2追加修正（2026-09-19）
+
+ユーザーのR2再PIEで大部分は合格。今回はFishing→Navigation後の表示残留とNavigation限定Shift Boostのみ対応。PresentationはMode Snapshotで切替しSimulationの寿命を維持。Boostは固定Commandによる推力応答で、Fishing Driftへ作用しない。計算はBOAT_SYSTEM末尾、操作/手動再確認はUI_SPEC末尾。今回2点の実装・自動試験は合格、実PIEは未確認のためR2正式合否は保留。R3以降/H/M11未着手。
+
+### R2 Mode Transition / Boost最終修正（2026-09-19）
+
+最新ユーザー依頼でFishing開始時の速度契約を変更した。Navigation由来の推進/慣性を解除し、Fishingは環境Driftへ移行する。現行R2は単一Velocityを0から再形成する方式を採用し、Position/Headingは保持する。旧手動合格記録中の慣性保持は当時の仕様であり、現行の受入条件には用いない。
+
+ShiftはControllerで物理押下と再入力待ちを追跡する。Enhanced Completed/CanceledやContext交換は物理解放ではない。Mode/Focus/Pauseで無効化したBoostは左右両Shiftの物理解放まで再開不可。SimulationのBoost要求は既存固定Commandを通し、入力ラッチをWidgetから変更しない。Navigation HUDはOFF/ON/再入力待ちを表示。計算・再確認手順・試験証跡はBOAT_SYSTEM/UI_SPEC/ROADMAP末尾。R3以降/H/M11未着手。

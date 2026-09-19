@@ -11,6 +11,7 @@ ATRFishingSessionActor::ATRFishingSessionActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	PlayerMode = CreateDefaultSubobject<UTRPlayerModeComponent>(TEXT("PlayerMode"));
+	Navigation = CreateDefaultSubobject<UTRBoatNavigationComponent>(TEXT("Navigation"));
 	Fishing = CreateDefaultSubobject<UTRFishingComponent>(TEXT("Fishing"));
 	EgiSimulation = CreateDefaultSubobject<UTREgiSimulationComponent>(TEXT("EgiSimulation"));
 	RodControl = CreateDefaultSubobject<UTRRodControlComponent>(TEXT("RodControl"));
@@ -47,6 +48,9 @@ bool ATRFishingSessionActor::Initialize(UTRSimulationWorldSubsystem* Simulation,
 	{ Coordinator.Reset(); Phase=ETRSessionPhase::Error;return false; }
 	if(RodTuning && Boat.PositionM.Z+RodTuning->Parameters.MountOffsetM.Z+RodTuning->Parameters.LengthM*FMath::Sin(RodTuning->Parameters.MinPitchRad)<Ocean.SurfaceZ_M)
 	{Errors.Add(FText::FromString(TEXT("Rod minimum pitch places tip below surface")));RodControl->Reset();Coordinator.Reset();Phase=ETRSessionPhase::Error;return false;}
+	if (NavigationTuning && (!Navigation->Configure(NavigationTuning->Parameters) ||
+		!Simulation->ConfigureBoatNavigation(BoatId,FMath::Max(NavigationTuning->Parameters.MaxSpeedMps,NavigationTuning->Parameters.BoostMaxSpeedMps))))
+	{ Errors.Add(FText::FromString(TEXT("Navigation requires valid parameters and a revision 2 boat"))); Phase=ETRSessionPhase::Error; return false; }
 	bInitialized = true; Phase = ETRSessionPhase::Ready;
 	return true;
 }
@@ -136,13 +140,27 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 			LastCommandResult = ETRCommandResult::RejectedBusy;
 			return;
 		}
+		if(Target==ETRPlayerMode::Fishing){Coordinator->ResetBoatForFishing(BoatId);}
 		PlayerMode->Transition(Target, Coordinator->GetSimulationTime().TickIndex);
+		Navigation->Clear();
+		Coordinator->SetBoatNavigationForces(BoatId,0,0);
 		Fishing->PendingJerkCount = 0;
 		bClearRodReservations = false;
 		bClearNormalRetrieve = false;
 		// Epoch rejects old due/future inputs without clearing another session's queue.
-		// No boat writes: R2 must consume the stop/heading policy before integrating.
+		// Fishing entry resets dynamic velocity before the environment-only Boat phase.
 		LastCommandResult = ETRCommandResult::Accepted;
+		return;
+	}
+	if (Command.Type == ETRFishingCommandType::NavigationBoostStarted || Command.Type == ETRFishingCommandType::NavigationBoostStopped)
+	{
+		if(IsInputModeAllowed(ETRPlayerMode::Navigation))
+		{Navigation->SetBoost(Command.Type==ETRFishingCommandType::NavigationBoostStarted);LastCommandResult=ETRCommandResult::Accepted;}
+		return;
+	}
+	if (Command.Type == ETRFishingCommandType::NavigationInput)
+	{
+		if(IsInputModeAllowed(ETRPlayerMode::Navigation) && Navigation->SetInput(Command.Axis2D)){LastCommandResult=ETRCommandResult::Accepted;}
 		return;
 	}
 	if (!IsInputModeAllowed(ETRPlayerMode::Fishing) && Command.Type != ETRFishingCommandType::EndFishing) { return; }
@@ -181,6 +199,14 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 }
 void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSimTime& Time)
 {
+	if(StepPhase==ETRSimulationPhase::Timers && Coordinator.IsValid() && !IsActorBeingDestroyed())
+	{
+		if(bClearNavigationInput){Navigation->Clear();bClearNavigationInput=false;}
+		Navigation->Step(Time.StepSeconds,IsInputModeAllowed(ETRPlayerMode::Navigation));
+		const auto N=Navigation->GetSnapshot();
+		Coordinator->SetBoatNavigationForces(BoatId,N.EngineForceN,N.YawRateRadPerS,N.LateralResponsePerS);
+		return;
+	}
 	if (StepPhase == ETRSimulationPhase::Publish && !IsActorBeingDestroyed())
 	{
 		CaptureHUD(Time);
@@ -295,6 +321,8 @@ ETRCommandResult ATRFishingSessionActor::ResetCast()
 }
 void ATRFishingSessionActor::EndFishing()
 {
+	Navigation->Clear();
+	if(Coordinator.IsValid()){Coordinator->SetBoatNavigationForces(BoatId,0,0);}
 	if (bCastActive) { AbortInternal(); }
 	Unregister();
 	bFishingStarted = false; bEquipmentLocked = !bEgiOnboard;
@@ -351,12 +379,14 @@ bool ATRFishingSessionActor::IsPlayerPaused() const { return !Coordinator.IsVali
 void ATRFishingSessionActor::SetPlayerPaused(bool bPaused) { if (Coordinator.IsValid()) { Coordinator->SetSimulationPaused(bPaused); } }
 void ATRFishingSessionActor::ClearPlayerCommands()
 {
+	bClearNavigationInput = true;
 	if (Coordinator.IsValid()) { Coordinator->ClearCommands(); }
 	if (RodControl->IsInitialized()) { bClearRodReservations = true; }
 	bClearNormalRetrieve = true; // Safety stop survives a paused/cleared queue, applied only at a fixed boundary.
 }
 void ATRFishingSessionActor::ConsumeInputReset()
 {
+	if(bClearNavigationInput){Navigation->Clear();bClearNavigationInput=false;}
 	if (bClearRodReservations) { Fishing->PendingJerkCount = 0; bClearRodReservations = false; }
 	if (bClearNormalRetrieve)
 	{
@@ -383,6 +413,7 @@ FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
 	if (!bInitialized || IsActorBeingDestroyed()) { return {}; }
 	FTRHUDSnapshot Copy = PublishedHUD;
 	Copy.PlayerMode = GetPlayerModeSnapshot();
+	Copy.Navigation = GetNavigationSnapshot();
 	Copy.bSessionValid = true; Copy.bEgiValid = bCastActive; Copy.bEquipmentLocked = bEquipmentLocked;
 	Copy.bEgiOnboard = bEgiOnboard; Copy.bCanChangeEquipment = CanChangeEquipment();
 	Copy.Phase = Phase; Copy.CastId = CurrentCastId; Copy.Equipment = GetEquipmentSnapshot();
@@ -475,4 +506,12 @@ bool ATRFishingSessionActor::SubmitModeChange(ETRPlayerMode Target, int64 Expect
      ExpectedEpoch != PlayerMode->GetSnapshot().ModeEpoch || !StaticEnum<ETRPlayerMode>()->IsValidEnumValue(int64(Target))) { return false; }
  return SubmitCommand(Target == ETRPlayerMode::Fishing ? ETRFishingCommandType::StartFishingMode : ETRFishingCommandType::ReturnNavigationMode,
                       CurrentCastId, TargetTick);
+}
+
+bool ATRFishingSessionActor::SubmitNavigationInput(FVector2D Input,int64 ExpectedEpoch,FTRActorSimId ExpectedRegistration,int64 TargetTick)
+{
+ if(!IsInputModeAllowed(ETRPlayerMode::Navigation)||!Navigation->GetSnapshot().bConfigured ||
+ ExpectedEpoch!=PlayerMode->GetSnapshot().ModeEpoch || ExpectedRegistration!=RegistrationId ||
+ Input.ContainsNaN()||FMath::Abs(Input.X)>1||FMath::Abs(Input.Y)>1){return false;}
+ return Coordinator->EnqueueCommand(RegistrationId,ETRFishingCommandType::NavigationInput,0,TargetTick,CurrentCastId,Input,ExpectedEpoch);
 }

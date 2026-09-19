@@ -567,8 +567,8 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 |単位|依存|対象・変更予定|Automationの受入/必要回帰|手動確認・停止境界|
 |---|---|---|---|---|
 |R1 Mode architecture（完了）|A〜F|Game/TRPlayerModeComponent新設、TRFishingSessionActor/TRGameModeBase、DataのMode要求/Snapshot|Navigation/Fishing、ModeEpoch、同Tick順、古いCast/Session、Pause、投中退出拒否、Normal Result/Quick Ready。M04/M06/E寿命回帰|モードと拒否理由の確認。推進・Camera・Sequenceはまだ追加しない|
-|R2a Navigation motion|R1/B|Boat/TRBoatNavigationComponent新設、TRBoatDriftComponent、Boat Tuning、固定配送|単一積分、推力/舵、慣性、Heading/Velocity分離、釣り移行で推進0/速度連続、無効環境。B/M04該当回帰|推進/操舵を記録で確認。三人称品質はR2b待ち|
-|R2b Navigation camera/input|R2a|Game/TRPlayerCameraManager新設、TRPlayerController、Input/Camera設定、TRPrototypeViewActorのViewTarget所有解除|Mouse LookがBoat正本を書かない、Input Context排他、Focus/Pause、30/60/120fps。D/M09入力回帰|三人称で移動・船首選択が自然。Fishing視点はR3bへ|
+|R2a Navigation motion（自動検証完了）|R1/B|Boat/TRBoatNavigationComponent新設、TRBoatDriftComponent、Navigation Tuning、固定配送|単一積分、推力/舵、慣性、Heading/Velocity分離、釣り移行で推進0/速度連続。B/M04回帰成功|手動PIE待ち。末尾のR2記録参照|
+|R2b Navigation camera/input（自動検証完了）|R2a|Game/TRPlayerCameraManager新設、TRPlayerController、Input/Camera設定、TRPrototypeViewActorのViewTarget所有解除|Mouse LookがBoat正本を書かない、Context分離、Focus/Pause、30/60/120fps。D/M09回帰成功|三人称の操作感は手動PIE待ち。Fishing視点はR3bへ|
 |R3a Fishing stations|R1/R2a/C/D|Data/TRFishingStationDataAsset新設、Boat/Rod/Session設定接続|左右舷の位置/方位、船移動後Eye/Mount/Tip整合、投中舷変更拒否、選択参照不備。CのTip接続/D回帰|左右舷識別。カメラ自然さはR3bへ|
 |R3b First-person camera|R2b/R3a|CameraManager、Camera Tuning、Rod/Reel表示参照|選択舷Eye、角度制限、表示のみ補間、ViewTarget競合なし|Rod/Reel/海面中心、真上真下なし。入力仕上げはR4|
 |R4 Fishing input/aim|R3b|Controller、Input設定、RodControl、Modeキュー接続|Mouse基準Aim/Camera読取、Snap余裕、UI遮断、保持解除、Cast/ModeEpoch/30-120fps。D/E/M09/F関連回帰|通常釣りにShift不要。右/左操作維持。Sequenceは旧挙動と明示|
@@ -628,3 +628,77 @@ R1変更ファイル（SourceはSource/TipRunFishingUE5配下）:
 - 更新: `Public/Game`と`Private/Game`の`TRFishingSessionActor`、`TRPlayerController`、`TRSimulationWorldSubsystem`各h/cpp。
 - 試験準備更新: `Private/Tests/TRSessionTestFixture.h`、`TRSessionTests.cpp`、`TREgiTests.cpp`、`TRInputHUDTests.cpp`、`TRPrototypeSetupTests.cpp`（既存G未追跡ファイルへの最小追記）。
 - 文書: `AGENTS.md`、`Docs/GAME_DESIGN.md`、`Docs/FISHING_SYSTEM.md`、`Docs/UI_SPEC.md`、`Docs/ROADMAP.md`。
+
+### R2完了記録（2026-09-18）
+
+- 今回の明示依頼に従いR2a操船＋R2b三人称/Inputを実装。**実装・自動検証は合格、手動PIEの操作感は未確認**。R3以降/H/M11未着手。Gの品質不合格/R全体の手動ゲート保留を維持する。
+- Navigation専用Context→Controller→Session Input Queue→Timersで推力/舵要求→Boatの既存Drift単一積分。Mode/Cast/登録世代/Tick/Sequenceを維持し、Fishingでの操船は固定処理でも拒否。Fishing移行で推進/操舵を解除、位置/速度/慣性は継承しHeading保持。計算/安全限界はBOAT_SYSTEM末尾が正本。
+- 三人称Cameraは表示専用Manager。Yaw/Pitch/距離、Homeで現在船首後方へReset。既存表示Actorが毎Tick ViewTargetを上書きしないよう変更。Fishing一人称、釣り舷、Sequence、HUD/F1改修は追加していない。
+- 保存PrototypeへNavigation DataAssetを新設、Input/Sessionの2資産を明示移行。画面なしAutomationの明示引数`-TRMigrateM105R2`でUE SavePackageを使用。通常のAutomation実行では資産を変更しない。移行1試験成功後、別プロセスで再読込し参照/生成/操船を検証。移行前後SHA256比較で既存の変更はInput/Sessionだけ。保存Level/GameMode/Ocean/Boat/Fishing/Rod等は保持。
+- **最終31件成功、失敗/未実行/試験内警告0**。R2 4件: MotionAndEnvironment、DeterminismPauseAndLifetime、InputCameraAndValidation、SavedPrototype。回帰27件: R1 4、B 5、D 5、M04 6、M09 7。初回26件も全成功。A〜C/Egi/Equipment全回帰やH/R9統合は実施していない。
+- R2で前後進/操舵、風潮＋Engine、Fishing移行の速度連続、固定処理の操船拒否、Focus再押下、Pause、破棄後入力残留なし、NaN/Inf拒否、30/60/120fpsの位置/速度/Heading完全一致、Cameraだけでは船首不変、Pitch/距離制限、保存参照を確認した。D/M09で既存Mouse/Fishing入力を回帰確認。
+- UE5.8.2 / MSVC14.51.36257 / Windows SDK10.0.22621.0。初回UHTで**19生成ファイル**を書込み、13 C++コンパイル＋リンク等16アクション成功。試験追加後2 C++、最終防御修正後3 C++を実コンパイルし、各Development Editor Win64ビルド成功。up-to-dateだけの確認ではない。
+- 証跡: `Saved/Logs/M105R2Build.log`、`M105R2TestsBuild.log`、`M105R2FinalBuild.log`、`Saved/Automation/M105R2Migration/index.json`（保存移行1件）、`M105R2/index.json`（初回26件）、`M105R2Final/index.json`（最終31件）。各プロセス終了コード0、JSONの失敗/警告数も確認。`Saved/M105R2BeforeMigration.csv`は資産の変更前SHA256記録。
+- R2由来の残存警告0。既存の非推奨MSVC/旧include順通知、試験起動前のCondition failed Error表記19件・Editorレイアウト警告1件、Win64以外のSDK不足は残る。試験内エラーとは区別する。`git diff --check`確認済み。
+- PIEは自動実行せず、手動操作も未確認。UI_SPEC末尾に保存Map、W/S/A/D/Mouse/Wheel/Home、Fishing移行と慣性の手順を記載。R3への技術的接続は可能だが、R2の操作感合格は手動結果待ち。次タスクへの自動進行はしない。
+
+R2変更ファイル（Sourceは`Source/TipRunFishingUE5`配下）:
+
+- 新規: `Public/Boat/TRBoatNavigationComponent.h`、`Private/Boat/TRBoatNavigationComponent.cpp`、`Public/Data/TRNavigationTuningDataAsset.h`、`Private/Data/TRNavigationTuningDataAsset.cpp`、`Public/Game/TRPlayerCameraManager.h`、`Private/Game/TRPlayerCameraManager.cpp`、`Private/Tests/TRNavigationTests.cpp`。
+- 更新: `Public/Boat/TRBoatDriftComponent.h`、`Private/Boat/TRBoatDriftComponent.cpp`。
+- 更新: `Public/Data/TRHUDSnapshot.h`、`TRInputConfigDataAsset.h`、`TRSessionConfigDataAsset.h`、`TRTypes.h`、`Private/Data/TRInputConfigDataAsset.cpp`、`TRSessionConfigDataAsset.cpp`。
+- 更新: `Public/Game`と`Private/Game`の`TRFishingSessionActor`、`TRPlayerController`、`TRSimulationWorldSubsystem`各h/cpp、`Private/Game/TRGameModeBase.cpp`、`TRPrototypeViewActor.cpp`。
+- 保存資産（`Content/TipRun/Prototype/M105/Data/`）: 新規`DA_TR_M105Navigation_Prototype.uasset`、更新`DA_TR_M105Input_Prototype.uasset`、`DA_TR_M105Session_Prototype.uasset`。
+- 文書: `AGENTS.md`、`Docs/GAME_DESIGN.md`、`Docs/BOAT_SYSTEM.md`、`Docs/UI_SPEC.md`、`Docs/ROADMAP.md`。
+- 開始時の`Config/DefaultEngine.ini`差分と未追跡M105 Contentは保全。Configに今回追加編集なし。
+
+### R2手動指摘修正記録（2026-09-18）
+
+- 旧R2の自動成功は保持するが、ユーザーPIEで移動/旋回が遅い、Fishing開始導線なし、旧/モード非対応HUDが不合格。今回R2だけ修正し、再自動検証は合格。手動再PIEは未実施、ゲームプレイ合否は保留。R3以降/H/M11未着手。
+- Navigation InputにEnterのFishingStartを追加し、既存Mode Queueへ接続。Fishing EnterはDeployのまま。HUD通常/詳細ガイドはMode Snapshotに応じて切替。NavigationのHomeを明示。操船Prototype値だけ再調整し、自然Driftの係数/積分やEgiには変更なし。詳細契約はUI_SPEC/BOAT_SYSTEM末尾。
+- **R2 6件＋回帰22件の計28件すべて成功**。R2は既存4件にPlayerEntryAndHUD、PrototypeResponseComparisonを追加。回帰はR1 4、B 5、M09 7、F UI 6。各試験errors/warnings=0。保存資産更新の別試験1件も成功。Egi全回帰/H統合は実施しない。
+- 保存Inputを使うEnhanced Action→固定Mode→Deploy、Navigation中Deploy拒否、Mode境界の位置/Velocity/Heading完全保持、推力/舵解除、Fishing操船拒否、自然運動継続、Cameraのみでは船首不変、HomeのYaw/Pitch/距離復帰、実UMGガイド交換を確認。新旧DataAsset比較は5秒前進2.322641→6.012489m/s、後退1.172509→3.643671m/s、1秒操舵.311002→.841921rad。受入値を失敗後に緩めていない。
+- UHT実行で3生成ファイルを書込み、変更コード含む11 C++コンパイル＋リンク等14アクションのDevelopment Editor Win64成功。UE5.8.2、MSVC14.51.36257、SDK10.0.22621.0。ビルド/Automationプロセス終了0、JSON失敗0も確認。`git diff --check`成功。
+- 証跡: `Saved/Logs/M105R2FixBuild.log`、`Saved/Automation/M105R2FixMigration/index.json`（明示引数`-TRReviseM105R2`でUE資産保存）、`Saved/Automation/M105R2Fix/index.json`（別プロセス再読込＋28件）、`Saved/Logs/M105R2FixTests.log`（比較値）、`Saved/M105R2FixBeforeMigration.csv`（変更前資産SHA256）。
+- 変更コード: `Public/Data/TRInputConfigDataAsset.h`、`Private/Data/TRInputConfigDataAsset.cpp`、`TRNavigationTuningDataAsset.cpp`、`Private/Game/TRPlayerController.cpp`、`Public/UI/TRFishingHUDWidget.h`、`Private/UI/TRFishingHUDWidget.cpp`、`TRPrototypePresentation.cpp`、`Private/Tests/TRNavigationTests.cpp`（Source/TipRunFishingUE5配下）。既存R2差分は保持。
+- 変更Content: 保存`DA_TR_M105Input_Prototype`と`DA_TR_M105Navigation_Prototype`だけ。前後ハッシュで他資産不変を確認。Config追加変更なし。文書はAGENTS/GAME_DESIGN/BOAT_SYSTEM/UI_SPEC/ROADMAPを更新。
+- 修正由来の残存警告0。既存MSVC推奨版/include順通知、試験起動前Condition failed Error表記19件とEditorレイアウト警告1件、非Win64 SDK不足は残る。実キー/Viewport/体感はUI_SPEC末尾の手動手順で再確認し、自動結果でPIE合格を代用しない。
+
+### R2最終3点修正（2026-09-18）
+
+- ユーザー手動で前後進/操舵/Camera/Home/Zoom/Mode開始/Deploy/保持Enter防御等は合格。旋回時の横滑り慣性、Fishing退出入力欠落、F1表示競合の3点のみ修正。今回の実装・自動検証は合格、3点の手動再PIEは未実施のためR2正式合否は保留。R3以降/H/M11未着手。
+- Navigation推進入力中だけ`NavigationLateralResponsePerS`による横減衰を既存単一積分へ追加。Prototype1.5/s、解放/Mode退出では0。Fishing係数/環境外力は保持。Eで既存ReturnNavigationModeを要求し安全条件はSessionのまま。InsertへHUDキー変更、Project Configから旧F1 Wireframe割当だけを除外。契約はBOAT_SYSTEM/UI_SPEC末尾。
+- **R2 9件＋回帰35件＝44件成功、試験内errors/warnings=0**。回帰内訳R1 4、B 5、M09 7、F 6、E 7、M04 6。新規SteeringAssistIsolation/ReturnNavigationInput/DetailsKeyIsolationを追加。既存決定性試験も補助あり設定で30/60/120fps完全一致。無関係なEgi全試験/R9/Hは実施しない。
+- 旋回試験で方位差82.766→33.480°、瞬間整列なし、風/潮各寄与あり。Fishing中は補助係数0/1.5でも600ステップ後の位置/速度が完全一致。Eキー入力によるReady復帰、FreeFall/Stay/Retrieve/Quick中拒否、Quick後Ready復帰を検証。生Insert入力20回/Repeat無視、F1のHUD/DebugExec割当なし、ViewMode/ShowFlags/ViewTarget不変を確認。
+- UHTで8生成ファイルを書込み、変更Runtime C++は実コンパイル成功。新規試験コードのPIマクロ衝突・TObjectPtr取得・表示フラグ比較APIで初回コンパイル失敗したが修正。最終Development Editor Win64は試験の実コンパイル＋リンクを含み成功。UE5.8.2 / MSVC14.51.36257 / SDK10.0.22621.0。
+- 証跡: `Saved/Logs/M105R2FinalFixBuild.log`（UHT/初回）、`M105R2FinalFixBuild2.log`（試験修正途中）、`M105R2FinalFixBuild3.log`（最終成功）、`Saved/Automation/M105R2FinalFixMigration/index.json`（明示保存1件成功）、`Saved/Automation/M105R2FinalFix/index.json`（44件成功）、`Saved/Logs/M105R2FinalFixTests.log`。実行終了コード/JSONを確認、`git diff --check`成功。
+- 追加変更コード（Source/TipRunFishingUE5配下）: DataのNavigationTuning h/cpp・InputConfig h/cpp、BoatNavigation cpp・BoatDrift h/cpp、SimulationWorldSubsystem h/cpp、FishingSessionActor cpp、PlayerController cpp、UIのFishingHUDWidget cpp・PrototypePresentation cpp、Tests/TRNavigationTests.cpp。Config/DefaultInput.iniにF1除外を追加。文書はAGENTS/GAME_DESIGN/BOAT_SYSTEM/UI_SPEC/ROADMAPを更新。
+- 保存AssetはInputとNavigationだけをUE SavePackage（`-TRFinalizeM105R2`）で明示更新。変更前ハッシュ`Saved/M105R2FinalFixBeforeMigration.csv`との比較で他Asset不変。旧差分を保持。今回由来の残存警告0、既存のMSVC/include順、起動前Condition failed19件・Editorレイアウト1件、対象外SDK不足は残る。
+- R3への技術的接続は可能だが、操作感はUI_SPEC末尾の手動3点確認待ち。今回のユーザー報告で合格した項目を再実装していない。R2正式合格やH開始を自動宣言しない。
+
+### R2追加2点修正記録（2026-09-19）
+
+- ユーザーの最終PIEはほぼ合格。今回Rod残留とNavigation Boostのみ修正し、既存実装/差分を保持。R3以降/H/M11未着手。今回の実装・自動検証は合格、実PIEは自動実行せず手動再確認待ち、R2正式合否は保留。
+- 残留原因はPrototypeViewActorがMode非依存でRod/Tipを常時可視化していたこと。Mode/Session有効性でFishing表示を遮断、再Fishingで同じ部品を復帰。船/世界基準物は保持。Boostは専用Enhanced Action→Session固定Commandで処理し、推力倍率2・応答2/s・安全速度上限24m/sを保存Prototype Navigationへ明示適用。自然Driftの係数/積分は変更なし。
+- **R2 12件＋関連回帰29件＝41件成功、試験内errors/warnings=0**。新規ModePresentation/BoostResponseAndModes/BoostDeterminismの3件。回帰はR1 4、B 5、M09 7、F 6、M04 6、G保存表示接続1。表示10往復の部品再利用、Shift単独無推進、通常比1.5倍超の速度、滑らかな解除、Steering併用、Fishing直接Command拒否、Mode/Focus/Pause後保持解除、30/60/120fps完全一致、Mode別HUDを確認。無関係なEgi全試験/R9/Hは実施しない。
+- 保存更新専用試験1件も成功。`-TRBoostM105R2`だけが保存InputとNavigationを更新。変更前後のSHA256比較で他Asset不変。新規Map/Actor資産は作成せず、Configも追加変更なし。
+- UHT **11生成ファイル**を書込み、Runtime変更を実C++コンパイル。新規試験のRod型ヘッダー不足を修正後、試験の実コンパイルとリンクを含むDevelopment Editor Win64成功。UE5.8.2 / MSVC14.51.36257 / SDK10.0.22621.0。up-to-date確認だけではない。
+- 証跡: `Saved/Logs/M105R2BoostBuild.log`（初回UHT/実コンパイル）、`M105R2BoostBuild2.log`（最終成功）、`Saved/Automation/M105R2BoostMigration/index.json`（保存移行1件）、`Saved/Automation/M105R2Boost/index.json`（41件）、`Saved/Logs/M105R2BoostTests.log`。ビルド/試験プロセス終了0、JSON失敗0。資産ハッシュは`Saved/M105R2BoostBeforeMigration.csv`と`M105R2BoostAfterMigration.csv`。
+- 変更コード（Source/TipRunFishingUE5配下）: BoatNavigation h/cpp、NavigationTuningDataAsset h/cpp、InputConfigDataAsset h/cpp、Types.h、FishingSessionActor.cpp、PlayerController.cpp、PrototypeViewActor.cpp、PrototypePresentation.cpp、Tests/TRNavigationTests.cpp。保存Contentは`DA_TR_M105Input_Prototype.uasset`と`DA_TR_M105Navigation_Prototype.uasset`。文書はAGENTS/GAME_DESIGN/BOAT_SYSTEM/UI_SPEC/ROADMAP。
+- 今回由来の残存警告0。既存のMSVC推奨版/include順通知、試験起動前Condition failed Error表記19件、Editorレイアウト警告1件、非Win64 SDK不足は残る。`git diff --check`成功（GitのLF/CRLF変換通知は既存設定による）。
+- R3へ接続する実装基盤は維持。今回の表示/Boost体感はUI_SPEC末尾の手動再確認後に正式判定し、R3へ自動進行しない。
+
+### R2 Mode Transition / Boost最終修正記録（2026-09-19）
+
+- ユーザーPIEで前回の航行/Boost速度/表示往復/重複なしは合格。残る航行慣性持込み、Shift保持の再発火、状態表示不足だけ修正。今回明示された新仕様により、過去の本書の「速度/慣性継承」成功記録は旧契約の履歴とする。現行受入はFishing開始で航行由来の速度を解除、位置/Heading保持、環境Drift再形成。
+- 速度残留は旧仕様の単一Velocity保持が原因。固定Mode処理からBoatの動的速度を0へ戻す許可済み簡略方式を採用。Engine/Boost/Steering/Assistの内部応答も0。基礎風/潮/Drag/Inertia係数と通常/Boost調整値は変更なし。
+- ShiftはContext解除のCompleted/Canceledが物理Releasedと同じ解除処理だったことが原因。ControllerのInputKeyで左右物理状態とRearmRequiredを分離し、両Shiftの物理解放だけで再入力を許可。固定Simulationへの配送契約は維持。Navigationの実WidgetにOFF/ON/再入力待ちを表示、Fishingでは非表示。
+- **最終R2 14件＋必須回帰28件＝42件すべて成功**。回帰はR1 4、B Boat 5、M04 6、M09 7、F HUD 6。新規FishingEntryEnvironmentOnly、PhysicalShiftRearmAndHUDを追加、FPS試験にFishing移行を追加。
+- 通常/Boost×無環境/風潮ありの4条件で、Mode確定時に位置/Heading完全保持・Velocity0・全Navigation応答0を確認。続く600固定ステップが独立した環境専用Boatの位置/速度と完全一致。無風無潮では速度0を維持。30/60/120fpsで移行後結果も完全一致。
+- Raw Shift→Enhanced開始、Mode/Focus/Pauseでの疑似終了→再Started、両Shift保持/片側解放/全解放/再Down、実UMGのOFF/ON/待ち/Fishing非表示を確認。旧試験はActionの終了通知だけを解放としており実PIEのContext解除を十分に再現していなかった。
+- 初回42件中41成功/1失敗。失敗はPlayerEntryAndHUDが固定処理途中の前回公開Snapshotへ速度0を期待したもの。正本境界の新試験は成功。公開前は前Snapshot、公開後は環境速度という検査へ修正し、実Widget確認を追加した2件を再コンパイル/再実行して成功。未変更の成功40件は重複実行しない。最終採用結果の試験内errors/warningsは0。
+- UHTで4生成ファイルを書込み、13 C++＋リンク等16アクション成功。試験修正後も実C++＋リンク等4アクションのDevelopment Editor Win64成功。UE5.8.2 / MSVC14.51.36257 / Windows SDK10.0.22621.0。`Saved/Logs/M105R2TransitionBuild.log`、`M105R2TransitionBuild2.log`に記録。
+- 試験証跡: `Saved/Automation/M105R2Transition/index.json`（初回42件）、`Saved/Automation/M105R2TransitionFinal/index.json`（変更2件成功）、対応する`Saved/Logs/M105R2TransitionTests.log` / `M105R2TransitionFinalTests.log`。プロセス終了0に加えJSONを検証。`git diff --check`成功。
+- 今回変更（Source/TipRunFishingUE5配下）: BoatDriftComponent h/cpp、SimulationWorldSubsystem h/cpp、FishingSessionActor cpp、PlayerController h/cpp、HUDSnapshot h、PrototypePresentation cpp、Tests/NavigationTests cpp、Tests/PlayerModeTests cpp。文書AGENTS/GAME_DESIGN/BOAT_SYSTEM/UI_SPEC/ROADMAP。Content/Config/係数は追加変更なし、以前の差分を保持。
+- 今回由来の残存警告0。既存MSVC推奨版/include順通知、試験開始前のCondition failed Error表記19件/Editorレイアウト警告、非Win64 SDK不足は残る。旧成功履歴を今回手動合格の代用にしない。
+- 実装/自動検証は合格。実PIEは未実施、UI_SPEC末尾の今回分をユーザーが再確認するまでR2正式合否は保留。R3以降/H/M11未着手。

@@ -48,9 +48,11 @@ void UTRFishingHUDWidget::BuildLayout()
   auto* Label = Text(Row.Label,11,LabelColor); auto* LabelSize=WidgetTree->ConstructWidget<USizeBox>(); LabelSize->SetWidthOverride(125); LabelSize->SetContent(Label); Pair->AddChildToHorizontalBox(LabelSize);
   auto* V = Text(Row.Value,11,ValueColor); Pair->AddChildToHorizontalBox(V)->SetSize(FSlateChildSize(ESlateSizeRule::Fill)); Labels.Add(Label); Values.Add(V);
  }
- Side->AddChildToVerticalBox(Text(LOCTEXT("GuideTitle", "操作 / F1：詳細を開閉"),13,ValueColor))->SetPadding(FMargin(0,8,0,0));
- CompactGuide=Text(LOCTEXT("CompactGuide","Mouse：竿 / 右：シャクリ / 左保持：巻取り\nF：再落下 / Q：回収 / Enter：投入 / Tab：装備\nShift+Mouse：視点 / Home：視点リセット"),10,LabelColor); Side->AddChildToVerticalBox(CompactGuide);
- for (const auto& Row : BuildGuide(DisplaySnapshot)) { auto* T=Text(Row.Text,12,LabelColor); Side->AddChildToVerticalBox(T); Guides.Add(T); }
+ Side->AddChildToVerticalBox(Text(LOCTEXT("GuideTitleInsert", "操作 / Insert：詳細を開閉"),13,ValueColor))->SetPadding(FMargin(0,8,0,0));
+ CompactGuide=Text(BuildCompactGuide(DisplaySnapshot),10,LabelColor); Side->AddChildToVerticalBox(CompactGuide);
+ const auto InitialGuide=BuildGuide(DisplaySnapshot);
+ for (int32 I=0;I<FMath::Max(InitialGuide.Num(),BuildGuide(FTRHUDSnapshot()).Num());++I)
+ {auto* T=Text(InitialGuide.IsValidIndex(I)?InitialGuide[I].Text:FText(),12,LabelColor);Side->AddChildToVerticalBox(T);Guides.Add(T);}
  InputStatus=Text(FText(),12,ValueColor);Side->AddChildToVerticalBox(InputStatus);
  DebugHelp=Text(LOCTEXT("Debug", "Debug: Space=シャクリ / R=回収 / T=TF\nBackspace=中断（再開はPIE再起動）\n方向は流れる向き：+X=0°、+Y=90°\n白=船・橙=竿・黄=ライン・赤=エギ\nHook / BITE は未実装"),11,DisabledColor); Side->AddChildToVerticalBox(DebugHelp);
  EquipmentPanel = WidgetTree->ConstructWidget<UVerticalBox>(); Side->AddChildToVerticalBox(EquipmentPanel);
@@ -169,7 +171,7 @@ void UTRFishingHUDWidget::ApplySnapshot(const FTRHUDSnapshot& S)
  if(InputStatus){InputStatus->SetText(S.InputConfigurationNote);}
  const bool Details=Controller.IsValid() && Controller->IsPrototypeDetailsOpen();
  const auto Rows=Details?BuildReadout(S):BuildCompactReadout(S);
- if(CompactGuide){CompactGuide->SetVisibility(Details?ESlateVisibility::Collapsed:ESlateVisibility::Visible);}
+ if(CompactGuide){CompactGuide->SetText(BuildCompactGuide(S));CompactGuide->SetVisibility(Details?ESlateVisibility::Collapsed:ESlateVisibility::Visible);}
  for(int32 I=0;I<Rows.Num() && I<Values.Num();++I)
  {
   Labels[I]->SetText(Rows[I].Label); Labels[I]->SetColorAndOpacity(LabelColor);
@@ -179,11 +181,12 @@ void UTRFishingHUDWidget::ApplySnapshot(const FTRHUDSnapshot& S)
   ReadoutPairs[I]->SetVisibility(Details || IsPrimaryReadout(I)?ESlateVisibility::Visible:ESlateVisibility::Collapsed);
  }
  if(RevisionStatus){RevisionStatus->SetText(FormatRevisions(S));RevisionStatus->SetColorAndOpacity(HasRevisionMismatch(S)?FLinearColor(1,.25f,.15f):LabelColor);RevisionStatus->SetVisibility(Details||HasRevisionMismatch(S)?ESlateVisibility::Visible:ESlateVisibility::Collapsed);}
- if(DebugHelp){DebugHelp->SetVisibility(Details?ESlateVisibility::Visible:ESlateVisibility::Collapsed);}
+ if(DebugHelp){DebugHelp->SetVisibility(Details && (!S.PlayerMode.bValid || S.PlayerMode.Mode==ETRPlayerMode::Fishing)?ESlateVisibility::Visible:ESlateVisibility::Collapsed);}
  const auto Guide=BuildGuide(S);
  const bool bOpen=Controller.IsValid() && Controller->IsPrototypePanelOpen();
- for(int32 I=0;I<Guide.Num() && I<Guides.Num();++I)
+ for(int32 I=0;I<Guides.Num();++I)
  {
+  if(!Guide.IsValidIndex(I)){Guides[I]->SetVisibility(ESlateVisibility::Collapsed);continue;}
   // Session decides state eligibility; UI capture only disables mouse gameplay locally.
   const bool Enabled=Guide[I].bAvailable && !(bOpen && I<6);
   Guides[I]->SetText(FText::FromString((Enabled?TEXT("○ "):TEXT("— "))+Guide[I].Text.ToString()));
@@ -217,7 +220,7 @@ FReply UTRFishingHUDWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry,con
  {
   const FKey Key=Event.GetKey();
   if(Key==EKeys::Tab){if(!Event.IsRepeat()){OnClose();}return FReply::Handled();}
-  if(Key==EKeys::F1){if(!Event.IsRepeat()){Controller->TogglePrototypeDetails();ApplySnapshot(DisplaySnapshot);}return FReply::Handled();}
+  if(Key==EKeys::Insert){if(!Event.IsRepeat()){Controller->TogglePrototypeDetails();ApplySnapshot(DisplaySnapshot);}return FReply::Handled();}
   if(Key==EKeys::P){if(!Event.IsRepeat()){Controller->SetPauseRequested(!DisplaySnapshot.bPaused);}return FReply::Handled();}
   // Let an open combo consume Enter to finish editing, never deploy that same key.
   if(Key==EKeys::Enter && ((EgiCombo && EgiCombo->IsOpen()) || (SinkerCombo && SinkerCombo->IsOpen()))){return Super::NativeOnPreviewKeyDown(Geometry,Event);}

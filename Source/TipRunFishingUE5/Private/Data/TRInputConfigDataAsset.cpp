@@ -1,9 +1,21 @@
 #include "Data/TRInputConfigDataAsset.h"
 #include "Misc/DataValidation.h"
+#include "InputModifiers.h"
 
 bool UTRInputConfigDataAsset::Validate(TArray<FText>& Errors) const
 {
 	bool bValid = IsValid(FishingContext);
+	if(NavigationContext || NavigationThrottle || NavigationSteering || NavigationLook || NavigationZoom || NavigationFishingStart || NavigationBoost)
+	{
+		bValid &= IsValid(NavigationContext) && NavigationContext != FishingContext;
+		for(const UInputAction* A : {NavigationThrottle.Get(),NavigationSteering.Get(),NavigationLook.Get(),NavigationZoom.Get(),NavigationFishingStart.Get(),NavigationBoost.Get()})
+		{
+			bool bMapped=false;
+			if(IsValid(NavigationContext)){for(const auto& M:NavigationContext->GetMappings()){bMapped |= M.Action==A && M.Key.IsValid();}}
+			bValid &= IsValid(A) && bMapped;
+			if(A){bValid &= A->ValueType==((A==NavigationFishingStart || A==NavigationBoost)?EInputActionValueType::Boolean:A==NavigationLook?EInputActionValueType::Axis2D:EInputActionValueType::Axis1D);}
+		}
+	}
 	TSet<ETRPlayerAction> Commands;
 	TSet<const UInputAction*> Actions;
 	for (const FTRInputBinding& B : Bindings)
@@ -73,3 +85,44 @@ EDataValidationResult UTRInputConfigDataAsset::IsDataValid(FDataValidationContex
 	return bValid ? EDataValidationResult::Valid : EDataValidationResult::Invalid;
 }
 #endif
+
+void UTRInputConfigDataAsset::CreateNavigationPrototype()
+{
+ if(!Bindings.ContainsByPredicate([](const auto& B){return B.Command==ETRPlayerAction::ReturnNavigation;}))
+ {
+  FTRInputBinding B;B.Command=ETRPlayerAction::ReturnNavigation;
+  B.Action=NewObject<UInputAction>(this,TEXT("IA_ReturnNavigation"));B.Action->ValueType=EInputActionValueType::Boolean;
+  FishingContext->MapKey(B.Action,EKeys::E);Bindings.Add(B);
+ }
+ if(!NavigationContext)
+ {
+ NavigationContext=NewObject<UInputMappingContext>(this,TEXT("IMC_Navigation_Prototype"));
+ auto Action=[&](const TCHAR* Name,EInputActionValueType Type){auto* A=NewObject<UInputAction>(this,Name);A->ValueType=Type;return A;};
+ NavigationThrottle=Action(TEXT("IA_NavigationThrottle"),EInputActionValueType::Axis1D);
+ NavigationSteering=Action(TEXT("IA_NavigationSteering"),EInputActionValueType::Axis1D);
+ NavigationLook=Action(TEXT("IA_NavigationLook"),EInputActionValueType::Axis2D);
+ NavigationZoom=Action(TEXT("IA_NavigationZoom"),EInputActionValueType::Axis1D);
+ NavigationContext->MapKey(NavigationThrottle,EKeys::W);
+ NavigationContext->MapKey(NavigationThrottle,EKeys::S).Modifiers.Add(NewObject<UInputModifierNegate>(this));
+ NavigationContext->MapKey(NavigationSteering,EKeys::D);
+ NavigationContext->MapKey(NavigationSteering,EKeys::A).Modifiers.Add(NewObject<UInputModifierNegate>(this));
+ NavigationContext->MapKey(NavigationLook,EKeys::Mouse2D);
+ NavigationContext->MapKey(NavigationZoom,EKeys::MouseWheelAxis);
+ // Pause is shared, but fishing actions are never mapped in this context.
+ for(const auto& Binding:Bindings){if(Binding.Command==ETRPlayerAction::Pause){NavigationContext->MapKey(Binding.Action,EKeys::P);}}
+ }
+ if(!NavigationBoost)
+ {
+  NavigationBoost=NewObject<UInputAction>(this,TEXT("IA_NavigationBoost"));
+  NavigationBoost->ValueType=EInputActionValueType::Boolean;
+  NavigationContext->MapKey(NavigationBoost,EKeys::LeftShift);
+  NavigationContext->MapKey(NavigationBoost,EKeys::RightShift);
+ }
+ // Explicit asset migration may add the entry action without replacing existing mappings.
+ if(!NavigationFishingStart)
+ {
+  NavigationFishingStart=NewObject<UInputAction>(this,TEXT("IA_NavigationFishingStart"));
+  NavigationFishingStart->ValueType=EInputActionValueType::Boolean;
+  NavigationContext->MapKey(NavigationFishingStart,EKeys::Enter);
+ }
+}

@@ -62,11 +62,24 @@ TArray<FTRPrototypeReadoutRow> UTRFishingHUDWidget::BuildReadout(const FTRHUDSna
  Add(LOCTEXT("Normal", "通常巻取り (Normal Retrieve)"),S.bSessionValid ? (S.Retrieval.bIsRetrieving ? FString::Printf(TEXT("巻取り中 %.3f m/s"),S.Retrieval.RetrieveSpeedMps) : TEXT("停止")) : NA);
  Add(LOCTEXT("QuickProgress", "クイック回収／進捗"),S.bSessionValid ? (S.Retrieval.bIsQuickRetrieving ? FString::Printf(TEXT("%.1f%% / 途中停止不可"),100*S.Retrieval.QuickRetrieveProgress01) : TEXT("実行していません")) : NA);
  Egi(LOCTEXT("Count", "シャクリ回数／予約"),FString::Printf(TEXT("%lld / %lld"),S.Egi.JerkCount,S.Egi.PendingJerkCount));
+ if(S.PlayerMode.bValid && S.PlayerMode.Mode==ETRPlayerMode::Navigation)
+ {
+  Rows[1].Label=LOCTEXT("Mode","モード");
+  Rows[1].Value=Value(S.bPaused?TEXT("一時停止 / 操船 (Navigation)"):TEXT("操船 (Navigation)"));
+ }
  return Rows;
 }
 TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapshot& S)
 {
  TArray<FTRPrototypeGuideRow> Rows;
+ if(S.PlayerMode.bValid && S.PlayerMode.Mode==ETRPlayerMode::Navigation)
+ {
+  const bool Enabled=S.bSessionValid && S.PlayerMode.bNavigationInputAllowed && S.Navigation.bConfigured;
+  for(const TCHAR* Text:{TEXT("W/S：前進／後退"),TEXT("A/D：操舵"),TEXT("Mouse：視点"),TEXT("Wheel：Camera距離"),TEXT("Home：視点リセット"),TEXT("Shift：高速航行")}){Rows.Add({Value(Text),Enabled});}
+  Rows.Add({LOCTEXT("FishingStart","Enter：釣り開始"),Enabled && S.PlayerMode.bCanChangeMode && !S.UnmappedPrimaryInputs.Contains(ETRFishingCommandType::StartFishingMode)});
+  Rows.Add({LOCTEXT("NavigationPause","P：一時停止／再開"),S.bSessionValid});
+  return Rows;
+ }
  auto Add = [&](FText Text, ETRFishingCommandType Command) { Rows.Add({Text,S.bSessionValid && !S.bPaused && S.AvailableCommands.Contains(Command) && !S.UnmappedPrimaryInputs.Contains(Command)}); };
  Add(LOCTEXT("GuideMouse", "マウス移動：竿操作"),ETRFishingCommandType::RodAim);
  Add(LOCTEXT("GuideRight", "右クリック：シャクリ"),ETRFishingCommandType::Jerk);
@@ -78,7 +91,18 @@ TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapsho
  Add(LOCTEXT("GuideNext", "N：次投の準備へ"),ETRFishingCommandType::NextCast);
  Rows.Add({LOCTEXT("GuideEquipment", "Tab：装備"),S.bSessionValid});
  Rows.Add({LOCTEXT("GuidePause", "P：一時停止／再開"),S.bSessionValid});
+ Rows.Add({LOCTEXT("GuideReturnNavigation","E：Navigationへ戻る（回収後Ready）"),S.PlayerMode.bValid && S.PlayerMode.bCanChangeMode && !S.UnmappedPrimaryInputs.Contains(ETRFishingCommandType::ReturnNavigationMode)});
  return Rows;
+}
+FText UTRFishingHUDWidget::BuildCompactGuide(const FTRHUDSnapshot& S)
+{
+ if(S.PlayerMode.bValid && S.PlayerMode.Mode==ETRPlayerMode::Navigation)
+ {
+  const FText Status=S.bBoostRearmRequired ? LOCTEXT("BoostRearm","高速航行: 再入力待ち") :
+   (S.Navigation.bBoostRequested && S.Navigation.Throttle!=0 ? LOCTEXT("BoostOn","高速航行: ON") : LOCTEXT("BoostOff","高速航行: OFF"));
+  return FText::Format(LOCTEXT("NavigationBoostStatus","W/S：前進／後退  A/D：操舵  Shift：高速航行\nMouse：視点  Wheel：距離\nHome：視点リセット  Enter：釣り開始\n{0}"),Status);
+ }
+ return LOCTEXT("FishingCompactReturn","Mouse：竿 / 右：シャクリ / 左保持：巻取り\nF：再落下 / Q：回収 / Enter：投入 / Tab：装備\nE：Navigationへ戻る（回収後Ready）");
 }
 FText UTRFishingHUDWidget::FormatSnapshot(const FTRHUDSnapshot& S)
 {

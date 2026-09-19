@@ -1,12 +1,14 @@
 #include "Game/TRPlayerController.h"
 #include "Game/TRFishingSessionActor.h"
 #include "Game/TRPrototypeViewActor.h"
+#include "Game/TRPlayerCameraManager.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "Framework/Application/SlateApplication.h"
+#include "InputKeyEventArgs.h"
 
-ATRPlayerController::ATRPlayerController() { PrimaryActorTick.bTickEvenWhenPaused = true; }
+ATRPlayerController::ATRPlayerController() { PrimaryActorTick.bTickEvenWhenPaused = true; PlayerCameraManagerClass=ATRPlayerCameraManager::StaticClass(); }
 void ATRPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -20,7 +22,7 @@ void ATRPlayerController::SetupInputComponent()
 	Super::SetupInputComponent();
 	InstallInputBindings(Cast<UEnhancedInputComponent>(InputComponent));
 	if (InputComponent) { InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ATRPlayerController::TogglePrototypePanel).bExecuteWhenPaused = true; }
-	if (InputComponent) { InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ATRPlayerController::TogglePrototypeDetails).bExecuteWhenPaused = true; }
+	if (InputComponent) { InputComponent->BindKey(EKeys::Insert, IE_Pressed, this, &ATRPlayerController::TogglePrototypeDetails).bExecuteWhenPaused = true; }
 	if (InputComponent) { InputComponent->BindKey(EKeys::Home, IE_Pressed, this, &ATRPlayerController::ResetPrototypeCamera); }
 }
 bool ATRPlayerController::InstallInputBindings(UEnhancedInputComponent* Component)
@@ -29,6 +31,22 @@ bool ATRPlayerController::InstallInputBindings(UEnhancedInputComponent* Componen
 	TArray<FText> Errors;
 	if (!IsValid(Component) || !IsValid(InputConfig) || !InputConfig->Validate(Errors)) { return false; }
 	BoundInput = Component;
+	if(InputConfig->NavigationContext)
+	{
+		for(auto Event:{ETriggerEvent::Triggered,ETriggerEvent::Completed,ETriggerEvent::Canceled})
+		{
+			BindingHandles.Add(Component->BindAction(InputConfig->NavigationThrottle,Event,this,&ATRPlayerController::EnhancedNavigationThrottle).GetHandle());
+			BindingHandles.Add(Component->BindAction(InputConfig->NavigationSteering,Event,this,&ATRPlayerController::EnhancedNavigationSteering).GetHandle());
+		}
+		BindingHandles.Add(Component->BindAction(InputConfig->NavigationLook,ETriggerEvent::Triggered,this,&ATRPlayerController::EnhancedNavigationLook).GetHandle());
+		BindingHandles.Add(Component->BindAction(InputConfig->NavigationZoom,ETriggerEvent::Triggered,this,&ATRPlayerController::EnhancedNavigationZoom).GetHandle());
+		BindingHandles.Add(Component->BindAction(InputConfig->NavigationBoost,ETriggerEvent::Started,this,&ATRPlayerController::EnhancedStarted,ETRPlayerAction::NavigationBoost).GetHandle());
+		for(auto Event:{ETriggerEvent::Completed,ETriggerEvent::Canceled})
+		{BindingHandles.Add(Component->BindAction(InputConfig->NavigationBoost,Event,this,&ATRPlayerController::EnhancedReleased,ETRPlayerAction::NavigationBoost).GetHandle());}
+		BindingHandles.Add(Component->BindAction(InputConfig->NavigationFishingStart,ETriggerEvent::Started,this,&ATRPlayerController::EnhancedStarted,ETRPlayerAction::FishingStart).GetHandle());
+		for(auto Event:{ETriggerEvent::Completed,ETriggerEvent::Canceled})
+		{BindingHandles.Add(Component->BindAction(InputConfig->NavigationFishingStart,Event,this,&ATRPlayerController::EnhancedReleased,ETRPlayerAction::FishingStart).GetHandle());}
+	}
 	for (const auto& B : InputConfig->Bindings)
 	{
 		if(B.Command==ETRPlayerAction::RodAim)
@@ -53,11 +71,12 @@ void ATRPlayerController::SetMappingContext(bool bEnabled)
 		if (auto* Enhanced = Local->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
 		{
 			if (InstalledContext) { Enhanced->RemoveMappingContext(InstalledContext); InstalledContext = nullptr; }
-			if (bEnabled && BoundSession.IsValid() && BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing) &&
-				IsValid(InputConfig) && IsValid(InputConfig->FishingContext))
+			if (bEnabled && BoundSession.IsValid() && IsValid(InputConfig))
 			{
 				FModifyContextOptions Options; Options.bIgnoreAllPressedKeysUntilRelease = true;
-				InstalledContext = InputConfig->FishingContext; Enhanced->AddMappingContext(InstalledContext, 0, Options);
+				InstalledContext = BoundSession->GetPlayerModeSnapshot().Mode==ETRPlayerMode::Navigation ?
+					InputConfig->NavigationContext : InputConfig->FishingContext;
+				if(InstalledContext){Enhanced->AddMappingContext(InstalledContext, 0, Options);}
 			}
 		}
 	}
@@ -68,6 +87,8 @@ bool ATRPlayerController::BindSession(ATRFishingSessionActor* Session)
 	if (!IsValid(Session) || Session->IsActorBeingDestroyed() || Session->GetWorld() != GetWorld() || !Session->IsAcceptingPlayerInput()) { return false; }
 	BoundSession = Session; ObservedCast = Session->GetCastId(); ObservedRegistration = Session->GetRegistrationId();
 	ObservedModeEpoch = Session->GetPlayerModeSnapshot().ModeEpoch;
+	if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager))
+	{Camera->ConfigureNavigation(Session->GetNavigationParameters(),Session->GetHUDSnapshot().Boat.HeadingRad);}
 	CommandHandle = Session->OnCommandProcessed.AddUObject(this, &ATRPlayerController::ObserveCommand);
 	SetMappingContext(true);
 	PrototypeObservedPhase = ETRSessionPhase::Initializing;
@@ -75,6 +96,7 @@ bool ATRPlayerController::BindSession(ATRFishingSessionActor* Session)
 }
 void ATRPlayerController::UnbindSession()
 {
+	if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Camera->ClearNavigation();}
 	if (BoundSession.IsValid()) { BoundSession->OnCommandProcessed.Remove(CommandHandle); }
 	CommandHandle.Reset();
 	ReleaseInput(); BoundSession.Reset(); bPendingStop = false; ObservedCast = {}; ObservedRegistration = {};
@@ -84,6 +106,9 @@ void ATRPlayerController::UnbindSession()
 }
 void ATRPlayerController::ReleaseInput()
 {
+	InvalidateBoostInput();
+	bNavigationBlockedUntilNeutral |= !NavigationAxes.IsNearlyZero();
+	NavigationAxes=FVector2D::ZeroVector;
 	for (ETRPlayerAction A : Pressed) { BlockedUntilRelease.Add(A); }
 	Pressed.Empty();
 	if (bRetrieveHeld) { bPendingStop = true; PendingStopCast = HeldCast; }
@@ -95,13 +120,17 @@ void ATRPlayerController::ObserveCommand(const FTRFishingCommand& Command, ETRCo
 {
 	const bool bModeChange = Command.Type == ETRFishingCommandType::StartFishingMode || Command.Type == ETRFishingCommandType::ReturnNavigationMode;
 	if ((!bModeChange && Command.Type != ETRFishingCommandType::QuickRetrieve) || Result != ETRCommandResult::Accepted) { return; }
+	InvalidateBoostInput();
 	// Input bookkeeping only. Never discard later same-tick commands: simulation must reject them in sequence.
 	for (ETRPlayerAction Action : Pressed) { BlockedUntilRelease.Add(Action); }
 	Pressed.Empty(); bRetrieveHeld = false; bPendingStop = false;
 	if (bModeChange && BoundSession.IsValid())
 	{
+		NavigationAxes=FVector2D::ZeroVector;
+		bNavigationBlockedUntilNeutral=false; // Mapping context ignores held device keys until release.
 		ObservedModeEpoch = BoundSession->GetPlayerModeSnapshot().ModeEpoch;
 		SetMappingContext(true);
+		if(PrototypeObserver.IsValid()){SetViewTarget(PrototypeObserver.Get());}
 	}
 }
 void ATRPlayerController::FlushPendingStop()
@@ -148,9 +177,23 @@ bool ATRPlayerController::ActionStarted(ETRPlayerAction Action, int64 TargetTick
 		if (!bInputFocused || !BoundSession.IsValid()) { return false; }
 		Pressed.Add(Action); SetPauseRequested(!BoundSession->IsPlayerPaused()); return true;
 	}
+	if(Action==ETRPlayerAction::NavigationBoost && bBoostRearmRequired){return false;}
 	if (BlockedUntilRelease.Contains(Action)) { return false; }
 	if (bPrototypePanelOpen) { BlockedUntilRelease.Add(Action); return false; }
 	if (!BoundSession.IsValid() || !bInputFocused || BoundSession->IsPlayerPaused()) { BlockedUntilRelease.Add(Action); return false; }
+	if (Action == ETRPlayerAction::NavigationBoost)
+	{
+		if(!BoundSession->IsInputModeAllowed(ETRPlayerMode::Navigation) || !BoundSession->SubmitCommand(ETRFishingCommandType::NavigationBoostStarted,BoundSession->GetCastId(),TargetTick)){return false;}
+		Pressed.Add(Action);return true;
+	}
+	if (Action == ETRPlayerAction::FishingStart || Action == ETRPlayerAction::ReturnNavigation)
+	{
+		const auto Required=Action==ETRPlayerAction::FishingStart?ETRPlayerMode::Navigation:ETRPlayerMode::Fishing;
+		if (!BoundSession->IsInputModeAllowed(Required)) { return false; }
+		const auto Mode = BoundSession->GetPlayerModeSnapshot();
+		if (!BoundSession->SubmitModeChange(Required==ETRPlayerMode::Navigation?ETRPlayerMode::Fishing:ETRPlayerMode::Navigation,Mode.ModeEpoch,BoundSession->GetRegistrationId(),TargetTick)) { return false; }
+		Pressed.Add(Action); return true;
+	}
 	ETRFishingCommandType Command;
 	switch (Action)
 	{
@@ -173,9 +216,11 @@ bool ATRPlayerController::ActionStarted(ETRPlayerAction Action, int64 TargetTick
 }
 void ATRPlayerController::ActionReleased(ETRPlayerAction Action)
 {
+	if(Action==ETRPlayerAction::NavigationBoost && BoundSession.IsValid() && BoundSession->IsInputModeAllowed(ETRPlayerMode::Navigation))
+	{BoundSession->SubmitCommand(ETRFishingCommandType::NavigationBoostStopped,BoundSession->GetCastId());}
 	Pressed.Remove(Action);
 	// Conservative rearming: releases delivered during pause/focus loss do not rearm gameplay.
-	if (Action == ETRPlayerAction::Pause || (bInputFocused && BoundSession.IsValid() && !BoundSession->IsPlayerPaused())) { BlockedUntilRelease.Remove(Action); }
+	if (Action != ETRPlayerAction::NavigationBoost && (Action == ETRPlayerAction::Pause || (bInputFocused && BoundSession.IsValid() && !BoundSession->IsPlayerPaused()))) { BlockedUntilRelease.Remove(Action); }
 	if (Action == ETRPlayerAction::Retrieve && bRetrieveHeld)
 	{
 		bRetrieveHeld = false; bPendingStop = true; PendingStopCast = HeldCast; FlushPendingStop();
@@ -193,6 +238,12 @@ bool ATRPlayerController::RoutePrototypeMouse(FVector2D Delta,bool bCameraLook)
 }
 void ATRPlayerController::ResetPrototypeCamera()
 {
+	if(BoundSession.IsValid() && BoundSession->GetPlayerModeSnapshot().Mode==ETRPlayerMode::Navigation)
+	{
+		if(!bPrototypePanelOpen && bInputFocused && !BoundSession->IsPlayerPaused())
+		{if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Camera->ResetNavigation(BoundSession->GetHUDSnapshot().Boat.HeadingRad);}}
+		return;
+	}
 	if(!bPrototypePanelOpen && bInputFocused){if(auto* View=Cast<ATRPrototypeViewActor>(GetViewTarget())){View->ResetCameraLook();}}
 }
 bool ATRPlayerController::SubmitMouseDelta(FVector2D Delta,int64 TargetTick)
@@ -219,6 +270,8 @@ void ATRPlayerController::PlayerTick(float DeltaTime) { SynchronizeSession(); Su
 FTRHUDSnapshot ATRPlayerController::GetDebugSnapshot() const
 {
 	auto Copy = BoundSession.IsValid() ? BoundSession->GetHUDSnapshot() : FTRHUDSnapshot();
+	Copy.bBoostRearmRequired=bBoostRearmRequired;
+	if(const auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Copy.NavigationCamera=Camera->GetNavigationSnapshot();}
 	if (!Copy.bSessionValid) { return Copy; }
 	auto HasKey = [&](ETRPlayerAction Action, FKey Key)
 	{
@@ -243,6 +296,15 @@ FTRHUDSnapshot ATRPlayerController::GetDebugSnapshot() const
 	Check(ETRPlayerAction::Retrieve, EKeys::LeftMouseButton, ETRFishingCommandType::RetrieveStopped);
 	Check(ETRPlayerAction::QuickRetrieve, EKeys::Q, ETRFishingCommandType::QuickRetrieve);
 	Check(ETRPlayerAction::Fall, EKeys::F, ETRFishingCommandType::Fall);
+	Check(ETRPlayerAction::ReturnNavigation,EKeys::E,ETRFishingCommandType::ReturnNavigationMode);
+	if(Copy.PlayerMode.Mode==ETRPlayerMode::Navigation)
+	{
+		Copy.UnmappedPrimaryInputs.Reset();
+		bool Mapped=false;
+		if(IsValid(InputConfig) && InputConfig->NavigationContext)
+		{for(const auto& M:InputConfig->NavigationContext->GetMappings()){Mapped |= M.Action==InputConfig->NavigationFishingStart && M.Key==EKeys::Enter;}}
+		if(!Mapped){Copy.UnmappedPrimaryInputs.Add(ETRFishingCommandType::StartFishingMode);}
+	}
 	if (!Copy.UnmappedPrimaryInputs.IsEmpty())
 	{
 		Copy.InputConfigurationNote = NSLOCTEXT("TRPrototype", "UnmappedPrimary", "基本操作の一部が未設定です。灰色の項目は現在使用できません。Debugキーは設定済みのものだけ使用できます。");
@@ -347,4 +409,56 @@ bool ATRPlayerController::RequestPlayerMode(ETRPlayerMode Target)
 void ATRPlayerController::TRSetFishingMode(bool bFishing)
 {
  RequestPlayerMode(bFishing ? ETRPlayerMode::Fishing : ETRPlayerMode::Navigation);
+}
+
+bool ATRPlayerController::SubmitNavigationInput(FVector2D Input,int64 TargetTick)
+{
+ if(!BoundSession.IsValid()||bPrototypePanelOpen||!bInputFocused||IsActorBeingDestroyed()||bNavigationBlockedUntilNeutral){return false;}
+ const auto Mode=BoundSession->GetPlayerModeSnapshot();
+ return BoundSession->SubmitNavigationInput(Input,Mode.ModeEpoch,BoundSession->GetRegistrationId(),TargetTick);
+}
+void ATRPlayerController::SendNavigationAxes()
+{
+ if(!bInputFocused || bPrototypePanelOpen || !BoundSession.IsValid() || BoundSession->IsPlayerPaused())
+ {bNavigationBlockedUntilNeutral |= !NavigationAxes.IsNearlyZero();return;}
+ if(NavigationAxes.IsNearlyZero()){bNavigationBlockedUntilNeutral=false;}
+ SubmitNavigationInput(NavigationAxes);
+}
+void ATRPlayerController::EnhancedNavigationThrottle(const FInputActionValue& Value){NavigationAxes.X=Value.Get<float>();SendNavigationAxes();}
+void ATRPlayerController::EnhancedNavigationSteering(const FInputActionValue& Value){NavigationAxes.Y=Value.Get<float>();SendNavigationAxes();}
+void ATRPlayerController::EnhancedNavigationLook(const FInputActionValue& Value){ApplyNavigationLook(Value.Get<FVector2D>());}
+void ATRPlayerController::EnhancedNavigationZoom(const FInputActionValue& Value)
+{
+ if(BoundSession.IsValid() && BoundSession->IsInputModeAllowed(ETRPlayerMode::Navigation) && bInputFocused && !bPrototypePanelOpen)
+ {if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Camera->Zoom(Value.Get<float>());}}
+}
+bool ATRPlayerController::ApplyNavigationLook(FVector2D Delta)
+{
+ if(!BoundSession.IsValid() || !BoundSession->IsInputModeAllowed(ETRPlayerMode::Navigation) || !bInputFocused || bPrototypePanelOpen || Delta.ContainsNaN()){return false;}
+ if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Camera->Look(Delta);return true;}return false;
+}
+void ATRPlayerController::SetPrototypeObserver(ATRPrototypeViewActor* Observer)
+{
+ if(IsValid(Observer) && PrototypeObserver.Get()!=Observer){PrototypeObserver=Observer;SetViewTarget(Observer);}
+}
+
+void ATRPlayerController::InvalidateBoostInput()
+{
+ bBoostRearmRequired |= bPhysicalLeftShift || bPhysicalRightShift || Pressed.Contains(ETRPlayerAction::NavigationBoost);
+}
+bool ATRPlayerController::InputKey(const FInputKeyEventArgs& Params)
+{
+ // Raw device release, not Enhanced Completed/Canceled (also emitted by context rebuild/flush).
+ if(Params.Key==EKeys::LeftShift || Params.Key==EKeys::RightShift)
+ {
+  bool& Held=Params.Key==EKeys::LeftShift?bPhysicalLeftShift:bPhysicalRightShift;
+  if(Params.Event==IE_Pressed || Params.Event==IE_Repeat){Held=true;}
+  if(Params.Event==IE_Released)
+  {
+   Held=false;
+   if(!bPhysicalLeftShift && !bPhysicalRightShift)
+   {bBoostRearmRequired=false;BlockedUntilRelease.Remove(ETRPlayerAction::NavigationBoost);}
+  }
+ }
+ return Super::InputKey(Params);
 }

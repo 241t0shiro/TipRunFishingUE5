@@ -9,6 +9,7 @@ class UTRBoatTuningDataAsset;
 class UTRFishingTuningDataAsset;
 class UTRInputConfigDataAsset;
 class UTRRodTuningDataAsset;
+class UTRNavigationTuningDataAsset;
 class UDataTable;
 // Clock validation remains independent; M09 startup validates its references separately.
 UCLASS(BlueprintType)
@@ -30,6 +31,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Startup") TObjectPtr<UTRFishingTuningDataAsset> Fishing;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Startup") TObjectPtr<UTRInputConfigDataAsset> Input;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Startup") TObjectPtr<UTRRodTuningDataAsset> Rod;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Startup") TObjectPtr<UTRNavigationTuningDataAsset> Navigation;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Startup") TObjectPtr<UDataTable> Egis;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Startup") TObjectPtr<UDataTable> Sinkers;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Startup") FName InitialSinkerId;

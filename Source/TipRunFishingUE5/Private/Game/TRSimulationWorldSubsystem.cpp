@@ -1,4 +1,5 @@
 #include "Game/TRSimulationWorldSubsystem.h"
+#include "Boat/TRBoatDriftComponent.h"
 #include "Data/TRSessionConfigDataAsset.h"
 #include "Ocean/TROceanWorldSubsystem.h"
 #include "Engine/World.h"
@@ -281,6 +282,8 @@ void UTRSimulationWorldSubsystem::StepRegisteredBoat(ETRSimulationPhase Phase, c
 		Query.PositionXYM = Destination;
 		return Ocean && Ocean->SampleOcean(Query).bValid;
 	});
+	// Navigation force requests last one fixed step; an unregistered session cannot leave propulsion latched.
+	Boat->DriftComponent->SetNavigationForces(0,0);
 }
 
 bool UTRSimulationWorldSubsystem::GetBoatSnapshot(FTRActorSimId BoatId, FTRBoatSnapshot& OutSnapshot) const
@@ -296,4 +299,24 @@ void UTRSimulationWorldSubsystem::HandleBoatEndPlay(AActor* Actor, EEndPlayReaso
 {
 	const FRegistration* Entry = Registrations.FindByPredicate([Actor](const FRegistration& Value) { return Value.bBoat && Value.Owner.Get() == Actor; });
 	if (Entry) { const FTRActorSimId Id = Entry->Id; Unregister(Id); }
+}
+
+bool UTRSimulationWorldSubsystem::ConfigureBoatNavigation(FTRActorSimId BoatId,double MaxSpeedMps)
+{
+ if(bAdvancing){return false;}
+ const auto* R=FindLive(BoatId);
+ auto* Boat=R && R->bBoat ? Cast<ATRBoatPawn>(R->Owner.Get()):nullptr;
+ return Boat && Boat->DriftComponent->ConfigureNavigation(MaxSpeedMps);
+}
+void UTRSimulationWorldSubsystem::SetBoatNavigationForces(FTRActorSimId BoatId,double ForceN,double YawRateRadPerS,double LateralResponsePerS)
+{
+ const auto* R=FindLive(BoatId);
+ if(auto* Boat=R && R->bBoat ? Cast<ATRBoatPawn>(R->Owner.Get()):nullptr){Boat->DriftComponent->SetNavigationForces(ForceN,YawRateRadPerS,LateralResponsePerS);}
+}
+
+void UTRSimulationWorldSubsystem::ResetBoatForFishing(FTRActorSimId BoatId)
+{
+ if(!bAdvancing){return;}
+ const auto* R=FindLive(BoatId);
+ if(auto* Boat=R && R->bBoat ? Cast<ATRBoatPawn>(R->Owner.Get()):nullptr){Boat->DriftComponent->ResetDynamicVelocityForFishing();}
 }

@@ -3,6 +3,7 @@
 #include "Data/TRSnapshots.h"
 #include "Data/TREquipmentData.h"
 #include "Data/TRPlayerModeTypes.h"
+#include "Data/TRNavigationTuningDataAsset.h"
 #include "TRHUDSnapshot.generated.h"
 
 // Display copies only. No simulated state or future AI metrics are owned by UI.
@@ -11,6 +12,8 @@ struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 {
 	GENERATED_BODY()
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRPlayerModeSnapshot PlayerMode;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRNavigationSnapshot Navigation;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRNavigationCameraSnapshot NavigationCamera;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bSessionValid = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bEgiValid = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bEnvironmentValid = false;
@@ -26,6 +29,8 @@ struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTROceanSample Ocean;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTREquipmentSnapshot Equipment;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bPaused = false;
+	// Controller input latch, presentation only; never drives simulation.
+	UPROPERTY(BlueprintReadOnly, Category="TipRun") bool bBoostRearmRequired = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FText EquipmentBlockReason;
 	// State eligibility only; actual commands still revalidate tick, cast and environment.
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") TArray<ETRFishingCommandType> AvailableCommands;
