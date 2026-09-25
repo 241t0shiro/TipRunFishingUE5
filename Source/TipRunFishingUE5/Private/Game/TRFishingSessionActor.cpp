@@ -51,6 +51,7 @@ bool ATRFishingSessionActor::Initialize(UTRSimulationWorldSubsystem* Simulation,
 	if (NavigationTuning && (!Navigation->Configure(NavigationTuning->Parameters) ||
 		!Simulation->ConfigureBoatNavigation(BoatId,FMath::Max(NavigationTuning->Parameters.MaxSpeedMps,NavigationTuning->Parameters.BoostMaxSpeedMps))))
 	{ Errors.Add(FText::FromString(TEXT("Navigation requires valid parameters and a revision 2 boat"))); Phase=ETRSessionPhase::Error; return false; }
+	if(FishingStations){if(!RodTuning || !FishingStations->Parameters.Validate()){Errors.Add(FText::FromString(TEXT("Invalid fishing stations")));return false;}FrozenStations=FishingStations->Parameters;bStationsConfigured=true;}
 	bInitialized = true; Phase = ETRSessionPhase::Ready;
 	return true;
 }
@@ -130,6 +131,38 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 		return;
 	}
 	ConsumeInputReset();
+	// Reselection preserves Fishing Mode and all boat dynamics.
+	if(Command.Type==ETRFishingCommandType::BeginSideChange)
+	{
+	 if(!bStationsConfigured || !IsInputModeAllowed(ETRPlayerMode::Fishing) || !CanChangeEquipment() || Fishing->GetState()!=ETRFishingState::Ready){return;}
+	 PlayerMode->State.SideSelectionOrigin=ETRFishingSideSelectionOrigin::FishingReadyChange;PlayerMode->State.PreviousFishingSide=PlayerMode->State.FishingSide;
+	 PlayerMode->State.bSideSelectionActive=true;PlayerMode->State.PendingSide=PlayerMode->State.FishingSide;++PlayerMode->State.ModeEpoch;
+	 LastCommandResult=ETRCommandResult::Accepted;return;
+	}
+	if(Command.Type==ETRFishingCommandType::StartFishingMode && PlayerMode->State.Mode==ETRPlayerMode::Fishing && PlayerMode->State.bSideSelectionActive)
+	{
+	 if(!CanChangeEquipment() || Fishing->GetState()!=ETRFishingState::Ready){return;}
+	 const auto* Station=FrozenStations.Find(PlayerMode->State.PendingSide);if(!Station){return;}
+	 PlayerMode->State.FishingSide=Station->Side;RodControl->SetStation(Station->RodMountM,FMath::DegreesToRadians(Station->FacingDeg));
+	 PlayerMode->State.bSideSelectionActive=false;PlayerMode->State.SideSelectionOrigin=ETRFishingSideSelectionOrigin::None;++PlayerMode->State.ModeEpoch;
+	 LastCommandResult=ETRCommandResult::Accepted;return;
+	}
+	if(Command.Type==ETRFishingCommandType::SelectPort || Command.Type==ETRFishingCommandType::SelectStarboard || Command.Type==ETRFishingCommandType::CancelSideSelection)
+	{
+	 if(!PlayerMode->State.bSideSelectionActive){return;}
+	 if(Command.Type==ETRFishingCommandType::CancelSideSelection)
+	 {
+	  const auto Origin=PlayerMode->State.SideSelectionOrigin;
+	  const auto ExpectedMode=Origin==ETRFishingSideSelectionOrigin::FishingReadyChange?ETRPlayerMode::Fishing:ETRPlayerMode::Navigation;
+	  if(Origin==ETRFishingSideSelectionOrigin::None || PlayerMode->State.Mode!=ExpectedMode){return;}
+	  // PendingSide never drives the committed anchors. Restore the saved side, not the preview.
+	  PlayerMode->State.FishingSide=PlayerMode->State.PreviousFishingSide;
+	  PlayerMode->State.PendingSide=PlayerMode->State.PreviousFishingSide;
+	  PlayerMode->State.bSideSelectionActive=false;PlayerMode->State.SideSelectionOrigin=ETRFishingSideSelectionOrigin::None;++PlayerMode->State.ModeEpoch;
+	 }
+	 else{PlayerMode->State.PendingSide=Command.Type==ETRFishingCommandType::SelectPort?ETRFishingSide::Port:ETRFishingSide::Starboard;}
+	 LastCommandResult=ETRCommandResult::Accepted;return;
+	}
 	if (Command.Type == ETRFishingCommandType::StartFishingMode || Command.Type == ETRFishingCommandType::ReturnNavigationMode)
 	{
 		const ETRPlayerMode Target = Command.Type == ETRFishingCommandType::StartFishingMode ? ETRPlayerMode::Fishing : ETRPlayerMode::Navigation;
@@ -139,6 +172,16 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 			PlayerMode->Reject(Rejection);
 			LastCommandResult = ETRCommandResult::RejectedBusy;
 			return;
+		}
+		if(Target==ETRPlayerMode::Fishing && bStationsConfigured)
+		{
+		 if(!PlayerMode->State.bSideSelectionActive)
+		 {PlayerMode->State.SideSelectionOrigin=ETRFishingSideSelectionOrigin::NavigationStart;PlayerMode->State.PreviousFishingSide=PlayerMode->State.FishingSide;PlayerMode->State.bSideSelectionActive=true;PlayerMode->State.PendingSide=ETRFishingSide::Unselected;++PlayerMode->State.ModeEpoch;Navigation->Clear();Coordinator->SetBoatNavigationForces(BoatId,0,0);LastCommandResult=ETRCommandResult::Accepted;return;}
+		 const auto* Station=FrozenStations.Find(PlayerMode->State.PendingSide);
+		 if(!Station){return;}
+		 PlayerMode->State.FishingSide=Station->Side;
+		 RodControl->SetStation(Station->RodMountM,FMath::DegreesToRadians(Station->FacingDeg));
+		 PlayerMode->State.bSideSelectionActive=false;PlayerMode->State.SideSelectionOrigin=ETRFishingSideSelectionOrigin::None;
 		}
 		if(Target==ETRPlayerMode::Fishing){Coordinator->ResetBoatForFishing(BoatId);}
 		PlayerMode->Transition(Target, Coordinator->GetSimulationTime().TickIndex);
@@ -412,6 +455,7 @@ FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
 {
 	if (!bInitialized || IsActorBeingDestroyed()) { return {}; }
 	FTRHUDSnapshot Copy = PublishedHUD;
+	Copy.Station=GetStationSnapshot();
 	Copy.PlayerMode = GetPlayerModeSnapshot();
 	Copy.Navigation = GetNavigationSnapshot();
 	Copy.bSessionValid = true; Copy.bEgiValid = bCastActive; Copy.bEquipmentLocked = bEquipmentLocked;
@@ -498,7 +542,7 @@ FTRPlayerModeSnapshot ATRFishingSessionActor::GetPlayerModeSnapshot() const
 bool ATRFishingSessionActor::IsInputModeAllowed(ETRPlayerMode RequiredMode) const
 {
  const auto State = PlayerMode->GetSnapshot();
- return State.bValid && IsAcceptingPlayerInput() && !IsPlayerPaused() && State.Mode == RequiredMode;
+ return State.bValid && IsAcceptingPlayerInput() && !IsPlayerPaused() && State.Mode == RequiredMode && !State.bSideSelectionActive;
 }
 bool ATRFishingSessionActor::SubmitModeChange(ETRPlayerMode Target, int64 ExpectedEpoch, FTRActorSimId ExpectedRegistration, int64 TargetTick)
 {
@@ -514,4 +558,14 @@ bool ATRFishingSessionActor::SubmitNavigationInput(FVector2D Input,int64 Expecte
  ExpectedEpoch!=PlayerMode->GetSnapshot().ModeEpoch || ExpectedRegistration!=RegistrationId ||
  Input.ContainsNaN()||FMath::Abs(Input.X)>1||FMath::Abs(Input.Y)>1){return false;}
  return Coordinator->EnqueueCommand(RegistrationId,ETRFishingCommandType::NavigationInput,0,TargetTick,CurrentCastId,Input,ExpectedEpoch);
+}
+
+FTRFishingStationSnapshot ATRFishingSessionActor::GetStationSnapshot() const
+{
+ FTRFishingStationSnapshot Out;const auto Mode=PlayerMode->GetSnapshot();
+ if(!bStationsConfigured || !Mode.bValid || Mode.Mode!=ETRPlayerMode::Fishing || !IsAcceptingPlayerInput()){return Out;}
+ const auto* S=FrozenStations.Find(Mode.FishingSide);FTRBoatSnapshot B;
+ if(!S || !Coordinator.IsValid() || !Coordinator->GetBoatSnapshot(BoatId,B)){return Out;}
+ const FQuat H(FVector::UpVector,B.HeadingRad);auto World=[&](FVector P){return B.PositionM+H.RotateVector(P);};
+ Out.bValid=true;Out.Side=S->Side;Out.PlayerWorldM=World(S->PlayerM);Out.EyeWorldM=World(S->EyeM);Out.CameraWorldM=World(S->CameraM);Out.RodRootWorldM=World(S->RodMountM);Out.FacingWorldDeg=FMath::RadiansToDegrees(double(B.HeadingRad))+S->FacingDeg;return Out;
 }

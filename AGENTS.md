@@ -1,5 +1,11 @@
 # TipRunFishingUE5 — Codex実装規約
 
+2026-09-25 R3 Cancel修正: 手動PIEでFishing内舷選択の取消後に観測Camera/操作不能となる不具合を受け、選択開始元と変更前Sideを明示化。R3 Cancel入力をSession終了へ流さず、開始元のMode/Context/Camera/Sideを維持する。UHT6生成・実C++/Development Editor Win64成功、R3 6件＋関連回帰27件の最終結果成功。今回取消経路の手動再PIE待ち。R4以降/H/M11未着手。
+
+2026-09-24 R3最終修正: 既存の両舷FPS構図/Gunwale/Rod/Reel/Line/Mouse Look/Drift追従はユーザー手動合格。Fishing Ready内のC釣り座変更を追加し、Mode/船動態を維持。UHT7生成・実C++/Development Editor Win64成功、R3 5件＋R1/R2/F/G回帰27件成功。今回C経路の手動再確認待ち。R4入力/R5-R6巻取り/R7環境の補足は文書のみで未実装。R4以降/H/M11未着手。
+
+2026-09-24 R3: ユーザーがR1/R2を正式合格。R3は毎回の舷選択、舷別Rod実接続、一人称Fishing Cameraと簡易Reel/Gunwaleを追加。R3実装・自動検証は成功、手動PIE構図は未確認。現行操作/手順はUI_SPEC末尾、証跡はROADMAP末尾。R4以降/H/M11未着手。
+
 2026-09-19 R2 Mode Transition/Boost最終改訂: ユーザー指示により旧Velocity/慣性保持契約を廃止。Fishing確定時に動的速度と全Navigation応答を解除し、位置/Headingを保持して環境Driftを0から再形成する。Shiftは物理ReleasedとContextのCompleted/Canceledを分離し、左右両キー解放まで再入力待ち。Navigation HUDにOFF/ON/再入力待ち。UHT4生成・実C++/Development Editor Win64成功、R2 14件＋回帰28件の最終結果成功。今回の実PIE未確認、R2正式合否保留。R3以降/H/M11未着手。以下の速度継承/保持解除成功記録は旧契約の履歴。最新契約と再手順は各設計書末尾を参照。
 
 2026-09-19 R2追加2点: Fishing→Navigation後のRod/Tip/Line/Egi表示をModeで遮断し再利用、Navigation専用Shift Boostを固定入力/推力応答へ追加。保存Input/Navigationのみ明示更新。UHT11生成・実C++・Development Editor Win64成功、R2 12件＋関連回帰29件成功、試験内エラー/警告0。今回の表示/Boost手動再PIEは未実施、R2正式合否保留。R3以降/H/M11未着手。現行操作はUI_SPEC末尾、計算はBOAT_SYSTEM末尾、証跡はROADMAP末尾。以下は履歴。

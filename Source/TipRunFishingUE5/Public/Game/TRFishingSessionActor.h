@@ -6,6 +6,7 @@
 #include "Data/TRSnapshots.h"
 #include "Game/TRSimulationWorldSubsystem.h"
 #include "Data/TRHUDSnapshot.h"
+#include "Data/TRFishingStationDataAsset.h"
 #include "Game/TRPlayerModeComponent.h"
 #include "Boat/TRBoatNavigationComponent.h"
 #include "TRFishingSessionActor.generated.h"
@@ -25,6 +26,10 @@ class TIPRUNFISHINGUE5_API ATRFishingSessionActor : public AActor
 	GENERATED_BODY()
 public:
 	ATRFishingSessionActor();
+	UPROPERTY(EditAnywhere) TObjectPtr<UTRFishingStationDataAsset> FishingStations;
+	FTRFishingStationParameters GetStationParameters() const {return FrozenStations;}
+	FTRFishingStationSnapshot GetStationSnapshot() const;
+	bool UsesFishingStations() const {return bStationsConfigured;}
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UTRNavigationTuningDataAsset> NavigationTuning;
 	FTRNavigationSnapshot GetNavigationSnapshot() const { return Navigation->GetSnapshot(); }
 	FTRNavigationParameters GetNavigationParameters() const { return Navigation->GetParameters(); }
@@ -83,6 +88,8 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Destroyed() override;
 private:
+ FTRFishingStationParameters FrozenStations;
+ bool bStationsConfigured=false;
 	UPROPERTY() TObjectPtr<UTRPlayerModeComponent> PlayerMode;
 	UPROPERTY() TObjectPtr<UTRBoatNavigationComponent> Navigation;
 	bool bClearNavigationInput = false;

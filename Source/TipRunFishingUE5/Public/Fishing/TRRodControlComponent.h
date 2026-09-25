@@ -19,10 +19,14 @@ public:
 	bool IsInitialized() const { return bInitialized; }
 	int64 GetJerkTicks() const { return UpTicks+ReturnTicks; }
 	float GetReelPulseMps(const FTRSimTime& Time, const FTREgiSnapshot& Fishing) const;
+	void SetStation(FVector MountM,double FacingRad){StationMountM=MountM;StationYawRad=FacingRad;bUseStation=true;Snapshot.BasePitchRad=FMath::Clamp(0.,Frozen.MinPitchRad,Frozen.MaxPitchRad);Snapshot.BaseYawRad=0;Snapshot.bValid=false;}
 	void Reset();
 	void InvalidateSnapshot() { Snapshot.bValid=false; Snapshot.bShakuriActive=false; }
 	void ObserveOperationStart(const FTREgiSnapshot& Fishing);
 private:
+	bool bUseStation=false;
+	FVector StationMountM=FVector::ZeroVector;
+	double StationYawRad=0;
 	FTRRodParameters Frozen;
 	FTRRodSnapshot Snapshot;
 	int64 UpTicks=0,ReturnTicks=0,ReelTicks=0,BudgetTick=-1;

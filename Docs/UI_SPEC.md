@@ -468,3 +468,33 @@ Automationでは生キー入力→PlayerInput/InputComponent経路のInsert20回
 6. Enter/Eの表示往復と、Fishingで押し直しEnterによるDeployは前回合格動作のままであること。
 
 上記今回分の手動合否は未確認。R2正式完了は再PIE結果待ち、R3/H/M11へ進まない。
+
+### R3 現行操作と手動PIE（2026-09-24）
+旧Fishing外部観測Camera/Mouse竿操作はR3保存Prototypeでは使用しない。Navigationは従来三人称。Enterで「釣り座を選択」、A=左舷、D=右舷、Enter=確定、Backspace=取消（EscはPIE終了と競合するため使用しない）。選択中A/Dは操舵へ配送しない。日本語ガイドに現在選択を表示し、操船ガイドと排他的に切替。
+FishingではMouse=限定FPS視線、右=シャクリ、左保持=巻取り、F=再落下、Q=回収、Enter=投入、Tab=装備、回収後ReadyでE=Navigation。Insert=詳細HUD。確定に使ったEnterを離してから再押下で投入。CameraのLookはBoat Heading/Rod基準姿勢を変更しない。左右舷の位置/範囲はBOAT_SYSTEM末尾参照。
+
+手動再確認（自動PIEは実施しない）:
+1. Editorを再起動して `/Game/TipRun/Prototype/M105/L_TR_M105_Prototype` を開き、1920×1080 New Editor Window PIE。GameModeは既存BP_TR_M105GameMode_Prototype。
+2. Enter→A。左舷選択表示とA/Dで船首が変わらないことを確認。Backspaceで取消、Enter→A→Enterで確定。
+3. 左舷外向きの一人称で下部の赤いGunwale、手前のRod/青いReel、正面の海を確認。Mouseで限定視線、Boat Heading不変、船外Orbitにならないこと。
+4. Enterを離し再押下で投入。Lineが選択舷のTipから伸びること、右クリックでRod/Lineが動くこと。Q完了→EでNavigation三人称へ戻り、Fishing表示が消えること。
+5. 再Enter→D→Enterで右舷。緑のGunwaleと外向き視線、Rod/Reelを確認。Navigationで船首を90/180度へ変えて両舷を再確認。
+6. Modeを数回往復し、Camera/表示の重複なし、Boost保持再発火なしを確認。構図・クリッピング・見やすさの正式合否はこの手動評価で判断する。
+
+保存Sessionから新規 `/Game/TipRun/Prototype/M105/Data/DA_TR_R3FishingStations_Prototype` を明示参照。既存Map/Input/Navigation/環境係数資産は変更していない。R4以降/H/M11は未着手。
+
+### R3最終修正：Fishing内釣り座変更
+C（既存Prototype割当との競合なし）=釣り座変更。Fishing Ready/Onboard/Cast終了/装備Unlockedのみ受付。A左舷、D右舷、Enter決定、Backspaceキャンセル。選択中はDeploy/操船を遮断。確定・取消ともFishingを維持し、取消では元Sideへ戻る。船位置/Heading/Driftはリセットしない。Navigationからの従来選択は維持。
+手動再確認: 左舷Fishing ReadyでC→D→Enter、再C→A→Enter。Gunwale/Camera/Rod/Tipが左右に対応し、船が跳ばずDriftを続けること。C→別Side→Backspaceでは元の舷のReadyに戻ること。投入後FreeFall/Stay/通常回収/Quick中はCで選択を開けないこと。Q完了後は変更可能。今回以外のR3構図/Mouse Look/表示/Drift追従はユーザー手動合格済み。
+
+### 後続R4入力仕様（文書のみ・未実装）
+FishingのW/S=固定釣り座FPS視点Pitch、A/D=Yaw、Mouse movement=Rod上下左右操作。歩行ではなくLook操作で、Boat Throttle/Steeringへ配送しない。CameraとRodは独立し、MouseでCameraを回さない。右クリック1入力1Shakuri・左保持Normal Retrieveとの統合はR4以降。R3現行Mouse Lookをこの記述だけで変更しない。
+
+### R3 Backspace Cancel修正と再確認（2026-09-25）
+R3保存PrototypeのBackspace/Cancel Actionは釣り座選択の取消専用とし、選択外ではSession終了に使わない。旧Fishing InputのCancel=EndFishingとの重複配送を遮断する。Navigation起点は操船Context/三人称、Fishing Ready起点は元Side/Fishing Context/一人称へ戻る。取消時は元の視線を保持する。元SideのRod/Reel/Gunwaleも継続し、Boat Position/Heading/Driftは変更しない。
+手動再PIE（自動PIEは行わない）:
+1. Editor再起動、既存L_TR_M105_PrototypeでNavigation→Enter→Backspace。操船・Mouse・再Enterが有効であること。
+2. 左舷Fishing ReadyでC→D仮選択→Backspace。左舷のFPS/Rod/Reel/Gunwale/Fishingガイドを維持し、Cで再選択できること。
+3. 同操作を10回程度繰り返し、最後はEnterで投入、Qで回収できること。船が跳ばず自然Driftを継続すること。
+4. 右舷でもC→A→Backspaceを同様に確認。Navigation操作が釣り中に有効にならず、回収後Eでの通常復帰は維持されること。
+従来R3の他項目はユーザー手動合格済み。今回修正したCancel経路のみ再確認待ち。R4以降の操作変更は未実装。

@@ -34,6 +34,9 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="Prototype|View") TObjectPtr<UStaticMeshComponent> LineVisual;
 	UPROPERTY(VisibleAnywhere, Category="Prototype|View") TObjectPtr<UStaticMeshComponent> EgiVisual;
 private:
+ UPROPERTY() TObjectPtr<UStaticMeshComponent> ReelVisual;
+ UPROPERTY() TObjectPtr<UStaticMeshComponent> PortGunwale;
+ UPROPERTY() TObjectPtr<UStaticMeshComponent> StarboardGunwale;
 	void ConfigureMaterials();
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> SurfaceEdges;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> WorldGrid;

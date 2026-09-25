@@ -88,7 +88,7 @@ bool ATRPlayerController::BindSession(ATRFishingSessionActor* Session)
 	BoundSession = Session; ObservedCast = Session->GetCastId(); ObservedRegistration = Session->GetRegistrationId();
 	ObservedModeEpoch = Session->GetPlayerModeSnapshot().ModeEpoch;
 	if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager))
-	{Camera->ConfigureNavigation(Session->GetNavigationParameters(),Session->GetHUDSnapshot().Boat.HeadingRad);}
+	{Camera->ConfigureNavigation(Session->GetNavigationParameters(),Session->GetHUDSnapshot().Boat.HeadingRad);Camera->ConfigureFishing(Session->GetStationParameters());}
 	CommandHandle = Session->OnCommandProcessed.AddUObject(this, &ATRPlayerController::ObserveCommand);
 	SetMappingContext(true);
 	PrototypeObservedPhase = ETRSessionPhase::Initializing;
@@ -118,7 +118,7 @@ void ATRPlayerController::ReleaseInput()
 }
 void ATRPlayerController::ObserveCommand(const FTRFishingCommand& Command, ETRCommandResult Result)
 {
-	const bool bModeChange = Command.Type == ETRFishingCommandType::StartFishingMode || Command.Type == ETRFishingCommandType::ReturnNavigationMode;
+	const bool bModeChange = Command.Type == ETRFishingCommandType::StartFishingMode || Command.Type == ETRFishingCommandType::ReturnNavigationMode || Command.Type==ETRFishingCommandType::CancelSideSelection || Command.Type==ETRFishingCommandType::BeginSideChange;
 	if ((!bModeChange && Command.Type != ETRFishingCommandType::QuickRetrieve) || Result != ETRCommandResult::Accepted) { return; }
 	InvalidateBoostInput();
 	// Input bookkeeping only. Never discard later same-tick commands: simulation must reject them in sequence.
@@ -128,6 +128,8 @@ void ATRPlayerController::ObserveCommand(const FTRFishingCommand& Command, ETRCo
 	{
 		NavigationAxes=FVector2D::ZeroVector;
 		bNavigationBlockedUntilNeutral=false; // Mapping context ignores held device keys until release.
+		if(Command.Type!=ETRFishingCommandType::CancelSideSelection && Command.Type!=ETRFishingCommandType::BeginSideChange)
+		{if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Camera->ResetFishingLook();}}
 		ObservedModeEpoch = BoundSession->GetPlayerModeSnapshot().ModeEpoch;
 		SetMappingContext(true);
 		if(PrototypeObserver.IsValid()){SetViewTarget(PrototypeObserver.Get());}
@@ -149,6 +151,7 @@ void ATRPlayerController::SynchronizeSession()
 	if (ObservedModeEpoch != BoundSession->GetPlayerModeSnapshot().ModeEpoch)
 	{
 		ReleaseInput();
+		if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Camera->ResetFishingLook();}
 		ObservedModeEpoch = BoundSession->GetPlayerModeSnapshot().ModeEpoch;
 		SetMappingContext(true);
 	}
@@ -181,6 +184,12 @@ bool ATRPlayerController::ActionStarted(ETRPlayerAction Action, int64 TargetTick
 	if (BlockedUntilRelease.Contains(Action)) { return false; }
 	if (bPrototypePanelOpen) { BlockedUntilRelease.Add(Action); return false; }
 	if (!BoundSession.IsValid() || !bInputFocused || BoundSession->IsPlayerPaused()) { BlockedUntilRelease.Add(Action); return false; }
+	if(Action==ETRPlayerAction::Cancel && BoundSession->UsesFishingStations())
+	{
+	 if(!BoundSession->GetPlayerModeSnapshot().bSideSelectionActive){return false;}
+	 if(!BoundSession->SubmitCommand(ETRFishingCommandType::CancelSideSelection,BoundSession->GetCastId(),TargetTick)){return false;}
+	 Pressed.Add(Action);return true;
+	}
 	if (Action == ETRPlayerAction::NavigationBoost)
 	{
 		if(!BoundSession->IsInputModeAllowed(ETRPlayerMode::Navigation) || !BoundSession->SubmitCommand(ETRFishingCommandType::NavigationBoostStarted,BoundSession->GetCastId(),TargetTick)){return false;}
@@ -189,7 +198,7 @@ bool ATRPlayerController::ActionStarted(ETRPlayerAction Action, int64 TargetTick
 	if (Action == ETRPlayerAction::FishingStart || Action == ETRPlayerAction::ReturnNavigation)
 	{
 		const auto Required=Action==ETRPlayerAction::FishingStart?ETRPlayerMode::Navigation:ETRPlayerMode::Fishing;
-		if (!BoundSession->IsInputModeAllowed(Required)) { return false; }
+		if (!BoundSession->IsInputModeAllowed(Required) && !(Required==ETRPlayerMode::Navigation && BoundSession->GetPlayerModeSnapshot().bSideSelectionActive)) { return false; }
 		const auto Mode = BoundSession->GetPlayerModeSnapshot();
 		if (!BoundSession->SubmitModeChange(Required==ETRPlayerMode::Navigation?ETRPlayerMode::Fishing:ETRPlayerMode::Navigation,Mode.ModeEpoch,BoundSession->GetRegistrationId(),TargetTick)) { return false; }
 		Pressed.Add(Action); return true;
@@ -230,6 +239,12 @@ void ATRPlayerController::EnhancedStarted(ETRPlayerAction Action) { ActionStarte
 void ATRPlayerController::EnhancedRodAim(const FInputActionValue& Value){RoutePrototypeMouse(Value.Get<FVector2D>(),IsInputKeyDown(EKeys::LeftShift)||IsInputKeyDown(EKeys::RightShift));}
 bool ATRPlayerController::RoutePrototypeMouse(FVector2D Delta,bool bCameraLook)
 {
+ if(BoundSession.IsValid() && BoundSession->UsesFishingStations())
+ {
+  if(!BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing) || !bInputFocused || bPrototypePanelOpen || Delta.ContainsNaN()){return false;}
+  if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Camera->LookFishing(Delta);return true;}return false;
+ }
+
 	if(!bCameraLook){return SubmitMouseDelta(Delta);}
 	SynchronizeSession();
 	if(bPrototypePanelOpen || !bInputFocused || IsActorBeingDestroyed() || Delta.ContainsNaN() || !BoundSession.IsValid() || BoundSession->IsPlayerPaused()){return false;}
@@ -271,7 +286,7 @@ FTRHUDSnapshot ATRPlayerController::GetDebugSnapshot() const
 {
 	auto Copy = BoundSession.IsValid() ? BoundSession->GetHUDSnapshot() : FTRHUDSnapshot();
 	Copy.bBoostRearmRequired=bBoostRearmRequired;
-	if(const auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Copy.NavigationCamera=Camera->GetNavigationSnapshot();}
+	if(const auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Copy.NavigationCamera=Camera->GetNavigationSnapshot();Copy.FishingCamera=Camera->GetFishingSnapshot(Copy.Station);}
 	if (!Copy.bSessionValid) { return Copy; }
 	auto HasKey = [&](ETRPlayerAction Action, FKey Key)
 	{
@@ -356,6 +371,7 @@ void ATRPlayerController::TogglePrototypeDetails()
 }
 void ATRPlayerController::TogglePrototypePanel()
 {
+ if(BoundSession.IsValid() && BoundSession->GetPlayerModeSnapshot().bSideSelectionActive){return;}
 	if (!bPrototypeUIEnabled || !bInputFocused || !BoundSession.IsValid() || !BoundSession->IsAcceptingPlayerInput()) { return; }
 	SetPrototypePanelOpen(!bPrototypePanelOpen);
 }
@@ -448,6 +464,24 @@ void ATRPlayerController::InvalidateBoostInput()
 }
 bool ATRPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
+ // Selection consumes Enter, so its physical release must also rearm the shared actions.
+ if(Params.Key==EKeys::Enter && Params.Event==IE_Released)
+ {ActionReleased(ETRPlayerAction::FishingStart);ActionReleased(ETRPlayerAction::Deploy);}
+
+ if(Params.Key==EKeys::C && BoundSession.IsValid() && BoundSession->GetPlayerModeSnapshot().Mode==ETRPlayerMode::Fishing)
+ {
+  if(Params.Event==IE_Pressed && bInputFocused && !bPrototypePanelOpen && !BoundSession->IsPlayerPaused())
+  {BoundSession->SubmitCommand(ETRFishingCommandType::BeginSideChange,BoundSession->GetCastId());}
+  return true;
+ }
+
+ if(BoundSession.IsValid() && BoundSession->GetPlayerModeSnapshot().bSideSelectionActive &&
+    (Params.Key==EKeys::A || Params.Key==EKeys::D || Params.Key==EKeys::BackSpace || Params.Key==EKeys::Enter))
+ {
+  if(Params.Event==IE_Pressed && bInputFocused && !BoundSession->IsPlayerPaused() && !bPrototypePanelOpen)
+  {BoundSession->SubmitCommand(Params.Key==EKeys::A?ETRFishingCommandType::SelectPort:Params.Key==EKeys::D?ETRFishingCommandType::SelectStarboard:Params.Key==EKeys::Enter?ETRFishingCommandType::StartFishingMode:ETRFishingCommandType::CancelSideSelection,BoundSession->GetCastId());}
+  return true; // Selection keys cannot also enter Navigation axes.
+ }
  // Raw device release, not Enhanced Completed/Canceled (also emitted by context rebuild/flush).
  if(Params.Key==EKeys::LeftShift || Params.Key==EKeys::RightShift)
  {

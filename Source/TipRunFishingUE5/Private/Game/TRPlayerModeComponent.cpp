@@ -10,7 +10,7 @@ void UTRPlayerModeComponent::Start()
 }
 void UTRPlayerModeComponent::Stop()
 {
- State.bValid = false;
+ State.bValid = false;State.bSideSelectionActive=false;State.SideSelectionOrigin=ETRFishingSideSelectionOrigin::None;State.PreviousFishingSide=ETRFishingSide::Unselected;State.PendingSide=ETRFishingSide::Unselected;
  State.bNavigationInputAllowed = false;
  State.bStopNavigationThrustRequested = true;
  State.bHoldBoatHeading = true;

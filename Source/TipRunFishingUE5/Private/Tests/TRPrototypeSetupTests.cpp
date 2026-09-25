@@ -193,6 +193,7 @@ bool FTRPrototypeBootGTest::RunTest(const FString& Parameters)
 	TStrongObjectPtr<UEnhancedPlayerInput> PlayerInput(NewObject<UEnhancedPlayerInput>(PC)); PC->PlayerInput=PlayerInput.Get();
 	TestTrue(TEXT("Stored input installed"),PC->InstallInputBindings(Input.Get())); TestTrue(TEXT("Session binds"),PC->BindSession(Mode->GetSession()));
 	TestTrue(TEXT("R1 explicit Fishing start"),PC->RequestPlayerMode(ETRPlayerMode::Fishing)); F.Step();
+ if(Mode->GetSession()->UsesFishingStations()){Mode->GetSession()->SubmitCommand(ETRFishingCommandType::SelectPort,{});F.Step();PC->RequestPlayerMode(ETRPlayerMode::Fishing);F.Step();}
 	TStrongObjectPtr<UTRFishingHUDWidget> UI(CreateWidget<UTRFishingHUDWidget>(F.World,UTRFishingHUDWidget::StaticClass()));
 	UI->TakeWidget(); UI->BindController(PC);
 	TestFalse(TEXT("Initial panel closed"),PC->IsPrototypePanelOpen()); PC->TogglePrototypePanel(); UI->RefreshFromController();
@@ -207,7 +208,7 @@ bool FTRPrototypeBootGTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("FreeFall and live spatial snapshot"),PC->GetDebugSnapshot().bEgiValid && PC->GetDebugSnapshot().Egi.bWorldPositionValid);
 	F.Step(240);
 	const auto Before=PC->GetDebugSnapshot(); Inject(EKeys::Mouse2D,FInputActionValue(FVector2D(1,1))); F.Step();
-	TestTrue(TEXT("Saved Mouse reaches rod"),PC->GetDebugSnapshot().Rod.BaseYawRad!=Before.Rod.BaseYawRad);
+	TestTrue(TEXT("Saved Mouse has mode-specific routing"),Mode->GetSession()->UsesFishingStations()?PC->GetDebugSnapshot().Rod.BaseYawRad==Before.Rod.BaseYawRad:PC->GetDebugSnapshot().Rod.BaseYawRad!=Before.Rod.BaseYawRad);
 	Inject(EKeys::RightMouseButton,FInputActionValue(true)); F.Step();
 	TestTrue(TEXT("Right click starts Shakuri"),PC->GetDebugSnapshot().Egi.FishingState==ETRFishingState::Jerking);
 	Inject(EKeys::RightMouseButton,FInputActionValue(false)); F.Step(60);
@@ -238,11 +239,14 @@ bool FTRPrototypeBootGTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Render projection never advances simulation"),F.Sim()->GetSimulationTime().TickIndex,Tick);
 	PC->PlayerCameraManager=F.World->SpawnActor<APlayerCameraManager>();PC->PlayerCameraManager->InitializeFor(PC);PC->SetViewTarget(View);
 	const auto OldRod=PC->GetDebugSnapshot().Rod;
-	TestTrue(TEXT("Modifier mouse routed to camera"),PC->RoutePrototypeMouse(FVector2D(30,20),true));
+	if(!Mode->GetSession()->UsesFishingStations())
+ {
+ TestTrue(TEXT("Modifier mouse routed to camera"),PC->RoutePrototypeMouse(FVector2D(30,20),true));
 	FMinimalViewInfo Turned;View->CalcCamera(0,Turned);
 	TestFalse(TEXT("Orbit changes observation"),Turned.Location.Equals(Camera.Location,1.e-6));
 	F.Step();TestEqual(TEXT("Camera never queues rod yaw"),PC->GetDebugSnapshot().Rod.BaseYawRad,OldRod.BaseYawRad);
 	PC->ResetPrototypeCamera();View->CalcCamera(0,Turned);TestTrue(TEXT("Home restores view"),Turned.Location.Equals(Camera.Location,1.e-6));
+	}
 	const auto Fixed=View->GetReferenceBuoy()->GetComponentLocation();auto Moved=Snapshot;Moved.Boat.PositionM+=FVector(4,5,0);
 	View->ApplyObservation(Moved,Mode->SessionConfig->Rod->Parameters,0,30);
 	TestTrue(TEXT("World reference mesh does not follow drifting boat"),View->GetReferenceBuoy()->GetComponentLocation().Equals(Fixed,0));

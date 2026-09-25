@@ -7,6 +7,8 @@ enum class ETRPlayerMode : uint8 { Navigation, Fishing };
 UENUM(BlueprintType)
 enum class ETRFishingSide : uint8 { Unselected, Port, Starboard };
 UENUM(BlueprintType)
+enum class ETRFishingSideSelectionOrigin : uint8 { None, NavigationStart, FishingReadyChange };
+UENUM(BlueprintType)
 enum class ETRModeChangeRejection : uint8
 {
  None, SessionUnavailable, Paused, InvalidTarget, AlreadyInMode, ActiveCast,
@@ -20,6 +22,10 @@ struct TIPRUNFISHINGUE5_API FTRPlayerModeSnapshot
  UPROPERTY(BlueprintReadOnly, Category="TipRun|Mode") bool bValid = false;
  UPROPERTY(BlueprintReadOnly, Category="TipRun|Mode") ETRPlayerMode Mode = ETRPlayerMode::Navigation;
  UPROPERTY(BlueprintReadOnly, Category="TipRun|Mode") ETRFishingSide FishingSide = ETRFishingSide::Unselected;
+ UPROPERTY(BlueprintReadOnly) bool bSideSelectionActive=false;
+ UPROPERTY(BlueprintReadOnly) ETRFishingSideSelectionOrigin SideSelectionOrigin=ETRFishingSideSelectionOrigin::None;
+ UPROPERTY(BlueprintReadOnly) ETRFishingSide PreviousFishingSide=ETRFishingSide::Unselected;
+ UPROPERTY(BlueprintReadOnly) ETRFishingSide PendingSide=ETRFishingSide::Unselected;
  UPROPERTY(BlueprintReadOnly, Category="TipRun|Mode") int64 ModeEpoch = 0;
  UPROPERTY(BlueprintReadOnly, Category="TipRun|Mode") int64 ChangedAtTick = -1;
  UPROPERTY(BlueprintReadOnly, Category="TipRun|Mode") bool bCanChangeMode = false;

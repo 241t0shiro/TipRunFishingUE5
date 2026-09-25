@@ -42,8 +42,10 @@ bool UTRRodControlComponent::Step(const FTRSimTime& Time,const FTRBoatSnapshot& 
 	}
 	Next.FinalPitchRad=FMath::Clamp(Next.BasePitchRad+Offset,Frozen.MinPitchRad,Frozen.MaxPitchRad);Next.FinalYawRad=Next.BaseYawRad;
 	const double Heading=Boat.HeadingRad,C=FMath::Cos(Heading),S=FMath::Sin(Heading);
-	const FVector Mount=Boat.PositionM+FVector(C*Frozen.MountOffsetM.X-S*Frozen.MountOffsetM.Y,S*Frozen.MountOffsetM.X+C*Frozen.MountOffsetM.Y,Frozen.MountOffsetM.Z);
-	const double Yaw=Heading+Next.FinalYawRad,Pitch=Next.FinalPitchRad;
+	const FVector LocalMount=bUseStation?StationMountM:Frozen.MountOffsetM;
+	const FVector Mount=Boat.PositionM+FVector(C*LocalMount.X-S*LocalMount.Y,S*LocalMount.X+C*LocalMount.Y,LocalMount.Z);
+	Next.RootWorldPositionM=Mount;
+	const double Yaw=Heading+(bUseStation?StationYawRad:0)+Next.FinalYawRad,Pitch=Next.FinalPitchRad;
 	Next.TipDirection=FVector(FMath::Cos(Pitch)*FMath::Cos(Yaw),FMath::Cos(Pitch)*FMath::Sin(Yaw),FMath::Sin(Pitch));
 	Next.TipWorldRotation=FRotator(FMath::RadiansToDegrees(Pitch),FMath::RadiansToDegrees(Yaw),0).Quaternion();
 	Next.TipWorldPositionM=Mount+Next.TipDirection*Frozen.LengthM;
@@ -56,7 +58,7 @@ float UTRRodControlComponent::GetReelPulseMps(const FTRSimTime& Time,const FTREg
 	// Recover slack during rod return, not on top of the upward tip-speed peak.
 	return bInitialized && Time.IsValid() && Fishing.FishingState==ETRFishingState::Jerking && Elapsed>=UpTicks && Elapsed-UpTicks<ReelTicks ? float(Frozen.ShakuriReelSpeedMps) : 0.f;
 }
-void UTRRodControlComponent::Reset(){bInitialized=false;Snapshot={};Frozen={};UpTicks=ReturnTicks=ReelTicks=0;BudgetTick=-1;UsedAimRad={};ObservedCast={};ObservedJerkCount=0;}
+void UTRRodControlComponent::Reset(){bUseStation=false;StationYawRad=0;StationMountM=FVector::ZeroVector;bInitialized=false;Snapshot={};Frozen={};UpTicks=ReturnTicks=ReelTicks=0;BudgetTick=-1;UsedAimRad={};ObservedCast={};ObservedJerkCount=0;}
 void UTRRodControlComponent::ObserveOperationStart(const FTREgiSnapshot& Fishing)
 {
 	if(ObservedCast!=Fishing.CastId){ObservedCast=Fishing.CastId;ObservedJerkCount=0;}

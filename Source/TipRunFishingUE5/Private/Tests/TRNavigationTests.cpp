@@ -182,7 +182,9 @@ bool FTRNavigationAssetsTest::RunTest(const FString&)
  auto* PC=F.World->SpawnActor<ATRPlayerController>();PC->InputConfig=Config->Input;PC->BindSession(Mode->GetSession());
  TestTrue(TEXT("Saved setup navigation input"),PC->SubmitNavigationInput(FVector2D(1,1)));F.Step(120);
  const auto Snapshot=Mode->GetSession()->GetHUDSnapshot();TestTrue(TEXT("Saved boat moves and turns"),Snapshot.Boat.SpeedMps>0 && Snapshot.Boat.HeadingRad>.1);
- PC->RequestPlayerMode(ETRPlayerMode::Fishing);F.Step();TestFalse(TEXT("Saved setup rejects fishing-mode navigation"),PC->SubmitNavigationInput(FVector2D(1,1)));
+ PC->RequestPlayerMode(ETRPlayerMode::Fishing);F.Step();
+ if(Mode->GetSession()->GetPlayerModeSnapshot().bSideSelectionActive){Mode->GetSession()->SubmitCommand(ETRFishingCommandType::SelectPort,{});F.Step();PC->RequestPlayerMode(ETRPlayerMode::Fishing);F.Step();}
+ TestFalse(TEXT("Saved setup rejects fishing-mode navigation"),PC->SubmitNavigationInput(FVector2D(1,1)));
  PC->UnbindSession();Mode->Destroy();return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRNavigationEntryTest,"TipRun.M105R2.PlayerEntryAndHUD",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
@@ -214,7 +216,7 @@ bool FTRNavigationEntryTest::RunTest(const FString&)
  TestFalse(TEXT("No legacy Shift guide in Navigation"),HasVisibleText(TEXT("Shift+Mouse")));
  TestFalse(TEXT("Navigation Deploy rejected"),PC->ActionStarted(ETRPlayerAction::Deploy));
  Inject(Config->Input->NavigationContext,EKeys::W,FInputActionValue(1.f));F.Step(180);
- const auto Before=S->GetHUDSnapshot().Boat;
+ auto Before=S->GetHUDSnapshot().Boat;
  PC->ApplyNavigationLook(FVector2D(40,20));Camera->Zoom(4);
  TestTrue(TEXT("Camera changed distance"),Camera->GetNavigationSnapshot().DistanceM!=Config->Navigation->Parameters.CameraDistanceM);
  PC->ResetPrototypeCamera();const auto C=Camera->GetNavigationSnapshot();
@@ -224,13 +226,20 @@ bool FTRNavigationEntryTest::RunTest(const FString&)
  const auto Handle=S->OnCommandProcessed.AddLambda([&](const FTRFishingCommand& Command,ETRCommandResult Result)
  {
   if(Command.Type!=ETRFishingCommandType::StartFishingMode || Result!=ETRCommandResult::Accepted){return;}
+  if(S->GetPlayerModeSnapshot().bSideSelectionActive){return;}
   TransitionObserved=true;const auto B=S->GetHUDSnapshot().Boat;
   // HUD remains the last published boat until the Publish phase; exact physics boundary is tested separately.
   TestTrue(TEXT("HUD retains last published boat until Publish"),B.PositionM==Before.PositionM && B.VelocityMps==Before.VelocityMps && B.HeadingRad==Before.HeadingRad);
  });
  Inject(Config->Input->NavigationContext,EKeys::Enter,FInputActionValue(true));
  TestTrue(TEXT("Enter only queues mode change"),S->GetPlayerModeSnapshot().Mode==ETRPlayerMode::Navigation);
- F.Step();S->OnCommandProcessed.Remove(Handle);
+ F.Step();
+ if(S->GetPlayerModeSnapshot().bSideSelectionActive)
+ {
+  Inject(Config->Input->NavigationContext,EKeys::Enter,FInputActionValue(false));S->SubmitCommand(ETRFishingCommandType::SelectPort,{});F.Step();
+  Before=S->GetHUDSnapshot().Boat;Inject(Config->Input->NavigationContext,EKeys::Enter,FInputActionValue(true));F.Step();
+ }
+ S->OnCommandProcessed.Remove(Handle);
  TestTrue(TEXT("Published Fishing boat has no navigation speed"),S->GetHUDSnapshot().Boat.SpeedMps<.1);
  TestTrue(TEXT("Navigation Enter enters Fishing without Deploy"),TransitionObserved && S->GetPlayerModeSnapshot().Mode==ETRPlayerMode::Fishing && !S->GetHUDSnapshot().bEgiValid);
  TestTrue(TEXT("Engine and steering stopped"),!S->GetNavigationSnapshot().bEngineActive && S->GetNavigationSnapshot().Steering==0);

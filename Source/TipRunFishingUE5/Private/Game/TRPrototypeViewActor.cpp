@@ -38,6 +38,7 @@ ATRPrototypeViewActor::ATRPrototypeViewActor()
   M->SetStaticMesh(Ball?Sphere.Object:Cube.Object); M->SetCollisionEnabled(ECollisionEnabled::NoCollision);
   M->SetCastShadow(false); M->SetGenerateOverlapEvents(false); return M;
  };
+ ReelVisual=Make(TEXT("ReelObservation"),true);PortGunwale=Make(TEXT("PortGunwale"));StarboardGunwale=Make(TEXT("StarboardGunwale"));
  BoatVisual=Make(TEXT("BoatObservation")); RodVisual=Make(TEXT("RodObservation"));
 	BoatBow=Make(TEXT("BoatBow"),true); BoatCabin=Make(TEXT("BoatCabin")); ReferenceBuoy=Make(TEXT("WorldOriginBuoy"),true);
 	for(int32 I=0;I<42;++I){WorldGrid.Add(Make(*FString::Printf(TEXT("FixedWaterGrid%d"),I)));}
@@ -45,7 +46,7 @@ ATRPrototypeViewActor::ATRPrototypeViewActor()
  SeabedVisual=Make(TEXT("Seabed30m")); BackgroundVisual=Make(TEXT("ObservationBackground"));
  SurfaceEdges.Add(Make(TEXT("SurfaceNorth"))); SurfaceEdges.Add(Make(TEXT("SurfaceSouth")));
  SurfaceEdges.Add(Make(TEXT("SurfaceEast"))); SurfaceEdges.Add(Make(TEXT("SurfaceWest")));
- RodVisual->SetVisibility(false); TipVisual->SetVisibility(false); LineVisual->SetVisibility(false); EgiVisual->SetVisibility(false);
+ ReelVisual->SetVisibility(false);RodVisual->SetVisibility(false); TipVisual->SetVisibility(false); LineVisual->SetVisibility(false); EgiVisual->SetVisibility(false);
  BoatVisual->SetRelativeScale3D(FVector(5,2,.6));
  SeabedVisual->SetRelativeLocation(FVector(0,0,-3020)); SeabedVisual->SetRelativeScale3D(FVector(200,200,.4));
  BackgroundVisual->SetRelativeLocation(FVector(0,10000,0)); BackgroundVisual->SetRelativeScale3D(FVector(400,1,400));
@@ -55,6 +56,7 @@ void ATRPrototypeViewActor::ConfigureMaterials()
  if(!ObservationMaterial){return;}
  auto Tint=[&](UStaticMeshComponent* M,FLinearColor Color)
  { auto* MID=UMaterialInstanceDynamic::Create(ObservationMaterial,this); MID->SetVectorParameterValue(TEXT("Color"),Color); M->SetMaterial(0,MID); };
+ Tint(ReelVisual,FLinearColor(.1f,.3f,.8f));Tint(PortGunwale,FLinearColor(.8f,.15f,.12f));Tint(StarboardGunwale,FLinearColor(.12f,.7f,.3f));
  Tint(BoatVisual,FLinearColor(.85f,.88f,.9f)); Tint(RodVisual,FLinearColor(1,.4f,.02f)); Tint(TipVisual,FLinearColor(1,.8f,.1f));
 	Tint(BoatBow,FLinearColor(.2f,.6f,1)); Tint(BoatCabin,FLinearColor(.35f,.45f,.6f)); Tint(ReferenceBuoy,FLinearColor(1,.2f,.6f));
 	for(const auto& M:WorldGrid){Tint(M,FLinearColor(.06f,.26f,.32f));}
@@ -85,6 +87,7 @@ void ATRPrototypeViewActor::ApplyCameraLook(FVector2D Delta)
 void ATRPrototypeViewActor::ApplyObservation(const FTRHUDSnapshot& S,const FTRRodParameters& Rod,double SurfaceM,double DepthM)
 {
  const bool FishingVisible=S.bSessionValid && S.PlayerMode.bValid && S.PlayerMode.Mode==ETRPlayerMode::Fishing && S.bEnvironmentValid;
+ ReelVisual->SetVisibility(false);
  RodVisual->SetVisibility(false);TipVisual->SetVisibility(false);LineVisual->SetVisibility(false);EgiVisual->SetVisibility(false);
  if(!S.bEnvironmentValid || S.Boat.PositionM.ContainsNaN() || !FMath::IsFinite(SurfaceM) || !FMath::IsFinite(DepthM)){return;}
  CameraCenterM=S.Boat.PositionM;
@@ -93,6 +96,7 @@ void ATRPrototypeViewActor::ApplyObservation(const FTRHUDSnapshot& S,const FTRRo
  const FQuat Heading(FVector::UpVector,S.Boat.HeadingRad);
  BoatBow->SetWorldLocation((S.Boat.PositionM+Heading.RotateVector(FVector(2.1,0,0)))*100); BoatBow->SetWorldRotation(Heading);BoatBow->SetWorldScale3D(FVector(1.3,1.9,.6));
  BoatCabin->SetWorldLocation((S.Boat.PositionM+Heading.RotateVector(FVector(-1,0,.6)))*100);BoatCabin->SetWorldRotation(Heading);BoatCabin->SetWorldScale3D(FVector(1,1.3,.8));
+ for(int Side:{-1,1}){auto* Rail=Side<0?PortGunwale.Get():StarboardGunwale.Get();Rail->SetWorldLocation((S.Boat.PositionM+Heading.RotateVector(FVector(0,Side*1.,1.05)))*100);Rail->SetWorldRotation(Heading);Rail->SetWorldScale3D(FVector(5,.1,.12));}
  const FVector O(0,0,SurfaceM); ReferenceSurfaceM=SurfaceM;
  ReferenceBuoy->SetWorldLocation((O+FVector(0,-4,.35))*100);ReferenceBuoy->SetWorldScale3D(FVector(.5,.5,.7));
  for(int32 I=0;I<21;++I)
@@ -109,12 +113,13 @@ void ATRPrototypeViewActor::ApplyObservation(const FTRHUDSnapshot& S,const FTRRo
  SeabedVisual->SetWorldLocation(TRUnits::MetersToCentimeters(FVector(O.X,O.Y,SurfaceM-DepthM-.2)));
  BackgroundVisual->SetWorldLocation(TRUnits::MetersToCentimeters(O+FVector(0,100,0)));
  if(!FishingVisible){return;}
- const FVector Mount=S.Boat.PositionM+FQuat(FVector::UpVector,S.Boat.HeadingRad).RotateVector(Rod.MountOffsetM);
+ const FVector Mount=S.Station.bValid?S.Station.RodRootWorldM:S.Boat.PositionM+FQuat(FVector::UpVector,S.Boat.HeadingRad).RotateVector(Rod.MountOffsetM);
  // Before first Deploy the configured base pose is a labelled onboard display only.
  const FVector InitialDirection=FRotator(FMath::RadiansToDegrees(Rod.InitialPitchRad),FMath::RadiansToDegrees(S.Boat.HeadingRad+Rod.InitialYawRad),0).Vector();
- const FVector Tip=S.Rod.bValid?S.Rod.TipWorldPositionM:Mount+InitialDirection*Rod.LengthM;
+ const FVector Tip=S.Rod.bValid?S.Rod.TipWorldPositionM:Mount+(S.Station.bValid?FRotator(0,S.Station.FacingWorldDeg,0).Vector():InitialDirection)*Rod.LengthM;
  Segment(RodVisual,Mount,Tip,.045); TipVisual->SetWorldLocation(TRUnits::MetersToCentimeters(Tip)); TipVisual->SetWorldScale3D(FVector(.14));
  RodVisual->SetVisibility(true); TipVisual->SetVisibility(true);
+ ReelVisual->SetVisibility(S.Station.bValid);ReelVisual->SetWorldLocation((Mount+(Tip-Mount).GetSafeNormal()*.15-FVector(0,0,.09))*100);ReelVisual->SetWorldScale3D(FVector(.17,.17,.13));
  const bool Live=S.bEgiValid && S.Egi.bWorldPositionValid && !S.Egi.WorldPositionM.ContainsNaN();
  LineVisual->SetVisibility(Live); EgiVisual->SetVisibility(Live);
  if(Live)

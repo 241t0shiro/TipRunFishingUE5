@@ -192,3 +192,10 @@ NavigationとCameraの自然さ、選んだ船首を保つ横流し、左右舷�
 - 現行モデルは環境と推力を単一Velocityへ積分しており、由来別の履歴分離は行わない。今回許可された簡潔な方式として、受理されたFishing開始Command内でCoordinator→Boat Driftへ`ResetDynamicVelocityForFishing`を依頼し、Velocity/Speedと前Tickの速度寄与を0へ戻す。Navigation ComponentのEngine/Throttle/BoostBlend/Steering/Assistも解除する。
 - Position/Heading/Forward/RodTip、環境設定、登録、固定時計は保持。Command確定時点で位置/Headingは完全に同じ。後続Boatフェーズから既存BのWind/SurfaceCurrent/船体応答/Drag/Inertiaだけで自然Driftを再形成する。無風無潮では静止、環境ありでは環境による変位だけが生じる。拒否されたMode変更では速度をリセットしない。
 - Boost係数/通常Navigation速度/表示の手動合格箇所は変更しない。速度の減算推定やClampで高速残量を隠さず、Fishing開始という明示境界で動的状態を解除する。Navigationへの復帰時にはFishingの自然Driftをリセットしない。
+
+### R3 Fishing Station（2026-09-24）
+UTRFishingStationDataAssetがPort/Starboard各1行のPlayerM/EyeM/CameraM/RodMountM/FacingDegを保持する。船ローカル+X前方/+Y右舷、距離m、角度deg。World = BoatPositionM + Heading回転(Local)。左舷はY負・外向き-90度、右舷はY正・+90度。BoatのDriftで全Anchorが追従し、VelocityをCamera方向へ合わせない。
+Prototype仮値: Player=(0.6,±0.6,0.3)、Eye/Camera=(0.6,±0.4,1.6)、RodMount=(0.85,±1,1.25)m。左右の符号はPort負/Starboard正。Camera FOV80、初期Pitch -20、Pitch[-65,10]、Yaw±55度、感度0.2度/入力単位。全てDataAssetで調整可能、製品値ではない。既存Navigation/環境Driftモデルは変更しない。
+
+### 後続R7 Tip-run環境調整（文書のみ・未実装）
+Wind/Surface Current/Depth Currentは独立Vector。Prototype標準で3つを同方向・同速度へ固定しない。代表条件ではBoatがWind＋Surface Current＋hull responseで流れ、EgiはDepth Current＋weight＋line tensionへ応答する。Stay中に相対位置差が生じ、Boat先行によってRod/LineからEgiが一定量引かれる状態を観測できるよう調整する。常に理想状態を強制せず、Wind/Current/Heading/weightにより良い流しと悪い流しを維持する。今回環境値/Drift計算は変更しない。

@@ -205,6 +205,7 @@ struct TIPRUNFISHINGUE5_API FTRRodSnapshot
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double FinalPitchRad=0;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double FinalYawRad=0;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector TipWorldPositionM=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly) FVector RootWorldPositionM=FVector::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector TipDirection=FVector::ForwardVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FQuat TipWorldRotation=FQuat::Identity;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double ShakuriStartBasePitchRad=0;

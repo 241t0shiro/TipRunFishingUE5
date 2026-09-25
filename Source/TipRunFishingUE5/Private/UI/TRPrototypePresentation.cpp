@@ -72,6 +72,7 @@ TArray<FTRPrototypeReadoutRow> UTRFishingHUDWidget::BuildReadout(const FTRHUDSna
 TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapshot& S)
 {
  TArray<FTRPrototypeGuideRow> Rows;
+ if(S.PlayerMode.bSideSelectionActive){Rows.Add({BuildCompactGuide(S),true});return Rows;}
  if(S.PlayerMode.bValid && S.PlayerMode.Mode==ETRPlayerMode::Navigation)
  {
   const bool Enabled=S.bSessionValid && S.PlayerMode.bNavigationInputAllowed && S.Navigation.bConfigured;
@@ -80,8 +81,10 @@ TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapsho
   Rows.Add({LOCTEXT("NavigationPause","P：一時停止／再開"),S.bSessionValid});
   return Rows;
  }
+ if(S.Station.bValid){Rows.Add({LOCTEXT("ChangeSide","C：釣り座変更"),S.bCanChangeEquipment && !S.bPaused});}
  auto Add = [&](FText Text, ETRFishingCommandType Command) { Rows.Add({Text,S.bSessionValid && !S.bPaused && S.AvailableCommands.Contains(Command) && !S.UnmappedPrimaryInputs.Contains(Command)}); };
- Add(LOCTEXT("GuideMouse", "マウス移動：竿操作"),ETRFishingCommandType::RodAim);
+ if(S.Station.bValid){Rows.Add({LOCTEXT("GuideFPSMouse", "マウス移動：視線操作"),S.bSessionValid && !S.bPaused});}
+ else{Add(LOCTEXT("GuideMouse", "マウス移動：竿操作"),ETRFishingCommandType::RodAim);}
  Add(LOCTEXT("GuideRight", "右クリック：シャクリ"),ETRFishingCommandType::Jerk);
  Add(LOCTEXT("GuideLeft", "左クリック長押し：巻き上げ"),ETRFishingCommandType::RetrieveStarted);
  Add(LOCTEXT("GuideRelease", "左クリックを離す：巻き上げ停止"),ETRFishingCommandType::RetrieveStopped);
@@ -96,12 +99,21 @@ TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapsho
 }
 FText UTRFishingHUDWidget::BuildCompactGuide(const FTRHUDSnapshot& S)
 {
+ if(S.PlayerMode.bSideSelectionActive)
+ {
+  const auto Side=S.PlayerMode.PendingSide;
+  return FText::Format(LOCTEXT("SideSelect","釣り座を選択\nA：左舷 {0}  D：右舷 {1}\nEnter：確定  Backspace：取消"),
+   Side==ETRFishingSide::Port?LOCTEXT("ChosenPort","◀ 選択中"):FText::GetEmpty(),Side==ETRFishingSide::Starboard?LOCTEXT("ChosenStarboard","選択中 ▶"):FText::GetEmpty());
+ }
+
  if(S.PlayerMode.bValid && S.PlayerMode.Mode==ETRPlayerMode::Navigation)
  {
   const FText Status=S.bBoostRearmRequired ? LOCTEXT("BoostRearm","高速航行: 再入力待ち") :
    (S.Navigation.bBoostRequested && S.Navigation.Throttle!=0 ? LOCTEXT("BoostOn","高速航行: ON") : LOCTEXT("BoostOff","高速航行: OFF"));
   return FText::Format(LOCTEXT("NavigationBoostStatus","W/S：前進／後退  A/D：操舵  Shift：高速航行\nMouse：視点  Wheel：距離\nHome：視点リセット  Enter：釣り開始\n{0}"),Status);
  }
+ if(S.Station.bValid && S.bCanChangeEquipment){return LOCTEXT("FishingReadySideGuide","Mouse：視線 / Enter：投入 / Tab：装備\nC：釣り座変更 / E：Navigationへ戻る");}
+ if(S.Station.bValid){return LOCTEXT("FishingFPSGuide","Mouse：視線 / 右：シャクリ / 左保持：巻取り\nF：再落下 / Q：回収 / Enter：投入 / Tab：装備\nE：Navigationへ戻る（回収後Ready）");}
  return LOCTEXT("FishingCompactReturn","Mouse：竿 / 右：シャクリ / 左保持：巻取り\nF：再落下 / Q：回収 / Enter：投入 / Tab：装備\nE：Navigationへ戻る（回収後Ready）");
 }
 FText UTRFishingHUDWidget::FormatSnapshot(const FTRHUDSnapshot& S)

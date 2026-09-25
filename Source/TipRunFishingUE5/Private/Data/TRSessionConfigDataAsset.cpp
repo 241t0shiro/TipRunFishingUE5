@@ -1,6 +1,7 @@
 #include "Data/TRSessionConfigDataAsset.h"
 #include "Data/TRNavigationTuningDataAsset.h"
 #include "Misc/DataValidation.h"
+#include "Data/TRFishingStationDataAsset.h"
 #include <limits>
 #include "Data/TROceanAreaDataAsset.h"
 #include "Data/TRBoatTuningDataAsset.h"
@@ -16,6 +17,7 @@ bool UTRSessionConfigDataAsset::ValidateStartup(TArray<FText>& Errors) const
 		Errors.Add(FText::FromString(TEXT("Startup requires valid clock, ocean, boat, input and finite initial transform")));
 		return false;
 	}
+	if(FishingStations && (!FishingStations->Parameters.Validate() || !Rod || !Navigation)){Errors.Add(FText::FromString(TEXT("Stations require valid anchors, Rod and Navigation")));return false;}
 	FTREquipmentSnapshot Equipment;
 	if(Navigation && (!IsValid(Navigation) || !Navigation->Parameters.Validate() || Boat->Parameters.ModelRevision!=2 || !Input->NavigationContext))
 	{Errors.Add(FText::FromString(TEXT("Navigation requires explicit revision2 boat, tuning and Navigation input context")));return false;}

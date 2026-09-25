@@ -126,7 +126,11 @@ enum class ETRFishingCommandType : uint8
 	ReturnNavigationMode,
 	NavigationInput,
 	NavigationBoostStarted,
-	NavigationBoostStopped
+	NavigationBoostStopped,
+	SelectPort,
+	SelectStarboard,
+	CancelSideSelection,
+	BeginSideChange
 };
 
 UENUM(BlueprintType)

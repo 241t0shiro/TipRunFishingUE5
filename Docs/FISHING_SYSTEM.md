@@ -460,3 +460,10 @@ UpのRodTip移動→Cライン拘束→Egi作用を唯一の伝達経路とし�
 ### R1との境界（2026-09-18）
 
 PlayerModeはFishingStateへ追加しない。NavigationではSessionが釣りCommandを拒否し、FishingフェーズのRod/Egi更新を行わない。Fishingへは固定Mode Commandで入り、既存の投入・回収・Quick・装備ロックを使用する。Mode退出はReady/船上/Cast終了/Unlockedに限定するため、海中エギを破棄して操船へ移る経路はない。Shakuri Sequence/Slack-aware Reelは依然R5/R6の未実装設計。R1でその数値式や既存Gシャクリを変更していない。
+
+### R3 Rod Mount接続（2026-09-24）
+Side確定時、RodControlへ選択舷のMount/Facingを設定する。Root/TipはBoat Headingを通してWorldへ変換し、既存の空間Line/Egiが実際のTipを使用する。船首中央の旧MountはR3保存Prototypeの正本にしない。RodSnapshot.RootWorldPositionMを公開する。
+R3ではMouseを限定FPS視線へ使用し、Rod基準姿勢へ同時配送しない。CameraとRodを同一Transformへ固定せず、右クリックの既存Shakuriは舷側Rodから継続する。R4のRod/Camera入力統合・Sequence・Slack-aware Reelは未実装。表示ActorはSnapshotを読むだけで、Reel/Gunwaleは簡易表示。NavigationではFishing表示を非表示にして再利用する。
+
+### 後続R5/R6 Shakuri/Reel補足（文書のみ・未実装）
+Rodをあおりながら約1 handle rotationを巻く複合操作を基準とする。Prototype採用候補は1回転≒0.8m nominal retrieve（製品値ではない）。Drag/Line tension/slipにより実効巻取り量が0.8m未満になり得る構造とする。1Shakuriで数mのLineを回収する現行近似を後続で廃止/再設計する。固定2m Reel Pulse等が残る場合もR5/R6対象。今回係数/Simulation実装は変更しない。

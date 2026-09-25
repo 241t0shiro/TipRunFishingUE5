@@ -4,6 +4,7 @@
 #include "Data/TREquipmentData.h"
 #include "Data/TRPlayerModeTypes.h"
 #include "Data/TRNavigationTuningDataAsset.h"
+#include "Data/TRFishingStationDataAsset.h"
 #include "TRHUDSnapshot.generated.h"
 
 // Display copies only. No simulated state or future AI metrics are owned by UI.
@@ -11,6 +12,8 @@ USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 {
 	GENERATED_BODY()
+ UPROPERTY(BlueprintReadOnly) FTRFishingStationSnapshot Station;
+ UPROPERTY(BlueprintReadOnly) FTRFishingCameraSnapshot FishingCamera;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRPlayerModeSnapshot PlayerMode;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRNavigationSnapshot Navigation;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRNavigationCameraSnapshot NavigationCamera;

@@ -702,3 +702,69 @@ R2変更ファイル（Sourceは`Source/TipRunFishingUE5`配下）:
 - 今回変更（Source/TipRunFishingUE5配下）: BoatDriftComponent h/cpp、SimulationWorldSubsystem h/cpp、FishingSessionActor cpp、PlayerController h/cpp、HUDSnapshot h、PrototypePresentation cpp、Tests/NavigationTests cpp、Tests/PlayerModeTests cpp。文書AGENTS/GAME_DESIGN/BOAT_SYSTEM/UI_SPEC/ROADMAP。Content/Config/係数は追加変更なし、以前の差分を保持。
 - 今回由来の残存警告0。既存MSVC推奨版/include順通知、試験開始前のCondition failed Error表記19件/Editorレイアウト警告、非Win64 SDK不足は残る。旧成功履歴を今回手動合格の代用にしない。
 - 実装/自動検証は合格。実PIEは未実施、UI_SPEC末尾の今回分をユーザーが再確認するまでR2正式合否は保留。R3以降/H/M11未着手。
+
+### R3 実装・自動検証記録（2026-09-24）
+- ユーザーがR1/R2を正式合格。R3だけ実装。R3自動検証は合格、左右舷の実PIE構図は未確認。R4以降/H/M11未着手。
+- Sessionの固定Commandで開始→毎回未選択→左右舷選択→確定/取消。Navigation中の遷移準備として実装。選択中の操舵/Deployを拒否。確定時はR2のNavigation応答/速度解除を維持。
+- 新規FishingStation DataAsset、選択舷の実RodMount、一人称Fishing Camera、簡易Reel/左右色別Gunwale、Mode別ガイドを接続。Cameraは表示のみ、Egi/Lineの積分は変更なし。設定/手順はBOAT_SYSTEM/UI_SPEC末尾。
+- **R3 4件＋回帰32件＝36件成功、試験内errors/warnings=0**。回帰はR1 4、R2 14、D Rod 5、F HUD 6、G Asset/保存接続/CompactHUD 3。最後の詳細ガイド修正後、F 6＋R3選択1の7件も成功。無関係な全物理試験は実施していない。
+- R3試験: SelectionInputAndLifetime（A/D/取消/確定・操舵遮断・6往復・破棄）、AnchorsCameraRodAndVisuals（両舷×Heading0/90/180度・FPS外向き・Reel/Gunwale初期16:9視錐台内・Mouse制限とHeading/Rod独立・Drift追従・Deploy）、FixedQueuePauseAndFPS（同Tick順序・30/60/120fps一致・Pause）、SavedStations（保存参照/重複Side不正）。画面描画の見やすさは自動試験で代替しない。
+- UHT **18生成ファイル**、Runtimeおよび新規試験の実C++コンパイルとDevelopment Editor Win64成功。最後のHUD変更も実コンパイル＋リンク成功。UE5.8.2 / MSVC14.51.36257 / SDK10.0.22621.0。
+- 証跡: Saved/Logs/M105R3Build.log、M105R3TestsBuild.log、M105R3FinalBuild.log。Saved/Automation/M105R3Migration/index.json（明示保存1件）、M105R3Final/index.json（36件）、M105R3HUD/index.json（最終7件）、対応ログ。終了0とJSON失敗0を確認。git diff --check成功。
+- AssetはUE SavePackageの明示TRMigrateM105R3経路でStation新設と既存Session参照だけ保存。既存資産の事前SHA256との差はSessionのみ。Map/Input等は保持。
+- 今回由来の残存警告0。既存MSVC推奨版/include順通知、起動前Condition failed診断19件・Editorレイアウト警告、非Win64 SDK不足は残る。GitのLF/CRLF通知あり。実PIEは自動実行せずUI_SPEC末尾の手動再評価待ち。
+- R4を接続する型/Anchor/Snapshotは用意済みだが、R3正式合否は手動PIE後。次タスクへ自動進行しない。
+
+変更ファイル（今回のみ）:
+- `AGENTS.md`
+- `Content/TipRun/Prototype/M105/Data/DA_TR_M105Session_Prototype.uasset`
+- `Content/TipRun/Prototype/M105/Data/DA_TR_R3FishingStations_Prototype.uasset`
+- `Docs/BOAT_SYSTEM.md`
+- `Docs/FISHING_SYSTEM.md`
+- `Docs/GAME_DESIGN.md`
+- `Docs/ROADMAP.md`
+- `Docs/UI_SPEC.md`
+- `Source/TipRunFishingUE5/Private/Data/TRFishingStationDataAsset.cpp`
+- `Source/TipRunFishingUE5/Private/Data/TRSessionConfigDataAsset.cpp`
+- `Source/TipRunFishingUE5/Private/Fishing/TRRodControlComponent.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRFishingSessionActor.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRGameModeBase.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRPlayerCameraManager.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRPlayerController.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRPlayerModeComponent.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRPrototypeViewActor.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRFishingStationTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRNavigationTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRPrototypeSetupTests.cpp`
+- `Source/TipRunFishingUE5/Private/UI/TRPrototypePresentation.cpp`
+- `Source/TipRunFishingUE5/Public/Data/TRFishingStationDataAsset.h`
+- `Source/TipRunFishingUE5/Public/Data/TRHUDSnapshot.h`
+- `Source/TipRunFishingUE5/Public/Data/TRPlayerModeTypes.h`
+- `Source/TipRunFishingUE5/Public/Data/TRSessionConfigDataAsset.h`
+- `Source/TipRunFishingUE5/Public/Data/TRSnapshots.h`
+- `Source/TipRunFishingUE5/Public/Data/TRTypes.h`
+- `Source/TipRunFishingUE5/Public/Fishing/TRRodControlComponent.h`
+- `Source/TipRunFishingUE5/Public/Game/TRFishingSessionActor.h`
+- `Source/TipRunFishingUE5/Public/Game/TRPlayerCameraManager.h`
+- `Source/TipRunFishingUE5/Public/Game/TRPrototypeViewActor.h`
+
+### R3 Fishing Ready再選択・後続仕様補足（2026-09-24）
+- ユーザー手動合格: Port/Starboard一人称構図、Gunwale/Rod/Reel/Line、Mouse Look、Drift追従。今回不足していたFishing Ready内の舷変更だけ追加。
+- CでBeginSideChange固定Command、既存SelectPort/SelectStarboard/StartFishingMode（選択確定）/Cancelを再利用。Ready/Onboard/Cast終了/UnlockedをSessionで再検証。確定後もFishingで、船の位置/Heading/動的速度をリセットしない。取消は元Side。Enter物理解放で共有Actionを再受付可能にし、選択UIで解放を失わない。
+- **R3 5件＋関連回帰27件＝最終32件成功、試験内errors/warnings=0**。回帰R1 4、R2 14、F 6、G保存/表示3。新規FishingReadyReselectionで左右6往復、取消、船Drift継続、Eye/Camera/Rod接続、表示部品再利用、HUD、FreeFall/Stay/Retrieve/Quick中拒否、Enter解放を検証。既存R3試験でHeading/両舷Gunwale/Mode往復/固定更新を回帰。
+- 初回は31成功/1失敗。浅い投入直後から回収した試験が船上帰還しておりRetrieve/Quick状態を検査できなかった。600固定ステップ沈める試験条件へ修正して成功。その後Enter解放も補強し全32件を再実行、成功。
+- UHT7生成ファイル、実C++12＋リンク等15アクション成功。試験修正・Enter修正後も実C++＋リンクのDevelopment Editor Win64成功。証跡Saved/Logs/R3ReselectBuild.log、Build2/Build3相当ログ、Saved/Automation/R3ReselectVerified/index.json、Saved/Logs/R3ReselectVerified.log。プロセス終了0、JSON失敗0、git diff --check成功。
+- 今回のコード変更: Public/Data/TRTypes.h、Private/Game/TRFishingSessionActor.cpp、TRPlayerController.cpp、Private/UI/TRPrototypePresentation.cpp、Private/Tests/TRFishingStationTests.cpp。文書AGENTS/GAME_DESIGN/BOAT_SYSTEM/FISHING_SYSTEM/UI_SPEC/ROADMAP。前回差分を保持し、今回Content/Config/係数を追加変更しない。
+- 今回由来の警告0。既存MSVC推奨版/include順通知、起動前Condition failed診断/Editorレイアウト/非Win64 SDK不足は残る。C変更の実PIEは未実施、UI_SPEC末尾の左右変更/取消/投中拒否を手動確認後にR3正式完了可能。
+- 後続文書のみ: R4はW/S Pitch・A/D Yawの釣り座固定FPS LookとMouse Rod独立（UI_SPEC末尾）。R5/R6は1 handle rotation≒0.8m nominal retrieveのPrototype採用候補、drag/tension/slipによる実効低下、数m固定Pulse廃止/再設計（FISHING_SYSTEM末尾）。R7は独立したWind/Surface/Depth Currentと相対位置・Boat先行牽引、条件に応じた良い/悪い流し（BOAT_SYSTEM末尾）。これらのコード実装/H/M11は行っていない。
+
+### R3 Cancel経路修正（2026-09-25）
+- 手動PIEでR3の他項目はほぼ合格。Fishing Readyの舷選択Cancel後に外部Camera/操作不能となる問題だけ対応。前回までの差分を保持し、Content/Config/物理係数を追加変更しない。
+- コード調査で保存Fishing InputのBackspace→Cancel→EndFishingと、生キーのCancelSideSelectionが重複していた。Session終了すると有効なStationが消え、Cameraが観測ViewTargetへ戻り、釣り操作を受け付けなくなる経路があった。従来の生キーのみの試験は遅延したEnhanced Startedを含まなかった。R3ではCancelを選択中の取消専用とし、終了後のStartedもSession終了へ送らない。
+- Origin/PreviousFishingSideをSnapshotに明示し、取消時は開始元Modeを検証し元Sideへ復帰。位置/Heading/VelocityをCommand境界で完全保持、Lookも維持。Mode変更/Boatリセットを経由しない。
+- **R3 6件＋R1/R2/F/G回帰27件の最終結果すべて成功**。新規CancelOriginAndEnhancedInputは実LocalPlayer/Enhanced Context/Camera Updateを使用。Navigation取消、両舷各10回取消、元Side/FPS/排他的Context/表示再利用、Command時の船動態完全保持、遅延Cancel Startedの無害化、C再使用/Deploy/Quick/Navigation復帰を確認。
+- 初回は既存32件成功、新規1件は試験用LocalPlayerのOuter不正で失敗。Engine所有へ修正し新規試験を再実行、errors/warnings=0で成功。Runtime変更はその間なし。ビルド初回の試験変数PIとUE定数の衝突も改名で解消。
+- UHT6生成ファイル、Runtimeの実C++コンパイル、最終Development Editor Win64成功。試験修正も実コンパイル＋リンクを実施。UE5.8.2/MSVC14.51.36257/SDK10.0.22621.0。git diff --check成功。
+- 証跡: Saved/Logs/R3CancelBuild.log、R3CancelBuild2.log、R3CancelBuild3.log。Saved/Automation/R3Cancel/index.json（初回33件）、R3CancelFinal/index.json（修正1件成功）、対応するR3CancelTests.log/R3CancelFinal.log。終了コード0とJSONを確認。既存MSVC/include順通知、試験前Editor診断/非Win64 SDK不足は残る。今回由来の残存警告0。
+- 今回変更コード: Public/Data/TRPlayerModeTypes.h、Private/Game/TRPlayerModeComponent.cpp、TRFishingSessionActor.cpp、TRPlayerController.cpp、Private/Tests/TRFishingStationTests.cpp。文書AGENTS/GAME_DESIGN/UI_SPEC/ROADMAP。R4以降/H/M11未着手。
+- 実装・自動試験は合格。UI_SPEC末尾の今回Cancel再PIEをユーザーが確認後、R3正式完了可能。自動PIE/手動合格の代行宣言は行わない。
