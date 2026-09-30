@@ -1,6 +1,7 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Data/TRRuntimeObservation.h"
 #include "TRPrototypeViewActor.generated.h"
 class ATRPlayerController;
 class UStaticMeshComponent;
@@ -14,6 +15,7 @@ class TIPRUNFISHINGUE5_API ATRPrototypeViewActor : public AActor
 	GENERATED_BODY()
 public:
 	ATRPrototypeViewActor();
+ FTRRuntimeObservation GetRuntimeObservation() const { return RuntimeObservation; }
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
 	virtual void BeginPlay() override;
@@ -34,6 +36,8 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="Prototype|View") TObjectPtr<UStaticMeshComponent> LineVisual;
 	UPROPERTY(VisibleAnywhere, Category="Prototype|View") TObjectPtr<UStaticMeshComponent> EgiVisual;
 private:
+ FTRRuntimeObservation RuntimeObservation;
+ void CaptureRuntimeObservation(const FTRHUDSnapshot& S, ATRPlayerController* PC);
  UPROPERTY() TObjectPtr<UStaticMeshComponent> ReelVisual;
  UPROPERTY() TObjectPtr<UStaticMeshComponent> PortGunwale;
  UPROPERTY() TObjectPtr<UStaticMeshComponent> StarboardGunwale;

@@ -467,3 +467,39 @@ R3ではMouseを限定FPS視線へ使用し、Rod基準姿勢へ同時配送し�
 
 ### 後続R5/R6 Shakuri/Reel補足（文書のみ・未実装）
 Rodをあおりながら約1 handle rotationを巻く複合操作を基準とする。Prototype採用候補は1回転≒0.8m nominal retrieve（製品値ではない）。Drag/Line tension/slipにより実効巻取り量が0.8m未満になり得る構造とする。1Shakuriで数mのLineを回収する現行近似を後続で廃止/再設計する。固定2m Reel Pulse等が残る場合もR5/R6対象。今回係数/Simulation実装は変更しない。
+
+### R4 Rod Base Aim接続（2026-09-25）
+R3の選択Side RodMount/Facing＋DのBaseYaw/BasePitch＋TemporaryShakuriOffsetを維持。MouseでBase Aimのみ操作、Camera LookでBaseを変更しない。RodのMin/MaxYawRad、Min/MaxPitchRad、SensitivityXRad/YRad、bInvertX/Y、MaxAimRateRadPerSは既存DataAssetを使用し係数変更なし。Outward Clamp/有限数/海面整合/固定Tick当たり角度予算は従来どおり。
+FreeFall等のActive CastとReadyで固定RodAimを受理、Quick中は既存拒否。Snapshotから表示へ接続しControllerが表示Actorを直接動かさない。右/左Action・Shakuri/Reel量・環境は変更せず、R5/R6/R7の後続再設計を今回実装しない。
+
+
+### R4 Rod Geometry / Transform（2026-09-28・手動PIE不合格の旧方式）
+- RodTuning.Parameters.LengthMを固定の物理長（m）の正本として初期化時に凍結し、RodSnapshot.LengthMへ公開する。既存保存値/感度/Clamp/巻取り係数は変更しない。
+- StationBasis = Boat Heading + 選択舷Facing。現在の船はHeadingのみでroll/pitchを持たず、Station UpはWorld Up。毎固定Tick、独立BaseYaw/BasePitchとTemporaryShakuriOffsetからFinal角度を求め、Direction = normalize((Forward*cos(Yaw)+Right*sin(Yaw))*cos(Pitch)+Up*sin(Pitch))、Tip = Root + Direction*LengthM。前回Tip/QuaternionへDeltaを累積しない。Shakuri中も物理長は固定。
+- Pure YawではRootとPitchを固定し、Station LocalのTip Zは不変。Pure PitchでYawを変更しない。これはWorld/Station座標の契約であり、透視画面上のpixel座標や投影長を一定にする契約ではない。Camera追従やRod伸縮による画面補正を行わない。
+- 表示は有効RodSnapshotのRoot/Tipを一組として使用。従来のStation由来Root＋RodSnapshotのTipを組み合わせる経路は、更新時点や設定が異なると長さが崩れるため修正。Engine Cubeの1m長軸へRoot→Tip距離を設定し、太さ0.045mは別軸。位置だけUE境界でm→cmへ一度変換する。表示からSimulationへの書戻しなし。
+- 調査では旧Simulation式にも固定長・独立Yaw/Pitchがあり、累積回転/位置加算/二重単位変換は見つからなかった。今回の表示端点修正がユーザーPIEの全症状の原因だったとは未確認。実長とStation Local Zの検証結果と、画面上の見え方を区別して手動再評価する。
+- R5以降のSequence/0.8m巻取り/Slack-aware/環境調整は行っていない。
+
+
+### R4 Screen-space Rod Control（2026-09-28・現行契約）
+今回のユーザー再評価により、上記のEuler Base Aimと「World Z一定なら合格」という受入は廃止。以下が保存Fishing Stationを使用するPrototypeの正本。旧D単体fixture等のStation未設定経路は互換試験用に保持し、保存Prototypeで意図しないFallbackは許可しない。
+
+- Mouseの正本はRodSnapshot.ScreenControl（X右、Y上）の2D状態。単位はCamera水平半画面幅で、Yも同じ尺度を使う。Mouse X/Yはそれぞれの値だけを感度・反転・1固定Tickの軸別速度予算・矩形Clampを通して更新する。BaseYaw/Pitchは結果の方向から導出する互換観測値となる。
+- CameraのWASD Lookは従来どおりCameraManagerで更新。Rodへ渡す相対Yaw/PitchだけをController→Session.SubmitRodView→固定Input Queueで配送する。Mouse配送時も先に同TargetTickのRodView、次にRodAimを積み、CastId/登録世代/ModeEpoch/Tick/Sequenceを再検証する。Camera/WidgetからRodの状態を直接更新しない。
+- WASDはScreenControlを変更しない。毎固定Tick、現在のCameraを基準に同じ画面目標を解くため、視線変更に伴ってWorldのRod方向は変わり得る。旧「WASDでWorld Rod姿勢も絶対不変」ではない。MouseはCamera角度を変更しない。
+- Rootは凍結した選択Station.RodMountM。RootWorld = BoatPosition + BoatHeading回転(RodMountM)。CameraもStation.CameraMから同様に計算。Mouse/ライン張力/回収/シャクリでRootLocalを変えない。
+- Lensは同じStationのFOVを使用。実Fishing ViewportにもAspectRatio_MaintainXFOVを明示し、LocalPlayerのY-FOV既定値が逆投影と食い違わないようにする。Navigationへ戻るとこのFishing専用指定を解除する。Camera Ray = normalize(Forward + Right*ScreenX*tan(FOV/2) + Up*ScreenY*tan(FOV/2))。Root中心・LengthM半径の球との正の遠方交点を選ぶ。保存PrototypeではCameraが球内にあり前方出口は一意。交差しない外部設定はRay最寄り点を球へ射影し、有限数/前方/海面を検証する。
+- 下向き視線で海面を突き抜けないよう、Camera高さとLengthM＋Camera–Root距離から保守的な最小仰角を求める。Xに依存しない有効Y区間へBase Yだけを線形写像し、矩形の操作領域を保つ。Control自体はCamera変更で書き換えない。範囲外設定の最終防御も球面上で行い、bScreenSafetyLimitedを公開。通常範囲だけでなくCamera上下/左右限界でも再投影の軸独立を試験する。
+- FinalTipからDirection=normalize(Tip-Root)、WorldRotationを毎固定Tick再構築。LengthMは初期化時に凍結した物理長2m（現保存Prototype）で固定。m→cmは表示境界のみ。
+- 既存ShakuriのUp/Return Tickと1入力1動作/予約は保持。Base Screen Controlへ、既存角度プロファイルをCamera平面Yへ換算した一時Offsetだけ加える。Screen上限で制限し、終了後は同じBaseへ復帰。Root/Length不変、RodTip→Line→Egiの経路を維持。R5 Sequenceや巻取り量/Drag/環境係数は変更しない。
+- Quick Retrieveの旧処理はRod更新より前にreturnし、動くBoatに対して古いWorld位置を残していた。さらに完了時のInvalidateで初期姿勢表示へ切り替わった。現行はQuick中もRodを先に固定更新し、返船成功時には有効Snapshotを維持する。Egi側の短時間完了/Ready/Unlock/通知一度は従来どおり。QuickのためのGrip移動/Camera移動/Controlリセットは行わない。Camera/GripのWorld移動はBoat Driftのみ追従する。
+- Presentationは同一RodSnapshotのRoot/Tipと固定径から生成。操作中のLength変更やCamera自動追従で見え方を補正しない。
+
+Prototype調整（製品値ではない）:
+- RodTuning.Parameters.Screen: Min=(-0.28,0.02)、Max=(0.28,0.28)、Initial=(0,0.15)、Sensitivity=(0.004,0.004)/Mouse単位、MaxRatePerS=1.5、MaxProjectedY=0.5、SurfaceClearanceM=0.02。
+- 同じRod DataAsset内のLengthM/既存Shakuri時刻・角度・Reel係数は保持。Euler Clamp/感度は旧Station未設定経路の互換項目で、現行Screen操作のClamp/感度を上書きしない。
+- 保存StationのRodMount=(0.6,±1,1.1)mへ調整。Eye/Camera/FOVは維持。Gripを視線中央寄り/低めに配置し、通常操作での見かけの長さが極端に変わる構図を抑える。
+- SnapshotにScreenControl、ResolvedScreenControl、bScreenControl、bScreenSafetyLimited、AimCameraWorldM/Rotation/FOVDegを追加。Root/Tip/Length/回転は継続使用。
+
+正式受入はPlayer Cameraへの再投影。Pure Mouse XでProjected Y不変、Pure YでProjected X不変、両舷×Heading0/90/180/270、Camera Look後、連続入力、Clamp、実長/表示長/投影長、Quick前中後を評価する。Worldの固定長試験だけで手動合格を代用しない。

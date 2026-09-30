@@ -67,6 +67,7 @@ TArray<FTRPrototypeReadoutRow> UTRFishingHUDWidget::BuildReadout(const FTRHUDSna
   Rows[1].Label=LOCTEXT("Mode","モード");
   Rows[1].Value=Value(S.bPaused?TEXT("一時停止 / 操船 (Navigation)"):TEXT("操船 (Navigation)"));
  }
+ Add(LOCTEXT("RuntimeDiagnostics", "R4A-1 Runtime診断（読取専用）"),S.RuntimeDiagnostics);
  return Rows;
 }
 TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapshot& S)
@@ -83,7 +84,7 @@ TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapsho
  }
  if(S.Station.bValid){Rows.Add({LOCTEXT("ChangeSide","C：釣り座変更"),S.bCanChangeEquipment && !S.bPaused});}
  auto Add = [&](FText Text, ETRFishingCommandType Command) { Rows.Add({Text,S.bSessionValid && !S.bPaused && S.AvailableCommands.Contains(Command) && !S.UnmappedPrimaryInputs.Contains(Command)}); };
- if(S.Station.bValid){Rows.Add({LOCTEXT("GuideFPSMouse", "マウス移動：視線操作"),S.bSessionValid && !S.bPaused});}
+ if(S.Station.bValid){Rows.Add({LOCTEXT("GuideFPSMouse", "Mouse：ロッド操作 / W/S：視点 上下 / A/D：視点 左右"),S.bSessionValid && !S.bPaused});}
  else{Add(LOCTEXT("GuideMouse", "マウス移動：竿操作"),ETRFishingCommandType::RodAim);}
  Add(LOCTEXT("GuideRight", "右クリック：シャクリ"),ETRFishingCommandType::Jerk);
  Add(LOCTEXT("GuideLeft", "左クリック長押し：巻き上げ"),ETRFishingCommandType::RetrieveStarted);
@@ -112,8 +113,8 @@ FText UTRFishingHUDWidget::BuildCompactGuide(const FTRHUDSnapshot& S)
    (S.Navigation.bBoostRequested && S.Navigation.Throttle!=0 ? LOCTEXT("BoostOn","高速航行: ON") : LOCTEXT("BoostOff","高速航行: OFF"));
   return FText::Format(LOCTEXT("NavigationBoostStatus","W/S：前進／後退  A/D：操舵  Shift：高速航行\nMouse：視点  Wheel：距離\nHome：視点リセット  Enter：釣り開始\n{0}"),Status);
  }
- if(S.Station.bValid && S.bCanChangeEquipment){return LOCTEXT("FishingReadySideGuide","Mouse：視線 / Enter：投入 / Tab：装備\nC：釣り座変更 / E：Navigationへ戻る");}
- if(S.Station.bValid){return LOCTEXT("FishingFPSGuide","Mouse：視線 / 右：シャクリ / 左保持：巻取り\nF：再落下 / Q：回収 / Enter：投入 / Tab：装備\nE：Navigationへ戻る（回収後Ready）");}
+ if(S.Station.bValid && S.bCanChangeEquipment){return LOCTEXT("FishingReadySideGuide","W/S：視点 上下 / A/D：視点 左右\nMouse：ロッド操作 / 右クリック：シャクリ / 左クリック長押し：巻き上げ\nEnter：投入 / Tab：装備\nC：釣り座変更 / E：Navigationへ戻る");}
+ if(S.Station.bValid){return LOCTEXT("FishingFPSGuide","W/S：視点 上下 / A/D：視点 左右\nMouse：ロッド操作 / 右クリック：シャクリ / 左クリック長押し：巻き上げ\nF：再落下 / Q：回収 / Enter：投入 / Tab：装備\nE：Navigationへ戻る（回収後Ready）");}
  return LOCTEXT("FishingCompactReturn","Mouse：竿 / 右：シャクリ / 左保持：巻取り\nF：再落下 / Q：回収 / Enter：投入 / Tab：装備\nE：Navigationへ戻る（回収後Ready）");
 }
 FText UTRFishingHUDWidget::FormatSnapshot(const FTRHUDSnapshot& S)

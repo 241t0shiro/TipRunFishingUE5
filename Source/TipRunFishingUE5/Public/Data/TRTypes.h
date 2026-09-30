@@ -130,7 +130,8 @@ enum class ETRFishingCommandType : uint8
 	SelectPort,
 	SelectStarboard,
 	CancelSideSelection,
-	BeginSideChange
+	BeginSideChange,
+	RodView
 };
 
 UENUM(BlueprintType)

@@ -22,7 +22,10 @@ struct TIPRUNFISHINGUE5_API FTRFishingStationParameters
  UPROPERTY(EditAnywhere, BlueprintReadOnly) double MinPitchDeg=-65;
  UPROPERTY(EditAnywhere, BlueprintReadOnly) double MaxPitchDeg=10;
  UPROPERTY(EditAnywhere, BlueprintReadOnly) double InitialPitchDeg=-20;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly) double MinYawDeg=-55;
  UPROPERTY(EditAnywhere, BlueprintReadOnly) double MaxYawDeg=55;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly) double FishingCameraYawRateDegPerS=45;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly) double FishingCameraPitchRateDegPerS=35;
  UPROPERTY(EditAnywhere, BlueprintReadOnly) double SensitivityDeg=.2;
  UPROPERTY(EditAnywhere, BlueprintReadOnly) double FOV=80;
  bool Validate() const;

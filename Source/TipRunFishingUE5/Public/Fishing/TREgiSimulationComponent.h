@@ -22,8 +22,11 @@ public:
 	// Fishing owns operation state; numeric authority lives here.
 	FTREgiSnapshot BuildSnapshot(ETRFishingState FishingState) const;
 	void Reset();
+ FString GetLastDiagnosticFailure() const { return DiagnosticFailure; }
 	bool IsTransientComplete() const { return ResidualLiftMps <= FrozenEquipment.Parameters.TensionLiftCompletionMps; }
 private:
+ FString DiagnosticFailure;
+ ETREgiStepEvent DiagnosticFail(const TCHAR* Reason, int32 Site);
 	ETREgiStepEvent StepSpatial(FTRCastId ExpectedCastId, const FTRSimTime& Time,
 		const FTROceanSample& Ocean, const FTRBoatSnapshot& Boat, const FTREgiAction& Action,
 		TFunctionRef<FTROceanSample(const FTROceanQuery&)> Sample);

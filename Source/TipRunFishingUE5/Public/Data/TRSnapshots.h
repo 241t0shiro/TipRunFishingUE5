@@ -204,6 +204,15 @@ struct TIPRUNFISHINGUE5_API FTRRodSnapshot
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double BaseYawRad=0;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double FinalPitchRad=0;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double FinalYawRad=0;
+	// Frozen physical length in meters; independent of aim and Shakuri pose.
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double LengthM=0;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") bool bScreenControl=false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector2D ScreenControl=FVector2D::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector2D ResolvedScreenControl=FVector2D::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") bool bScreenSafetyLimited=false;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector AimCameraWorldM=FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FRotator AimCameraRotation=FRotator::ZeroRotator;
+	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double AimCameraFOVDeg=0;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector TipWorldPositionM=FVector::ZeroVector;
  UPROPERTY(BlueprintReadOnly) FVector RootWorldPositionM=FVector::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector TipDirection=FVector::ForwardVector;

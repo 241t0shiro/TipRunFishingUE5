@@ -320,3 +320,10 @@ void UTRSimulationWorldSubsystem::ResetBoatForFishing(FTRActorSimId BoatId)
  const auto* R=FindLive(BoatId);
  if(auto* Boat=R && R->bBoat ? Cast<ATRBoatPawn>(R->Owner.Get()):nullptr){Boat->DriftComponent->ResetDynamicVelocityForFishing();}
 }
+
+FString UTRSimulationWorldSubsystem::GetDiagnosticQueue(FTRActorSimId SessionId) const
+{
+ FString Out;int32 Count=0;
+ for(const auto& C:Commands){if(C.SessionId==SessionId){++Count;if(Count<=8){Out+=FString::Printf(TEXT("[%s tick=%lld seq=%lld cast=%lld]"),*StaticEnum<ETRFishingCommandType>()->GetNameStringByValue(int64(C.Value.Type)),C.Value.TargetTick,C.Value.Sequence,C.Value.ExpectedCastId.Value);}}}
+ return FString::Printf(TEXT("%d %s"),Count,*Out);
+}

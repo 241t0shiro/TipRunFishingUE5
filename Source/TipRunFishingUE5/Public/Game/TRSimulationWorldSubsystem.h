@@ -49,6 +49,7 @@ public:
 		int64 TargetTick = -1, FTRCastId ExpectedCastId = {}, FVector2D Axis2D = FVector2D::ZeroVector, int64 ExpectedModeEpoch = 0);
 	bool IsInFixedStep() const { return bAdvancing; }
 	void ClearCommands();
+ FString GetDiagnosticQueue(FTRActorSimId SessionId) const;
 	void SetSimulationPaused(bool bPaused);
 	bool IsSimulationPaused() const;
 	void AdvanceFrame(double DeltaSeconds);

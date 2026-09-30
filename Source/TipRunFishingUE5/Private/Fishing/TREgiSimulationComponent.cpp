@@ -30,6 +30,7 @@ bool UTREgiSimulationComponent::InitializeCast(const FTREgiSnapshot& Initial, co
 		Errors.Add(FText::FromString(TEXT("Egi initialization requires a new CastId, valid ocean/initial coordinates and finite equipment coefficients")));
 		return false;
 	}
+	DiagnosticFailure.Reset();
 	Snapshot = Initial;
 	Snapshot.WorldPositionM = Initial.bWorldPositionValid ? Initial.WorldPositionM :
 		FVector(Initial.PositionXYM.X, Initial.PositionXYM.Y, double(Ocean.SurfaceZ_M) - Initial.DepthM);
@@ -89,7 +90,11 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 		(Action.LiftMps > 0.0f && Action.FishingState != ETRFishingState::Jerking) ||
 		(Action.ReelMps > 0.0f && Action.LineMode != ETRLineMode::ReelIn))
 	{
-		return ETREgiStepEvent::EnvironmentInvalid;
+		const TCHAR* Detail = !Time.IsValid() ? TEXT("InvalidTime") : !ValidEgiOcean(Ocean) ? TEXT("InvalidOceanSample") :
+            Ocean.SampleTick != Time.TickIndex || Boat.Tick != Time.TickIndex ? TEXT("StaleSampleTick") :
+            Boat.RodTipM.ContainsNaN() || Boat.PositionM.ContainsNaN() || Boat.VelocityMps.ContainsNaN() || !FMath::IsFinite(Boat.HeadingRad) ? TEXT("NonFiniteBoat") :
+            !bSupportedState || !bSupportedLine ? TEXT("UnsupportedActionState") : TEXT("InvalidActionParameters");
+        return DiagnosticFail(*FString::Printf(TEXT("Egi.InvalidStepInput.%s"), Detail), __LINE__);
 	}
 	const FTRFishingParameters& P = FrozenEquipment.Parameters;
 	if (P.EgiModelRevision == 2) { return StepSpatial(ExpectedCastId, Time, Ocean, Boat, Action, SampleDestination); }
@@ -101,7 +106,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 		if (NextResidual <= P.TensionLiftCompletionMps) { NextResidual = 0.0; }
 	}
 	const double RateDt = double(FrozenEquipment.HorizontalResponsePerS) * Time.StepSeconds;
-	if (!FMath::IsFinite(RateDt)) { return ETREgiStepEvent::EnvironmentInvalid; }
+	if (!FMath::IsFinite(RateDt)) { return DiagnosticFail(TEXT("Egi.NonFiniteCurrentResponse"), __LINE__); }
 	// Boat velocity is not added to current. Its moving rod tip supplies the pull constraint.
 	const double Alpha = -std::expm1(-RateDt);
 	FVector Velocity = Snapshot.VelocityMps;
@@ -109,7 +114,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	Velocity.Y += (Ocean.CurrentMps.Y - Velocity.Y) * Alpha;
 	Velocity.Z = -double(FrozenEquipment.SinkSpeedMps) * Action.SinkScale + NextResidual;
 	const double Speed = std::hypot(Velocity.X, Velocity.Y, Velocity.Z);
-	if (!FMath::IsFinite(Speed)) { return ETREgiStepEvent::EnvironmentInvalid; }
+	if (!FMath::IsFinite(Speed)) { return DiagnosticFail(TEXT("Egi.NonFiniteVelocity"), __LINE__); }
 	if (Speed > P.MaxEgiSpeedMps) { Velocity *= double(P.MaxEgiSpeedMps) / Speed; }
 	const FVector Previous = Snapshot.WorldPositionM;
 	FVector Candidate = Previous;
@@ -117,10 +122,10 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	const double PayoutMps = Action.LineMode == ETRLineMode::Payout ? P.PayoutMps :
 		(Action.LineMode == ETRLineMode::ControlledPayout ? P.TensionPayoutMps : 0.0);
 	const double TrialLineM = double(Snapshot.LineLengthM) + (PayoutMps - double(Action.ReelMps)) * Time.StepSeconds;
-	if (Candidate.ContainsNaN() || !FMath::IsFinite(TrialLineM)) { return ETREgiStepEvent::EnvironmentInvalid; }
+	if (Candidate.ContainsNaN() || !FMath::IsFinite(TrialLineM)) { return DiagnosticFail(TEXT("Egi.NonFiniteCandidateOrLine"), __LINE__); }
 	const double MinimumLineM = Action.LineMode == ETRLineMode::ReelIn ?
 		FMath::Max(double(P.MinLineM), Boat.RodTipM.Z - Ocean.SurfaceZ_M) : double(P.MinLineM);
-	if (MinimumLineM > P.MaxLineLengthM) { return ETREgiStepEvent::EnvironmentInvalid; }
+	if (MinimumLineM > P.MaxLineLengthM) { return DiagnosticFail(TEXT("Egi.MinimumLineExceedsLimit"), __LINE__); }
 	const float LineM = float(FMath::Clamp(TrialLineM, MinimumLineM, double(P.MaxLineLengthM)));
 	// Numerical convergence limits, not balance coefficients. Never commit a partial solution.
 	constexpr int32 MaxConstraintIterations = 4;
@@ -133,7 +138,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	{
 		const FVector Offset = Candidate - Boat.RodTipM;
 		const double DistanceM = std::hypot(Offset.X, Offset.Y, Offset.Z);
-		if (!FMath::IsFinite(DistanceM)) { return ETREgiStepEvent::EnvironmentInvalid; }
+		if (!FMath::IsFinite(DistanceM)) { return DiagnosticFail(TEXT("Egi.NonFiniteConstraintDistance"), __LINE__); }
 		if (DistanceM > LineM)
 		{
 			CorrectionM += DistanceM - LineM;
@@ -147,7 +152,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 		if (!ValidEgiOcean(Destination) || Destination.SampleTick != Time.TickIndex ||
 			Boat.RodTipM.Z < Destination.SurfaceZ_M || Boat.RodTipM.Z - Destination.SurfaceZ_M > LineM + ConstraintToleranceM)
 		{
-			return ETREgiStepEvent::EnvironmentInvalid;
+			return DiagnosticFail(TEXT("Egi.InvalidDestinationOrRodSpan"), __LINE__);
 		}
 		DepthM = float(FMath::Clamp(double(Destination.SurfaceZ_M) - Candidate.Z, 0.0, double(Destination.BottomDepthM)));
 		Candidate.Z = double(Destination.SurfaceZ_M) - DepthM;
@@ -165,7 +170,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 				Query.PositionXYM = FVector2D(Candidate.X, Candidate.Y);
 				Destination = SampleDestination(Query);
 				if (!ValidEgiOcean(Destination) || Destination.SampleTick != Time.TickIndex ||
-					DepthM > Destination.BottomDepthM || Destination.SurfaceZ_M != Ocean.SurfaceZ_M) { return ETREgiStepEvent::EnvironmentInvalid; }
+					DepthM > Destination.BottomDepthM || Destination.SurfaceZ_M != Ocean.SurfaceZ_M) { return DiagnosticFail(TEXT("Egi.InvalidConstraintOcean"), __LINE__); }
 			}
 		}
 		const FVector FinalOffset = Candidate - Boat.RodTipM;
@@ -177,11 +182,11 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	}
 	if (!bConverged || !FMath::IsFinite(CorrectionM) || TRUnits::MetersToCentimeters(Candidate).ContainsNaN())
 	{
-		return ETREgiStepEvent::EnvironmentInvalid;
+		return DiagnosticFail(TEXT("Egi.ConstraintNotConvergedOrNonFinite"), __LINE__);
 	}
 	FVector CorrectedVelocity = (Candidate - Previous) / Time.StepSeconds;
 	const double CorrectedSpeed = std::hypot(CorrectedVelocity.X, CorrectedVelocity.Y, CorrectedVelocity.Z);
-	if (!FMath::IsFinite(CorrectedSpeed)) { return ETREgiStepEvent::EnvironmentInvalid; }
+	if (!FMath::IsFinite(CorrectedSpeed)) { return DiagnosticFail(TEXT("Egi.NonFiniteCorrectedVelocity"), __LINE__); }
 	if (CorrectedSpeed > P.MaxEgiSpeedMps) { CorrectedVelocity *= double(P.MaxEgiSpeedMps) / CorrectedSpeed; }
 	// A destination callback may end a cast; it must not resurrect it on return.
 	if (!bActive || Snapshot.CastId != ExpectedCastId || (GetOwner() && GetOwner()->IsActorBeingDestroyed()))
@@ -192,7 +197,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepEgi(FTRCastId ExpectedCastId, con
 	const ETREgiStepEvent Event = bReachedBottom && !bOnBottom ? ETREgiStepEvent::ReachedBottom :
 		(!bReachedBottom && bOnBottom ? ETREgiStepEvent::LeftBottom : ETREgiStepEvent::None);
 	const double DepthSpeed = (double(DepthM) - Snapshot.DepthM) / Time.StepSeconds;
-	if (!FMath::IsFinite(DepthSpeed) || FMath::Abs(DepthSpeed) > MAX_flt) { return ETREgiStepEvent::EnvironmentInvalid; }
+	if (!FMath::IsFinite(DepthSpeed) || FMath::Abs(DepthSpeed) > MAX_flt) { return DiagnosticFail(TEXT("Egi.NonFiniteDepthVelocity"), __LINE__); }
 	Snapshot.PositionXYM = FVector2D(Candidate.X, Candidate.Y);
 	Snapshot.WorldPositionM = Candidate;
 	Snapshot.HorizontalOffsetFromBoatM = FVector2D(Candidate.X-Boat.PositionM.X, Candidate.Y-Boat.PositionM.Y);
@@ -234,4 +239,10 @@ void UTREgiSimulationComponent::Reset()
 	bActive = false; bOnBottom = false; Snapshot = {}; FrozenEquipment = {}; LastSurfaceZ_M = 0.0f;
 	ResidualLiftMps = 0.0;
 	MotionVelocityMps = FVector::ZeroVector; bHasPreviousRod = false; PreviousRodTipM = FVector::ZeroVector;
+}
+
+ETREgiStepEvent UTREgiSimulationComponent::DiagnosticFail(const TCHAR* Reason,int32 Site)
+{
+ DiagnosticFailure=FString::Printf(TEXT("%s site=%d cast=%lld previousTick=%lld position=%s line=%.9g"),Reason,Site,Snapshot.CastId.Value,Snapshot.Tick,*Snapshot.WorldPositionM.ToString(),double(Snapshot.LineLengthM));
+ return ETREgiStepEvent::EnvironmentInvalid;
 }

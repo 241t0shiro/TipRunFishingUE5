@@ -20,6 +20,8 @@ public:
 	ATRPlayerController();
 	bool SubmitNavigationInput(FVector2D Input,int64 TargetTick=-1);
 	bool ApplyNavigationLook(FVector2D Delta);
+ bool SetFishingLookInput(FVector2D Axes);
+ void AdvanceFishingCamera(double DeltaSeconds);
 	void SetPrototypeObserver(ATRPrototypeViewActor* Observer);
 	UFUNCTION(BlueprintCallable, Category="TipRun|Mode") bool RequestPlayerMode(ETRPlayerMode Target);
 	UFUNCTION(Exec) void TRSetFishingMode(bool bFishing);
@@ -36,7 +38,11 @@ public:
 	void ResetPrototypeCamera();
 	void ActionReleased(ETRPlayerAction Action);
 	void SetInputFocus(bool bFocused);
-	bool IsRetrieveHeld() const { return bRetrieveHeld; }
+	// Observation counters include rejected/cleared traffic; they never drive input.
+ FVector2D DiagnosticRawMouse=FVector2D::ZeroVector, DiagnosticEnhancedMouse=FVector2D::ZeroVector, DiagnosticQueuedMouse=FVector2D::ZeroVector;
+ int64 DiagnosticRawSamples=0, DiagnosticEnhancedSamples=0, DiagnosticQueuedSamples=0;
+ FString DiagnosticLastQueue;
+ bool IsRetrieveHeld() const { return bRetrieveHeld; }
 	ATRFishingSessionActor* GetBoundSession() const { return BoundSession.Get(); }
 	void EnablePrototypeUI(bool bEnabled);
 	void RefreshPrototypePanel();
@@ -59,6 +65,13 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Destroyed() override;
 private:
+ void EnhancedFishingYaw(const FInputActionValue& Value);
+ void EnhancedFishingPitch(const FInputActionValue& Value);
+ void ClearFishingLookInput();
+ FVector2D FishingLookAxes=FVector2D::ZeroVector;
+ TSet<FKey> PhysicalLookKeys;
+ bool bFishingLookRearmRequired=false;
+ bool bDiscardNextRodDelta=false;
 	void EnhancedNavigationThrottle(const FInputActionValue& Value);
 	void EnhancedNavigationSteering(const FInputActionValue& Value);
 	void EnhancedNavigationLook(const FInputActionValue& Value);

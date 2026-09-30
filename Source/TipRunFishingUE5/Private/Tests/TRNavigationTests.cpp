@@ -246,7 +246,7 @@ bool FTRNavigationEntryTest::RunTest(const FString&)
  for(int32 I=0;I<3;++I){Inject(Config->Input->NavigationContext,EKeys::Enter,FInputActionValue(true));F.Step();}
  TestFalse(TEXT("Holding start does not Deploy"),S->GetHUDSnapshot().bEgiValid);
  Inject(Config->Input->NavigationContext,EKeys::Enter,FInputActionValue(false));
- TestTrue(TEXT("Fishing guide replaces Navigation"),HasVisibleText(TEXT("Enter：投入")) && !HasVisibleText(TEXT("W/S")) && !HasVisibleText(TEXT("Enter：釣り開始")));
+ TestTrue(TEXT("Fishing guide replaces Navigation"),HasVisibleText(TEXT("Enter：投入")) && !HasVisibleText(TEXT("W/S：前進")) && !HasVisibleText(TEXT("Enter：釣り開始")));
  for(auto Key:{EKeys::W,EKeys::S,EKeys::A,EKeys::D}){Inject(Config->Input->NavigationContext,Key,FInputActionValue(1.f));F.Step();}
  TestFalse(TEXT("Fishing W/S/A/D cannot restart engine"),S->GetNavigationSnapshot().bEngineActive);
  TestEqual(TEXT("Fishing cannot steer"),S->GetHUDSnapshot().Boat.HeadingRad,Before.HeadingRad);

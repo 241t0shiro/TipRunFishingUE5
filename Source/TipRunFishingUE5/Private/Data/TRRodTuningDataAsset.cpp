@@ -1,11 +1,22 @@
 #include "Data/TRRodTuningDataAsset.h"
 #include "Misc/DataValidation.h"
 
+bool FTRRodScreenParameters::Validate() const
+{
+	return !Min.ContainsNaN() && !Max.ContainsNaN() && !Initial.ContainsNaN() && !Sensitivity.ContainsNaN() &&
+		Min.X>=-.9 && Max.X<=.9 && Min.Y>=-.5 && Max.Y<=.5 && Min.X<Max.X && Min.Y<Max.Y &&
+		Initial.X>=Min.X && Initial.X<=Max.X && Initial.Y>=Min.Y && Initial.Y<=Max.Y &&
+		Sensitivity.X>0 && Sensitivity.X<=1 && Sensitivity.Y>0 && Sensitivity.Y<=1 &&
+		FMath::IsFinite(MaxRatePerS) && MaxRatePerS>0 && MaxRatePerS<=10 &&
+		FMath::IsFinite(MaxProjectedY) && MaxProjectedY>Max.Y && MaxProjectedY<=.9 &&
+		FMath::IsFinite(SurfaceClearanceM) && SurfaceClearanceM>=0 && SurfaceClearanceM<=.5;
+}
+
 bool FTRRodParameters::Validate(TArray<FText>& Errors) const
 {
 	const double Values[]={MinPitchRad,MaxPitchRad,MinYawRad,MaxYawRad,InitialPitchRad,InitialYawRad,
 		SensitivityXRad,SensitivityYRad,MaxMouseDelta,MaxAimRateRadPerS,LengthM,ShakuriAmplitudeRad,ShakuriUpSeconds,ShakuriReturnSeconds,ShakuriReelSpeedMps,ShakuriReelSeconds};
-	bool Valid=!MountOffsetM.ContainsNaN();
+	bool Valid=!MountOffsetM.ContainsNaN() && Screen.Validate();
 	Valid &= (ShakuriReelSpeedMps==0 && ShakuriReelSeconds==0) ||
 		(ShakuriReelSpeedMps>0 && ShakuriReelSpeedMps<=MAX_flt && ShakuriReelSeconds>0 && ShakuriReelSeconds<=ShakuriReturnSeconds && FMath::IsFinite(ShakuriReelSpeedMps*ShakuriReelSeconds));
 	for(double Value:Values){Valid &= FMath::IsFinite(Value);}

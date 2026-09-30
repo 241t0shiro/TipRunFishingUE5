@@ -28,6 +28,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationZoom;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationFishingStart;
  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Navigation") TObjectPtr<UInputAction> NavigationBoost;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|FishingCamera") TObjectPtr<UInputAction> FishingCameraYaw;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|FishingCamera") TObjectPtr<UInputAction> FishingCameraPitch;
+ void CreateFishingCameraPrototype();
 	void CreateNavigationPrototype();
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun") TObjectPtr<UInputMappingContext> FishingContext;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun") TArray<FTRInputBinding> Bindings;

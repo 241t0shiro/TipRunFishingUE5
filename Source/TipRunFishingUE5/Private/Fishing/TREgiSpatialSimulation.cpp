@@ -11,7 +11,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 	constexpr double MaxSubstepS = 1.0 / 60.0;
 	constexpr int32 MaxSubsteps = 240;
 	constexpr double EpsilonM = 1.e-5;
-	if (Time.StepSeconds > MaxSubstepS * MaxSubsteps) { return ETREgiStepEvent::EnvironmentInvalid; }
+	if (Time.StepSeconds > MaxSubstepS * MaxSubsteps) { return DiagnosticFail(TEXT("Spatial.StepBudget"), __LINE__); }
 	const int32 Count = FMath::Max(1, FMath::CeilToInt(Time.StepSeconds / MaxSubstepS));
 	const double Dt = Time.StepSeconds / Count;
 	const FVector Start = Snapshot.WorldPositionM;
@@ -19,7 +19,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 	const FVector RodStart = bHasPreviousRod ? PreviousRodTipM : Boat.RodTipM;
 	const FVector RodVelocity = (Boat.RodTipM - RodStart) / Time.StepSeconds;
 	if (RodVelocity.ContainsNaN() || (Boat.RodTipM - RodStart).Size() > P.MaxStepTravelM)
-	{ return ETREgiStepEvent::EnvironmentInvalid; }
+	{ return DiagnosticFail(TEXT("Spatial.InvalidRodVelocityOrTravel"), __LINE__); }
 	double Line = Snapshot.LineLengthM, Correction = 0, Residual = ResidualLiftMps;
 	double Travel = 0;
 	FTROceanSample Local = Ocean;
@@ -42,7 +42,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 	for (int32 Sub = 0; Sub < Count; ++Sub)
 	{
 		const FVector Rod = FMath::Lerp(RodStart, Boat.RodTipM, double(Sub+1)/Count);
-		if (!Read(Position, Local)) { return ETREgiStepEvent::EnvironmentInvalid; }
+		if (!Read(Position, Local)) { return DiagnosticFail(TEXT("Spatial.InvalidOceanAtEgi"), __LINE__); }
 		const FVector Old = Position;
 		if (Action.FishingState == ETRFishingState::Jerking) { Residual = Action.LiftMps; }
 		else if (Action.FishingState == ETRFishingState::TensionFall)
@@ -60,7 +60,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 		const double WetLength = Distance * (1.0-WetStart);
 		const double Transfer = Line-Distance <= P.LineSlackAllowanceM+EpsilonM ? P.TautLineTransfer01 : P.SlackLineTransfer01;
 		const double DragRate = P.LineDragKgPerMS * WetLength * Transfer / (double(FrozenEquipment.TotalMassG)*0.001);
-		if (!FMath::IsFinite(DragRate)) { return ETREgiStepEvent::EnvironmentInvalid; }
+		if (!FMath::IsFinite(DragRate)) { return DiagnosticFail(TEXT("Spatial.NonFiniteLineDrag"), __LINE__); }
 		FVector LineForcing = FVector::ZeroVector;
 		double EndWeight = 0;
 		if (DragRate > 0)
@@ -69,7 +69,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			{
 				const double T = WetStart + (1-WetStart)*(double(I)+0.5)/3;
 				FTROceanSample Water;
-				if (!Read(Rod+Offset*T, Water)) { return ETREgiStepEvent::EnvironmentInvalid; }
+				if (!Read(Rod+Offset*T, Water)) { return DiagnosticFail(TEXT("Spatial.InvalidOceanAtLine"), __LINE__); }
 				// Ignore points above their local surface (future spatial surfaces).
 				if ((Rod+Offset*T).Z > Water.SurfaceZ_M) { continue; }
 				LineForcing += (Water.CurrentMps - RodVelocity*(1-T)) / 3.0;
@@ -85,14 +85,14 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			const double Rate = BaseRate+DragRate*EndWeight;
 			const double Equilibrium = (BaseRate/Rate)*Target[Axis] + (DragRate/Rate)*LineForcing[Axis];
 			const double X = Rate*Dt;
-			if (!FMath::IsFinite(X) || !FMath::IsFinite(Equilibrium)) { return ETREgiStepEvent::EnvironmentInvalid; }
+			if (!FMath::IsFinite(X) || !FMath::IsFinite(Equilibrium)) { return DiagnosticFail(TEXT("Spatial.NonFiniteResponse"), __LINE__); }
 			const double Alpha = -std::expm1(-X);
 			const double Phi = X<1.e-5 ? 1-X/2+X*X/6-X*X*X/24 : Alpha/X;
 			Trial[Axis] += Dt*(V[Axis]*Phi+Equilibrium*(1-Phi));
 			V[Axis] += (Equilibrium-V[Axis])*Alpha;
 		}
 		if (Trial.ContainsNaN() || V.ContainsNaN() || V.Size() > P.MaxEgiSpeedMps)
-		{ return ETREgiStepEvent::EnvironmentInvalid; }
+		{ return DiagnosticFail(TEXT("Spatial.InvalidCandidateVelocity"), __LINE__); }
 		// FreeFall pays only demand. TF keeps length; no automatic TF slack accumulation.
 		if (Action.FishingState == ETRFishingState::FreeFall && Action.LineMode == ETRLineMode::Payout)
 		{
@@ -119,16 +119,16 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			ActualReelMps = FMath::Max(0.0,(PreviousLine-Line)/Dt);
 		}
 		if (!FMath::IsFinite(Line) || Line < P.MinLineM || Line > P.MaxLineLengthM)
-		{ return ETREgiStepEvent::EnvironmentInvalid; }
+		{ return DiagnosticFail(TEXT("Spatial.InvalidLineLength"), __LINE__); }
 		bool bSolved = false;
 		for (int32 Iter=0; Iter<8; ++Iter)
 		{
 			const FVector Delta = Trial-Rod;
 			const double D = Delta.Size();
-			if (!FMath::IsFinite(D)) { return ETREgiStepEvent::EnvironmentInvalid; }
+			if (!FMath::IsFinite(D)) { return DiagnosticFail(TEXT("Spatial.NonFiniteConstraintDistance"), __LINE__); }
 			if (D>Line) { Correction += D-Line; Trial = Rod+Delta*(Line/D); }
 			if (!Read(Trial, Local) || Rod.Z < Local.SurfaceZ_M || Rod.Z-Local.SurfaceZ_M > Line+EpsilonM)
-			{ return ETREgiStepEvent::EnvironmentInvalid; }
+			{ return DiagnosticFail(TEXT("Spatial.InvalidLineSurfaceIntersection"), __LINE__); }
 			Trial.Z = FMath::Clamp(Trial.Z, double(Local.SurfaceZ_M)-Local.BottomDepthM, double(Local.SurfaceZ_M));
 			// Exact surface circle intersection avoids asymptotic projection at retrieval's tangent point.
 			if (Trial.Z == Local.SurfaceZ_M)
@@ -146,9 +146,9 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			}
 			if ((Trial-Rod).Size()<=Line+EpsilonM) { bSolved=true; break; }
 		}
-		if (!bSolved || !Read(Trial, Local)) { return ETREgiStepEvent::EnvironmentInvalid; }
+		if (!bSolved || !Read(Trial, Local)) { return DiagnosticFail(bSolved ? TEXT("Spatial.InvalidOceanAtConstraintDestination") : TEXT("Spatial.ConstraintNotConverged"), __LINE__); }
 		const double Depth = double(Local.SurfaceZ_M)-Trial.Z;
-		if (Depth < -EpsilonM || Depth > Local.BottomDepthM+EpsilonM) { return ETREgiStepEvent::EnvironmentInvalid; }
+		if (Depth < -EpsilonM || Depth > Local.BottomDepthM+EpsilonM) { return DiagnosticFail(TEXT("Spatial.InvalidDepth"), __LINE__); }
 		bBottom = Depth >= Local.BottomDepthM; bSurface = Depth <= 0;
 		if (bBottom) { V.Z=FMath::Max(0.0,V.Z); }
 		if (bSurface) { V.Z=FMath::Min(0.0,V.Z); }
@@ -161,7 +161,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 		const double StepTravel = (Trial-Old).Size(); Travel+=StepTravel;
 		if (!FMath::IsFinite(Travel) || Travel>P.MaxStepTravelM || StepTravel/Dt>P.MaxEgiSpeedMps ||
 			V.ContainsNaN() || V.Size()>P.MaxEgiSpeedMps || TRUnits::MetersToCentimeters(Trial).ContainsNaN())
-		{ return ETREgiStepEvent::EnvironmentInvalid; }
+		{ DiagnosticFail(TEXT("Spatial.ExcessiveMotionOrNonFinite"), __LINE__); DiagnosticFailure += FString::Printf(TEXT(" travel=%.9g/%.9g stepSpeed=%.9g/%.9g velocity=%.9g rodSpeed=%.9g"),Travel,double(P.MaxStepTravelM),StepTravel/Dt,double(P.MaxEgiSpeedMps),V.Size(),RodVelocity.Size()); return ETREgiStepEvent::EnvironmentInvalid; }
 		Position=Trial;
 	}
 	// Callbacks cannot revive an old cast or a destroyed owner.
@@ -170,7 +170,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 	const double Depth = FMath::Clamp(double(Local.SurfaceZ_M)-Position.Z,0.0,double(Local.BottomDepthM));
 	const double DepthVelocity = (Depth-Snapshot.DepthM)/Time.StepSeconds;
 	if (!FMath::IsFinite(DepthVelocity) || FMath::Abs(DepthVelocity)>MAX_flt || !FMath::IsFinite(Correction))
-	{ return ETREgiStepEvent::EnvironmentInvalid; }
+	{ return DiagnosticFail(TEXT("Spatial.NonFiniteDepthVelocity"), __LINE__); }
 	const ETREgiStepEvent Event = bBottom&&!bOnBottom ? ETREgiStepEvent::ReachedBottom :
 		(!bBottom&&bOnBottom ? ETREgiStepEvent::LeftBottom : ETREgiStepEvent::None);
 	Snapshot.WorldPositionM=Position; Snapshot.PositionXYM=FVector2D(Position.X,Position.Y);

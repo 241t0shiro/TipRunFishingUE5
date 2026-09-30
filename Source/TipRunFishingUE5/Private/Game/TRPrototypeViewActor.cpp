@@ -12,6 +12,11 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "Engine/LocalPlayer.h"
+#include "Engine/GameViewportClient.h"
+#include "Slate/SceneViewport.h"
+#include "SceneView.h"
+#include "Game/TRPlayerCameraManager.h"
 
 namespace
 {
@@ -113,7 +118,9 @@ void ATRPrototypeViewActor::ApplyObservation(const FTRHUDSnapshot& S,const FTRRo
  SeabedVisual->SetWorldLocation(TRUnits::MetersToCentimeters(FVector(O.X,O.Y,SurfaceM-DepthM-.2)));
  BackgroundVisual->SetWorldLocation(TRUnits::MetersToCentimeters(O+FVector(0,100,0)));
  if(!FishingVisible){return;}
- const FVector Mount=S.Station.bValid?S.Station.RodRootWorldM:S.Boat.PositionM+FQuat(FVector::UpVector,S.Boat.HeadingRad).RotateVector(Rod.MountOffsetM);
+ // Both endpoints must belong to the same fixed-step snapshot. Mixing a live station
+ // root with an older rod tip stretches the mesh when boat/station transforms differ.
+ const FVector Mount=S.Rod.bValid?S.Rod.RootWorldPositionM:(S.Station.bValid?S.Station.RodRootWorldM:S.Boat.PositionM+FQuat(FVector::UpVector,S.Boat.HeadingRad).RotateVector(Rod.MountOffsetM));
  // Before first Deploy the configured base pose is a labelled onboard display only.
  const FVector InitialDirection=FRotator(FMath::RadiansToDegrees(Rod.InitialPitchRad),FMath::RadiansToDegrees(S.Boat.HeadingRad+Rod.InitialYawRad),0).Vector();
  const FVector Tip=S.Rod.bValid?S.Rod.TipWorldPositionM:Mount+(S.Station.bValid?FRotator(0,S.Station.FacingWorldDeg,0).Vector():InitialDirection)*Rod.LengthM;
@@ -138,5 +145,35 @@ void ATRPrototypeViewActor::Tick(float DeltaSeconds)
  const auto* Mode=GetWorld()->GetAuthGameMode<ATRGameModeBase>();
  const auto* Config=Mode?Mode->SessionConfig.Get():nullptr;
  if(Config && Config->Ocean && Config->Rod)
- {ApplyObservation(Controller->GetDebugSnapshot(),Config->Rod->Parameters,Config->Ocean->Settings.SurfaceZ_M,Config->Ocean->Settings.FlatDepthM);}
+ {const auto S=Controller->GetDebugSnapshot();ApplyObservation(S,Config->Rod->Parameters,Config->Ocean->Settings.SurfaceZ_M,Config->Ocean->Settings.FlatDepthM);CaptureRuntimeObservation(S,Controller.Get());}
+}
+
+void ATRPrototypeViewActor::CaptureRuntimeObservation(const FTRHUDSnapshot& S,ATRPlayerController* PC)
+{
+ RuntimeObservation={};auto& O=RuntimeObservation;O.WorldFrame=GFrameCounter;O.VisualFrame=GFrameCounter;O.RodTick=S.Rod.Tick;
+ if(!S.Rod.bValid || !RodVisual || !RodVisual->GetStaticMesh() || !PC || !PC->PlayerCameraManager){return;}
+ O.bValid=true;O.SimulationRootM=S.Rod.RootWorldPositionM;O.SimulationTipM=S.Rod.TipWorldPositionM;
+ const FBox Box=RodVisual->GetStaticMesh()->GetBoundingBox();const FTransform T=RodVisual->GetComponentTransform();
+ O.VisualRootM=T.TransformPosition(FVector(Box.Min.X,0,0))*.01;O.VisualTipM=T.TransformPosition(FVector(Box.Max.X,0,0))*.01;
+ O.RootErrorM=(O.VisualRootM-O.SimulationRootM).Size();O.TipErrorM=(O.VisualTipM-O.SimulationTipM).Size();O.LengthM=(O.VisualTipM-O.VisualRootM).Size();
+ const FQuat H(FVector::UpVector,S.Boat.HeadingRad);
+ O.RootLocal=H.UnrotateVector(O.SimulationRootM-S.Boat.PositionM);O.TipLocal=H.UnrotateVector(O.SimulationTipM-S.Boat.PositionM);O.DirectionLocal=(O.TipLocal-O.RootLocal).GetSafeNormal();
+ if(S.Station.bValid)
+ {
+  const FQuat StationRotation(FVector::UpVector,FMath::DegreesToRadians(S.Station.FacingWorldDeg));
+  O.StationRootLocal=StationRotation.UnrotateVector(O.SimulationRootM-S.Station.PlayerWorldM);
+  O.StationTipLocal=StationRotation.UnrotateVector(O.SimulationTipM-S.Station.PlayerWorldM);
+  O.StationDirectionLocal=(O.StationTipLocal-O.StationRootLocal).GetSafeNormal();
+ }
+ const auto& POV=PC->PlayerCameraManager->GetCameraCacheView();O.CameraM=POV.Location*.01;O.CameraRotation=POV.Rotation;O.FOV=POV.FOV;
+ if(const auto* Camera=Cast<ATRPlayerCameraManager>(PC->PlayerCameraManager)){O.CameraFrame=Camera->DiagnosticCameraFrame;}
+ if(auto* LP=PC->GetLocalPlayer();LP && LP->ViewportClient && LP->ViewportClient->Viewport)
+ {
+  FSceneViewProjectionData Data;
+  if(LP->GetProjectionData(LP->ViewportClient->Viewport,Data))
+  {
+   O.ViewRect=Data.GetConstrainedViewRect();const FMatrix VP=Data.ComputeViewProjectionMatrix();
+   O.bProjected=FSceneView::ProjectWorldToScreen(O.VisualRootM*100,O.ViewRect,VP,O.PixelRoot) && FSceneView::ProjectWorldToScreen(O.VisualTipM*100,O.ViewRect,VP,O.PixelTip);
+  }
+ }
 }

@@ -1,4 +1,5 @@
 #include "Game/TRPlayerController.h"
+#include "GameFramework/InputSettings.h"
 #include "Game/TRFishingSessionActor.h"
 #include "Game/TRPrototypeViewActor.h"
 #include "Game/TRPlayerCameraManager.h"
@@ -47,6 +48,14 @@ bool ATRPlayerController::InstallInputBindings(UEnhancedInputComponent* Componen
 		for(auto Event:{ETriggerEvent::Completed,ETriggerEvent::Canceled})
 		{BindingHandles.Add(Component->BindAction(InputConfig->NavigationFishingStart,Event,this,&ATRPlayerController::EnhancedReleased,ETRPlayerAction::FishingStart).GetHandle());}
 	}
+ if(InputConfig->FishingCameraYaw && InputConfig->FishingCameraPitch)
+ {
+  for(auto Event:{ETriggerEvent::Triggered,ETriggerEvent::Completed,ETriggerEvent::Canceled})
+  {
+   BindingHandles.Add(Component->BindAction(InputConfig->FishingCameraYaw,Event,this,&ATRPlayerController::EnhancedFishingYaw).GetHandle());
+   BindingHandles.Add(Component->BindAction(InputConfig->FishingCameraPitch,Event,this,&ATRPlayerController::EnhancedFishingPitch).GetHandle());
+  }
+ }
 	for (const auto& B : InputConfig->Bindings)
 	{
 		if(B.Command==ETRPlayerAction::RodAim)
@@ -106,6 +115,7 @@ void ATRPlayerController::UnbindSession()
 }
 void ATRPlayerController::ReleaseInput()
 {
+ ClearFishingLookInput();
 	InvalidateBoostInput();
 	bNavigationBlockedUntilNeutral |= !NavigationAxes.IsNearlyZero();
 	NavigationAxes=FVector2D::ZeroVector;
@@ -121,6 +131,7 @@ void ATRPlayerController::ObserveCommand(const FTRFishingCommand& Command, ETRCo
 	const bool bModeChange = Command.Type == ETRFishingCommandType::StartFishingMode || Command.Type == ETRFishingCommandType::ReturnNavigationMode || Command.Type==ETRFishingCommandType::CancelSideSelection || Command.Type==ETRFishingCommandType::BeginSideChange;
 	if ((!bModeChange && Command.Type != ETRFishingCommandType::QuickRetrieve) || Result != ETRCommandResult::Accepted) { return; }
 	InvalidateBoostInput();
+ ClearFishingLookInput();
 	// Input bookkeeping only. Never discard later same-tick commands: simulation must reject them in sequence.
 	for (ETRPlayerAction Action : Pressed) { BlockedUntilRelease.Add(Action); }
 	Pressed.Empty(); bRetrieveHeld = false; bPendingStop = false;
@@ -236,13 +247,15 @@ void ATRPlayerController::ActionReleased(ETRPlayerAction Action)
 	}
 }
 void ATRPlayerController::EnhancedStarted(ETRPlayerAction Action) { ActionStarted(Action); }
-void ATRPlayerController::EnhancedRodAim(const FInputActionValue& Value){RoutePrototypeMouse(Value.Get<FVector2D>(),IsInputKeyDown(EKeys::LeftShift)||IsInputKeyDown(EKeys::RightShift));}
+void ATRPlayerController::EnhancedRodAim(const FInputActionValue& Value){DiagnosticEnhancedMouse+=Value.Get<FVector2D>();++DiagnosticEnhancedSamples;RoutePrototypeMouse(Value.Get<FVector2D>(),IsInputKeyDown(EKeys::LeftShift)||IsInputKeyDown(EKeys::RightShift));}
 bool ATRPlayerController::RoutePrototypeMouse(FVector2D Delta,bool bCameraLook)
 {
+ SynchronizeSession();
  if(BoundSession.IsValid() && BoundSession->UsesFishingStations())
  {
   if(!BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing) || !bInputFocused || bPrototypePanelOpen || Delta.ContainsNaN()){return false;}
-  if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Camera->LookFishing(Delta);return true;}return false;
+  if(bDiscardNextRodDelta){bDiscardNextRodDelta=false;return false;}
+  return SubmitMouseDelta(Delta);
  }
 
 	if(!bCameraLook){return SubmitMouseDelta(Delta);}
@@ -265,7 +278,16 @@ bool ATRPlayerController::SubmitMouseDelta(FVector2D Delta,int64 TargetTick)
 {
 	SynchronizeSession();
 	if(bPrototypePanelOpen || !bInputFocused || IsActorBeingDestroyed() || Delta.ContainsNaN() || !BoundSession.IsValid() || BoundSession->IsPlayerPaused()){return false;}
-	return BoundSession->SubmitRodAim(Delta,ObservedCast,ObservedRegistration,TargetTick);
+	if(BoundSession->UsesFishingStations())
+	{
+		const auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager);
+		if(!Camera){return false;}
+		const auto View=Camera->GetFishingSnapshot(BoundSession->GetStationSnapshot());
+		if(!View.bActive || !BoundSession->SubmitRodView(FVector2D(View.YawDeg,View.PitchDeg),ObservedCast,ObservedRegistration,TargetTick)){return false;}
+	}
+	const bool Queued=BoundSession->SubmitRodAim(Delta,ObservedCast,ObservedRegistration,TargetTick);
+ DiagnosticLastQueue=FString::Printf(TEXT("delta=%s queued=%d frame=%llu target=%lld"),*Delta.ToString(),Queued,GFrameCounter,TargetTick);
+ if(Queued){DiagnosticQueuedMouse+=Delta;++DiagnosticQueuedSamples;}return Queued;
 }
 void ATRPlayerController::EnhancedReleased(ETRPlayerAction Action) { ActionReleased(Action); }
 void ATRPlayerController::SetPauseRequested(bool bPaused)
@@ -281,11 +303,21 @@ void ATRPlayerController::SetInputFocus(bool bFocused)
 	if (!bFocused) { ReleaseInput(); } else { SetMappingContext(BoundSession.IsValid()); FlushPendingStop(); }
 }
 void ATRPlayerController::FlushPressedKeys() { ReleaseInput(); Super::FlushPressedKeys(); }
-void ATRPlayerController::PlayerTick(float DeltaTime) { SynchronizeSession(); Super::PlayerTick(DeltaTime); }
+void ATRPlayerController::PlayerTick(float DeltaTime) { SynchronizeSession(); Super::PlayerTick(DeltaTime); AdvanceFishingCamera(DeltaTime); }
 FTRHUDSnapshot ATRPlayerController::GetDebugSnapshot() const
 {
 	auto Copy = BoundSession.IsValid() ? BoundSession->GetHUDSnapshot() : FTRHUDSnapshot();
 	Copy.bBoostRearmRequired=bBoostRearmRequired;
+ const auto* Settings=GetDefault<UInputSettings>();
+ Copy.RuntimeDiagnostics=FString::Printf(TEXT("InputContext=%s RetrieveHeld=%d pendingStop=%d blocked=%d pressed=%d\nMouse raw=%s (%lld) enhanced=%s (%lld) queued=%s (%lld)\nSmoothing=%d FOVScaling=%d FOVScale=%.6g\nLastQueue: %s\n"),
+ *GetNameSafe(InstalledContext),bRetrieveHeld,bPendingStop,BlockedUntilRelease.Num(),Pressed.Num(),*DiagnosticRawMouse.ToString(),DiagnosticRawSamples,*DiagnosticEnhancedMouse.ToString(),DiagnosticEnhancedSamples,*DiagnosticQueuedMouse.ToString(),DiagnosticQueuedSamples,Settings->bEnableMouseSmoothing,Settings->bEnableFOVScaling,double(Settings->FOVScale),*DiagnosticLastQueue);
+ for(const auto& Axis:Settings->AxisConfig)
+ {if(Axis.AxisKeyName==EKeys::MouseX.GetFName() || Axis.AxisKeyName==EKeys::MouseY.GetFName())
+  {Copy.RuntimeDiagnostics+=FString::Printf(TEXT("%s sensitivity=%.6g exponent=%.6g deadzone=%.6g invert=%d\n"),*Axis.AxisKeyName.ToString(),double(Axis.AxisProperties.Sensitivity),double(Axis.AxisProperties.Exponent),double(Axis.AxisProperties.DeadZone),Axis.AxisProperties.bInvert);}}
+ if(BoundSession.IsValid()){Copy.RuntimeDiagnostics+=BoundSession->GetRuntimeDiagnostics()+TEXT("\n"); if(!BoundSession->DiagnosticAbortContext.IsEmpty()){Copy.RuntimeDiagnostics+=TEXT("Before Abort cleanup:\n")+BoundSession->DiagnosticAbortContext+TEXT("\n");}}
+ if(PrototypeObserver.IsValid()){Copy.RuntimeDiagnostics+=PrototypeObserver->GetRuntimeObservation().Describe();}
+
+ Copy.bMouseRodInputActive=Copy.bSessionValid && BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing) && bInputFocused && !bPrototypePanelOpen && !Copy.Retrieval.bIsQuickRetrieving;
 	if(const auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager)){Copy.NavigationCamera=Camera->GetNavigationSnapshot();Copy.FishingCamera=Camera->GetFishingSnapshot(Copy.Station);}
 	if (!Copy.bSessionValid) { return Copy; }
 	auto HasKey = [&](ETRPlayerAction Action, FKey Key)
@@ -464,6 +496,20 @@ void ATRPlayerController::InvalidateBoostInput()
 }
 bool ATRPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
+ if(Params.Key==EKeys::MouseX || Params.Key==EKeys::MouseY)
+ {DiagnosticRawMouse[Params.Key==EKeys::MouseX?0:1]+=Params.AmountDepressed;++DiagnosticRawSamples;}
+
+ if(Params.Key==EKeys::W || Params.Key==EKeys::S || Params.Key==EKeys::A || Params.Key==EKeys::D)
+ {
+  if(Params.Event==IE_Pressed || Params.Event==IE_Repeat)
+  {
+   PhysicalLookKeys.Add(Params.Key);
+   if(!bInputFocused || bPrototypePanelOpen || !BoundSession.IsValid() || !BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing)){bFishingLookRearmRequired=true;}
+  }
+  if(Params.Event==IE_Released)
+  {PhysicalLookKeys.Remove(Params.Key);if(PhysicalLookKeys.IsEmpty()){bFishingLookRearmRequired=false;}}
+ }
+
  // Selection consumes Enter, so its physical release must also rearm the shared actions.
  if(Params.Key==EKeys::Enter && Params.Event==IE_Released)
  {ActionReleased(ETRPlayerAction::FishingStart);ActionReleased(ETRPlayerAction::Deploy);}
@@ -495,4 +541,27 @@ bool ATRPlayerController::InputKey(const FInputKeyEventArgs& Params)
   }
  }
  return Super::InputKey(Params);
+}
+
+void ATRPlayerController::ClearFishingLookInput()
+{
+ bFishingLookRearmRequired |= !PhysicalLookKeys.IsEmpty();FishingLookAxes=FVector2D::ZeroVector;bDiscardNextRodDelta=true;
+}
+bool ATRPlayerController::SetFishingLookInput(FVector2D Axes)
+{
+ if(Axes.ContainsNaN() || !BoundSession.IsValid() || !BoundSession->UsesFishingStations() || !BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing) || !bInputFocused || bPrototypePanelOpen || bFishingLookRearmRequired)
+ {FishingLookAxes=FVector2D::ZeroVector;return false;}
+ FishingLookAxes=FVector2D(FMath::Clamp(Axes.X,-1.,1.),FMath::Clamp(Axes.Y,-1.,1.));return true;
+}
+void ATRPlayerController::EnhancedFishingYaw(const FInputActionValue& V){SetFishingLookInput(FVector2D(V.Get<float>(),FishingLookAxes.Y));}
+void ATRPlayerController::EnhancedFishingPitch(const FInputActionValue& V){SetFishingLookInput(FVector2D(FishingLookAxes.X,V.Get<float>()));}
+void ATRPlayerController::AdvanceFishingCamera(double DeltaSeconds)
+{
+ if(!BoundSession.IsValid() || !BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing) || !bInputFocused || bPrototypePanelOpen || bFishingLookRearmRequired){FishingLookAxes=FVector2D::ZeroVector;return;}
+ if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager))
+ {
+  Camera->AdvanceFishingLook(FishingLookAxes,DeltaSeconds);
+  const auto View=Camera->GetFishingSnapshot(BoundSession->GetStationSnapshot());
+  if(View.bActive){BoundSession->SubmitRodView(FVector2D(View.YawDeg,View.PitchDeg),BoundSession->GetCastId(),BoundSession->GetRegistrationId());}
+ }
 }

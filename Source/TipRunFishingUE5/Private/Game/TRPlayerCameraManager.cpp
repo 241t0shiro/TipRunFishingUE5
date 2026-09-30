@@ -23,7 +23,7 @@ bool ATRPlayerCameraManager::BuildNavigationView(const FVector& BoatPositionM,FM
  const FRotator Rotation(State.PitchDeg,State.YawDeg,0);
  const FVector Target=BoatPositionM+FVector(0,0,Settings.CameraHeightM);
  Out.Location=TRUnits::MetersToCentimeters(Target-Rotation.Vector()*State.DistanceM);
- Out.Rotation=Rotation;Out.FOV=DefaultFOV;Out.bConstrainAspectRatio=false;
+ Out.Rotation=Rotation;Out.FOV=DefaultFOV;Out.bConstrainAspectRatio=false;Out.AspectRatioAxisConstraint.Reset();
  return !Out.Location.ContainsNaN();
 }
 void ATRPlayerCameraManager::UpdateViewTarget(FTViewTarget& OutVT,float DeltaTime)
@@ -47,7 +47,7 @@ void ATRPlayerCameraManager::ResetFishingLook(){FishingYaw=0;FishingPitch=Fishin
 void ATRPlayerCameraManager::LookFishing(FVector2D Delta)
 {
  if(!bFishingConfigured || Delta.ContainsNaN()){return;}
- FishingYaw=FMath::Clamp(FishingYaw+FMath::Clamp(Delta.X,-50.,50.)*FishingSettings.SensitivityDeg,-FishingSettings.MaxYawDeg,FishingSettings.MaxYawDeg);
+ FishingYaw=FMath::Clamp(FishingYaw+FMath::Clamp(Delta.X,-50.,50.)*FishingSettings.SensitivityDeg,FishingSettings.MinYawDeg,FishingSettings.MaxYawDeg);
  FishingPitch=FMath::Clamp(FishingPitch+FMath::Clamp(Delta.Y,-50.,50.)*FishingSettings.SensitivityDeg,FishingSettings.MinPitchDeg,FishingSettings.MaxPitchDeg);
 }
 FTRFishingCameraSnapshot ATRPlayerCameraManager::GetFishingSnapshot(const FTRFishingStationSnapshot& S) const
@@ -58,5 +58,19 @@ FTRFishingCameraSnapshot ATRPlayerCameraManager::GetFishingSnapshot(const FTRFis
 bool ATRPlayerCameraManager::BuildFishingView(const FTRFishingStationSnapshot& S,FMinimalViewInfo& Out) const
 {
  const auto View=GetFishingSnapshot(S);if(!View.bActive){return false;}
- Out.Location=View.PositionM*100;Out.Rotation=View.Rotation;Out.FOV=FishingSettings.FOV;Out.bConstrainAspectRatio=false;Out.ProjectionMode=ECameraProjectionMode::Perspective;return true;
+ Out.Location=View.PositionM*100;Out.Rotation=View.Rotation;Out.FOV=FishingSettings.FOV;Out.bConstrainAspectRatio=false;Out.ProjectionMode=ECameraProjectionMode::Perspective;
+ // Rod inverse projection uses horizontal FOV. Override LocalPlayer's optional Y-FOV
+ // policy so the real viewport and fixed-step inverse agree at both test resolutions.
+ Out.AspectRatioAxisConstraint=AspectRatio_MaintainXFOV;return true;
 }
+
+void ATRPlayerCameraManager::AdvanceFishingLook(FVector2D Axes,double DeltaSeconds)
+{
+ if(!bFishingConfigured || Axes.ContainsNaN() || !FMath::IsFinite(DeltaSeconds) || DeltaSeconds<=0){return;}
+ const double Dt=FMath::Min(DeltaSeconds,.1);
+ FishingYaw=FMath::Clamp(FishingYaw+FMath::Clamp(Axes.X,-1.,1.)*FishingSettings.FishingCameraYawRateDegPerS*Dt,FishingSettings.MinYawDeg,FishingSettings.MaxYawDeg);
+ FishingPitch=FMath::Clamp(FishingPitch+FMath::Clamp(Axes.Y,-1.,1.)*FishingSettings.FishingCameraPitchRateDegPerS*Dt,FishingSettings.MinPitchDeg,FishingSettings.MaxPitchDeg);
+}
+
+void ATRPlayerCameraManager::UpdateCamera(float DeltaTime)
+{Super::UpdateCamera(DeltaTime);DiagnosticCameraFrame=GFrameCounter;}

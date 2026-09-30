@@ -3,6 +3,7 @@
 #include "Components/ActorComponent.h"
 #include "Data/TRRodTuningDataAsset.h"
 #include "Data/TRSnapshots.h"
+#include "Data/TRFishingStationDataAsset.h"
 #include "Data/TRSimulationTypes.h"
 #include "TRRodControlComponent.generated.h"
 
@@ -20,10 +21,16 @@ public:
 	int64 GetJerkTicks() const { return UpTicks+ReturnTicks; }
 	float GetReelPulseMps(const FTRSimTime& Time, const FTREgiSnapshot& Fishing) const;
 	void SetStation(FVector MountM,double FacingRad){StationMountM=MountM;StationYawRad=FacingRad;bUseStation=true;Snapshot.BasePitchRad=FMath::Clamp(0.,Frozen.MinPitchRad,Frozen.MaxPitchRad);Snapshot.BaseYawRad=0;Snapshot.bValid=false;}
+	void SetScreenStation(const FTRFishingStation& Station,const FTRFishingStationParameters& Camera);
+	bool ApplyView(FVector2D YawPitchDeg);
 	void Reset();
 	void InvalidateSnapshot() { Snapshot.bValid=false; Snapshot.bShakuriActive=false; }
 	void ObserveOperationStart(const FTREgiSnapshot& Fishing);
 private:
+	FTRFishingStationParameters ScreenCameraSettings;
+	FVector CameraMountM=FVector::ZeroVector;
+	FVector2D CameraYawPitchDeg=FVector2D::ZeroVector;
+	bool ResolveScreenPose(FTRRodSnapshot& Next,const FQuat& Basis,double Offset,double SurfaceZ) const;
 	bool bUseStation=false;
 	FVector StationMountM=FVector::ZeroVector;
 	double StationYawRad=0;

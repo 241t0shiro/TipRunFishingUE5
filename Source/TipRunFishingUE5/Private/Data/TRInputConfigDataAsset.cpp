@@ -16,6 +16,12 @@ bool UTRInputConfigDataAsset::Validate(TArray<FText>& Errors) const
 			if(A){bValid &= A->ValueType==((A==NavigationFishingStart || A==NavigationBoost)?EInputActionValueType::Boolean:A==NavigationLook?EInputActionValueType::Axis2D:EInputActionValueType::Axis1D);}
 		}
 	}
+ if(FishingCameraYaw || FishingCameraPitch)
+ {
+  bValid &= FishingCameraYaw && FishingCameraPitch && FishingCameraYaw!=FishingCameraPitch;
+  for(const UInputAction* A:{FishingCameraYaw.Get(),FishingCameraPitch.Get()})
+  {bool Mapped=false;if(FishingContext){for(const auto& M:FishingContext->GetMappings()){Mapped|=M.Action==A;}}bValid &= A && A->ValueType==EInputActionValueType::Axis1D && Mapped;}
+ }
 	TSet<ETRPlayerAction> Commands;
 	TSet<const UInputAction*> Actions;
 	for (const FTRInputBinding& B : Bindings)
@@ -125,4 +131,15 @@ void UTRInputConfigDataAsset::CreateNavigationPrototype()
   NavigationFishingStart->ValueType=EInputActionValueType::Boolean;
   NavigationContext->MapKey(NavigationFishingStart,EKeys::Enter);
  }
+}
+
+void UTRInputConfigDataAsset::CreateFishingCameraPrototype()
+{
+ if(!FishingContext || FishingCameraYaw || FishingCameraPitch){return;}
+ FishingCameraYaw=NewObject<UInputAction>(this,TEXT("IA_FishingCameraYaw"));FishingCameraYaw->ValueType=EInputActionValueType::Axis1D;
+ FishingCameraPitch=NewObject<UInputAction>(this,TEXT("IA_FishingCameraPitch"));FishingCameraPitch->ValueType=EInputActionValueType::Axis1D;
+ FishingContext->MapKey(FishingCameraYaw,EKeys::D);
+ FishingContext->MapKey(FishingCameraYaw,EKeys::A).Modifiers.Add(NewObject<UInputModifierNegate>(this));
+ FishingContext->MapKey(FishingCameraPitch,EKeys::W);
+ FishingContext->MapKey(FishingCameraPitch,EKeys::S).Modifiers.Add(NewObject<UInputModifierNegate>(this));
 }

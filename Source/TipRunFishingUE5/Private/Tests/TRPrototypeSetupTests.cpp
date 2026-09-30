@@ -2,6 +2,7 @@
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 #include "Game/TRGameModeBase.h"
 #include "Game/TRPlayerController.h"
+#include "Game/TRPlayerCameraManager.h"
 #include "Game/TRPrototypeViewActor.h"
 #include "Data/TRRodTuningDataAsset.h"
 #include "UI/TRHUD.h"
@@ -189,6 +190,7 @@ bool FTRPrototypeBootGTest::RunTest(const FString& Parameters)
 	TArray<FText> Errors; if (!TestTrue(TEXT("Stored GameMode starts revision2 Session"),Mode->InitializeSession(Errors)))
 	{ for (const auto& Error:Errors) { AddError(Error.ToString()); } return false; }
 	auto* PC=F.World->SpawnActor<ATRPlayerController>(); PC->InputConfig=Mode->SessionConfig->Input;
+	PC->PlayerCameraManager=F.World->SpawnActor<ATRPlayerCameraManager>();PC->PlayerCameraManager->InitializeFor(PC);
 	TStrongObjectPtr<UEnhancedInputComponent> Input(NewObject<UEnhancedInputComponent>(PC)); PC->InputComponent=Input.Get();
 	TStrongObjectPtr<UEnhancedPlayerInput> PlayerInput(NewObject<UEnhancedPlayerInput>(PC)); PC->PlayerInput=PlayerInput.Get();
 	TestTrue(TEXT("Stored input installed"),PC->InstallInputBindings(Input.Get())); TestTrue(TEXT("Session binds"),PC->BindSession(Mode->GetSession()));
@@ -207,8 +209,9 @@ bool FTRPrototypeBootGTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Ready panel deploy"),UI->RequestDeploy()); F.Step(); UI->RefreshFromController();
 	TestTrue(TEXT("FreeFall and live spatial snapshot"),PC->GetDebugSnapshot().bEgiValid && PC->GetDebugSnapshot().Egi.bWorldPositionValid);
 	F.Step(240);
+	PC->RoutePrototypeMouse(FVector2D::ZeroVector,false);
 	const auto Before=PC->GetDebugSnapshot(); Inject(EKeys::Mouse2D,FInputActionValue(FVector2D(1,1))); F.Step();
-	TestTrue(TEXT("Saved Mouse has mode-specific routing"),Mode->GetSession()->UsesFishingStations()?PC->GetDebugSnapshot().Rod.BaseYawRad==Before.Rod.BaseYawRad:PC->GetDebugSnapshot().Rod.BaseYawRad!=Before.Rod.BaseYawRad);
+	TestTrue(TEXT("Saved Mouse has screen-space mode-specific routing"),PC->GetDebugSnapshot().Rod.bScreenControl && PC->GetDebugSnapshot().Rod.ScreenControl.X>Before.Rod.ScreenControl.X && PC->GetDebugSnapshot().FishingCamera.YawDeg==Before.FishingCamera.YawDeg);
 	Inject(EKeys::RightMouseButton,FInputActionValue(true)); F.Step();
 	TestTrue(TEXT("Right click starts Shakuri"),PC->GetDebugSnapshot().Egi.FishingState==ETRFishingState::Jerking);
 	Inject(EKeys::RightMouseButton,FInputActionValue(false)); F.Step(60);

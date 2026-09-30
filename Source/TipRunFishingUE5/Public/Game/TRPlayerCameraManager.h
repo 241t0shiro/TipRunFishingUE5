@@ -9,9 +9,12 @@ class TIPRUNFISHINGUE5_API ATRPlayerCameraManager : public APlayerCameraManager
 {
  GENERATED_BODY()
 public:
+ uint64 DiagnosticCameraFrame=0;
+ virtual void UpdateCamera(float DeltaTime) override;
  void ConfigureFishing(const FTRFishingStationParameters& P);
  void ResetFishingLook();
  void LookFishing(FVector2D Delta);
+ void AdvanceFishingLook(FVector2D Axes,double DeltaSeconds);
  FTRFishingCameraSnapshot GetFishingSnapshot(const FTRFishingStationSnapshot& S) const;
  bool BuildFishingView(const FTRFishingStationSnapshot& S,FMinimalViewInfo& Out) const;
  void ConfigureNavigation(const FTRNavigationParameters& P,double HeadingRad);

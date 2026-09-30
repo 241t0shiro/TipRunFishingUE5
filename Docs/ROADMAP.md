@@ -768,3 +768,88 @@ R2変更ファイル（Sourceは`Source/TipRunFishingUE5`配下）:
 - 証跡: Saved/Logs/R3CancelBuild.log、R3CancelBuild2.log、R3CancelBuild3.log。Saved/Automation/R3Cancel/index.json（初回33件）、R3CancelFinal/index.json（修正1件成功）、対応するR3CancelTests.log/R3CancelFinal.log。終了コード0とJSONを確認。既存MSVC/include順通知、試験前Editor診断/非Win64 SDK不足は残る。今回由来の残存警告0。
 - 今回変更コード: Public/Data/TRPlayerModeTypes.h、Private/Game/TRPlayerModeComponent.cpp、TRFishingSessionActor.cpp、TRPlayerController.cpp、Private/Tests/TRFishingStationTests.cpp。文書AGENTS/GAME_DESIGN/UI_SPEC/ROADMAP。R4以降/H/M11未着手。
 - 実装・自動試験は合格。UI_SPEC末尾の今回Cancel再PIEをユーザーが確認後、R3正式完了可能。自動PIE/手動合格の代行宣言は行わない。
+
+### R4 Fishing Camera / Rod Input（2026-09-25）
+- R3はユーザーが自動検証/手動PIEとも正式合格。今回R4のみ実装。Fishing WASDは固定釣り座のFPS視線、Mouseは固定QueueのRod Base Aim。NavigationのWASD/MouseとR3舷選択/Cancelを維持。R5以降/H/M11未着手。
+- CameraのYaw/Pitch速度・MinYawをStation DataAssetへ追加し、既存角度制限も使用。Rodの感度/Clamp/反転・BaseとShakuri Offset分離は再利用。Session/Egi/Boat/物理係数は変更なし。HUDはMode別操作、Snapshotは既存角度/回転/TipとMouseRodInputActive。
+- 保存InputへFishingCameraYaw/Pitchの2ActionとW/S/A/Dの独立Mappingを明示追加。TRMigrateM105R4専用のUE SavePackageでInput/Stationを検証・保存。前後SHA256で実バイト変更はInputのみ。旧資産/Map/Session/Rod/環境は保持。
+- **R4 4件＋必要回帰43件＝最終47件すべて成功、最終採用結果の試験内errors/warnings=0**。回帰はR1 4、R2 14、R3 6、D 5、M09 7、F 6、G保存Input接続1。保存移行専用1件も成功。
+- R4新規: SavedInputAndParameters（保存参照/方向Mapping/Clamp/無効値）、CameraRodIndependenceAndSides（両舷×Heading0/90/180/270、Enhanced軸方向/保持/Clamp、Mouse固定配送、BoatとRodの独立、Deploy後入力）、SelectionUIFocusPauseAndHeld（優先/取消・確定/UI/Focus/Pause/物理解放/古いDelta破棄/既存右左Action）、RodFixedFPSAndLifetime（同じTick/SequenceのRod入力が30/60/120fps完全一致、破棄後拒否）。
+- 初回45成功/2失敗。旧R2 HUD試験がW/S表示自体を禁止していたため「操船W/S表示を禁止」へ更新。G保存入力試験はUI閉鎖境界の最初のMouseサンプル破棄を通してから実配送を検査するよう変更。ControllerはMouse破棄判定より先にCast/Mode寿命同期を行うよう整合。最終関連30件を再実行し全成功、未影響の成功17件は初回結果を採用。
+- UHT7生成ファイル、Runtime/試験の実C++コンパイルとDevelopment Editor Win64成功。最終変更も5 Compile＋Link等8アクション成功。UE5.8.2/MSVC14.51.36257/SDK10.0.22621.0。git diff --check成功。
+- 証跡: Saved/Logs/R4Build.log、R4Build2.log、R4Build3.log、Saved/Automation/R4Migration/index.json、R4/index.json（初回47件）、R4Final/index.json（最終30件）、対応するR4Migration.log/R4Tests.log/R4Final.log。終了コード0とJSONを確認。資産比較はSaved/R4BeforeMigration.csv。
+- 今回由来の残存警告0。既存MSVC推奨版/include順、試験前Editor診断/非Win64 SDK不足は残る。実PIE/実Mouse capture/操作感は未確認、UI_SPEC末尾の手動評価待ち。自動PIEを起動していない。
+- R5接続のBase Aim/Camera独立とSnapshotは準備済み。R4手動合格と次の明示依頼なしにR5へ進行しない。0.8m Reel/Sequence/Slack-aware/Drift再調整は今回変更していない。
+
+変更ファイル:
+- `AGENTS.md`
+- `Content/TipRun/Prototype/M105/Data/DA_TR_M105Input_Prototype.uasset`
+- `Docs/FISHING_SYSTEM.md`
+- `Docs/GAME_DESIGN.md`
+- `Docs/ROADMAP.md`
+- `Docs/UI_SPEC.md`
+- `Source/TipRunFishingUE5/Private/Data/TRFishingStationDataAsset.cpp`
+- `Source/TipRunFishingUE5/Private/Data/TRInputConfigDataAsset.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRPlayerCameraManager.cpp`
+- `Source/TipRunFishingUE5/Private/Game/TRPlayerController.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRFishingStationTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRNavigationTests.cpp`
+- `Source/TipRunFishingUE5/Private/Tests/TRPrototypeSetupTests.cpp`
+- `Source/TipRunFishingUE5/Private/UI/TRPrototypePresentation.cpp`
+- `Source/TipRunFishingUE5/Public/Data/TRFishingStationDataAsset.h`
+- `Source/TipRunFishingUE5/Public/Data/TRHUDSnapshot.h`
+- `Source/TipRunFishingUE5/Public/Data/TRInputConfigDataAsset.h`
+- `Source/TipRunFishingUE5/Public/Game/TRPlayerCameraManager.h`
+- `Source/TipRunFishingUE5/Public/Game/TRPlayerController.h`
+
+
+### R4 Rod Geometry最終修正・検証（2026-09-28）
+- 今回の範囲はR4 Geometryのみ。前回R4の未コミット変更は保持。ユーザー手動合格済みの入力/Camera分離/両舷/感度は作り直していない。Content/Config/係数へ今回の変更なし。
+- 原因調査: 旧Rod計算はすでに固定長の球面方向式であり、累積Quaternion/Tip加算/二重m→cm変換は見つからなかった。表示はStation RootとRod Tipを別々に取得しており、異なる時点/設定で端点が不一致になる経路を確認し、同一RodSnapshotへ修正。これは防御修正であり、今回の手動PIEの円運動/伸縮の全原因を特定したと扱わない。透視投影上の見かけの変化も残るため正式合否は保留。
+- 固定LengthMをSnapshotへ追加。正規直交Station Basisと独立Yaw/Pitchで方向を毎固定Tick再構築し、Shakuri Offsetを加えても固定長を維持。表示Meshの長軸と径を別扱い、同じRoot/Tipを単一m→cm境界で表示。
+- **新規3件＋関連34件＝37件成功、試験内errors/warnings=0**。Geometry.FixedLengthPureYawPitchは両舷×Heading0/90/180/270、200 Pure Yaw条件＋Pure Pitch。最大長さ誤差8.881784197e-16m、最大Station Local Z誤差4.4408920985e-16m。RepeatedAimAndShakuriは各舷/Headingで左右2,000入力とShakuri全Tickの固定長。PresentationAndUnitsは96姿勢でMesh端点/長さ/径/単位と、意図的に異なるStation/編集後設定を与えた場合の凍結Snapshot表示を検査。
+- 関連34件: 既存R4 4（30/60/120fps完全一致、Camera/Rod独立、UI/Focus/Pause/寿命/右左入力含む）、R3 6、D 5、M09 7、F 6、G 6（保存設定と表示/既存Shakuri/回収接続）。A〜C全回帰/R9/Hは実行していない。
+- UHT8生成ファイル、Rod/表示/反射コードの実C++コンパイル、Development Editor Win64成功。新規試験の初回構文エラーを修正し再コンパイル/リンク成功。UE5.8.2/MSVC14.51.36257/SDK10.0.22621.0。git diff --check成功。
+- 証跡: Saved/Logs/R4GeometryBuild.log（UHT8生成/Runtime実コンパイル/新規試験構文エラー）、R4GeometryBuild2.log（修正後成功）、R4GeometryTests.log、Saved/Automation/R4Geometry/index.json（37成功/0失敗、終了コード0）。既存MSVC推奨版/include順通知、試験前Condition failed/Editor診断、非Win64 SDK不足は残る。今回由来の残存警告なし。
+- 今回変更: Public/Data/TRSnapshots.h、Public/Data/TRRodTuningDataAsset.h、Private/Fishing/TRRodControlComponent.cpp、Private/Game/TRPrototypeViewActor.cpp、新規Private/Tests/TRRodGeometryTests.cpp、AGENTS.md、Docs/FISHING_SYSTEM.md、Docs/UI_SPEC.md、Docs/ROADMAP.md（SourceパスはSource/TipRunFishingUE5配下）。
+- UI_SPEC末尾の手動再確認を依頼。R4正式完了は未宣言、R5以降/H/M11未着手。
+
+
+### R4 Screen-space Rod Control（2026-09-28実装、2026-09-29再開・最終確認）
+- ユーザー手動PIEで旧Geometry方式は不合格。Worldの高さ/長さだけを受入にする旧基準を廃止し、Player Cameraへ再投影したMouse軸の一致を正式契約へ変更。今回も自動試験だけで操作感の正式合格を宣言しない。
+- 正本はScreenControl X/Y。Mouse→Controller→Session→固定QueueでRodView（Camera相対Yaw/Pitch）とRodAimを順序付き配送。RootはStation Gripに固定、LengthMを凍結しCamera Rayと球面から毎Tick Tip/回転を解く。Camera Lookは操作値を変えないが、新しい視線で同じ画面目標を解き直す。旧BaseYaw/Pitchは導出値。詳細計算/調整項目はFISHING_SYSTEM末尾。
+- 実Viewportは水平FOVを明示し、UEのLocalPlayer側のY-FOV既定値による食い違いを防止。Navigation時には解除。下向き視線の安全範囲もXに依存しない矩形として扱う。Base＋既存Up/Returnの一時Screen Offset、RodTip→Line→Egiを維持。Shakuri巻取り量/Drag/slip/環境係数は変更しない。
+- Quick不具合の原因はRod固定更新より前の早期returnと、返船成功時のSnapshot無効化。Quick中も同TickのBoatへRodを追従させ、成功時の有効Snapshotを維持。前/中/後のRootLocal/Length/ScreenControl/Camera相対Transform不変を試験。Egi水中Snapshotの保持、固定短時間の終了、通知一度、Ready/Unlockは従来どおり。
+- 保存PrototypeをUE SavePackageで明示更新。RodMount=(0.6,±1,1.1)m、Camera/Eye/FOV/LengthMは保持。実バイト変更はDA_TR_R3FishingStations_Prototypeのみ。DA_TR_M105Rod_Prototypeは新Screen項目を設定・保存したがクラス既定値と同じためバイト変更なし。Saved/R4ScreenBeforeMigration.csvの前後SHA256で確認。既存Inputの差分は前回R4から保持したもので、今回追加変更していない。
+
+検証:
+- **新規Screen4件＋関連44件＝最終採用48件すべて成功、試験内errors/warnings=0**。新規はSavedTuning、ProjectedAxesSidesHeadings、VisualProfileAndSafety、QuickRetrieveGripAndControl。保存移行専用実行1件も成功。
+- 実UEのCalculateProjectionMatrixGivenViewRectangle/ProjectWorldToScreenで両舷×Heading0/90/180/270×視線4条件（初期/変更後/上下左右限界）を投影。Pure X/Y、斜め、独立Clamp、左右2,000＋上下2,000入力、1920×1080/2560×1440を確認。最大交差軸誤差0.000030517578125px、往復の累積誤差0px。
+- UEのProjectWorldToScreen内部ではRHW/NormalizedX/Y/pixel積がfloat。初期の1e-5px基準はこの精度を超えていたため、Engine実装を確認し4*float epsilon*1920（約0.000916px）の画面精度予算へ修正。数値不具合を隠すための製品許容値ではない。累積誤差の判定は別に維持。
+- 通常操作域の投影Rod長431.221〜731.964px、最大/最小1.6974（1920×1080）。技術上のPrototype受入は非崩壊/倍率2未満で、製品値や手動操作感合格ではない。World長2m、Visual長200cm、表示長誤差最大5.97e-13cm。Shakuri中/終了後のControl・Root・Length、Ray無交差時の有限な最寄り点、安全域、非有限入力拒否を確認。
+- 関連44件: 既存R4 7（従来Geometry3含む）、R3 6、D 5、E 7、M09 7、F 6、G 6。既存R4の30/60/120fpsはScreenControlとTipの完全一致を確認。Side/Camera/相対Mouse配送/UI/Focus/Pause/登録世代/破棄/右1入力/左保持・解放/Quick/装備も維持。無関係なA〜C全回帰/R9/Hは未実施。
+- 初回48件は47成功、G保存SmokeがCamera未生成＋旧Yaw期待で失敗。実Cameraを生成してScreen入力を検査するよう更新。Runtime最終版では47成功、投影試験1件だけfloat丸めで失敗。試験許容精度を上記根拠で修正して当該1件を再実行・成功。Runtimeにその間変更はなく、無関係な成功試験は再実行していない。
+- UHT初回12生成、反射調整後3生成。Runtime/試験の実C++コンパイルとDevelopment Editor Win64成功。最終試験コードも実Compile/Link成功。UE5.8.2、MSVC14.51.36257、Windows SDK10.0.22621.0。git diff --check成功。
+- 証跡: Saved/Logs/R4ScreenBuild.log〜R4ScreenBuild4.log、R4ScreenMigration.log、R4ScreenTests.log（初回）、R4ScreenFinal.log（Runtime最終版）、R4ScreenProjectionFinal.log（再試験）。Saved/Automation/R4ScreenMigration/index.json、R4Screen/index.json、R4ScreenFinal/index.json、R4ScreenProjectionFinal/index.json。終了コード0と個別JSONを確認。
+- 今回由来の残存試験警告なし。既存のMSVC推奨版/include順通知、試験開始前Condition failed/Editor診断、非Win64 SDK不足、Gitの改行変換通知は残る。
+
+今回の変更ファイル（前回R4/Geometryの差分は別途保持）:
+- Source/TipRunFishingUE5/Public/Data/TRRodTuningDataAsset.h、TRSnapshots.h、TRTypes.h
+- Source/TipRunFishingUE5/Public/Fishing/TRRodControlComponent.h
+- Source/TipRunFishingUE5/Public/Game/TRFishingSessionActor.h
+- Source/TipRunFishingUE5/Private/Data/TRRodTuningDataAsset.cpp、TRFishingStationDataAsset.cpp
+- Source/TipRunFishingUE5/Private/Fishing/TRRodControlComponent.cpp
+- Source/TipRunFishingUE5/Private/Game/TRFishingSessionActor.cpp、TRPlayerController.cpp、TRPlayerCameraManager.cpp
+- Source/TipRunFishingUE5/Private/Tests/TRRodScreenTests.cpp（新規）、TRFishingStationTests.cpp、TRPrototypeSetupTests.cpp
+- Content/TipRun/Prototype/M105/Data/DA_TR_R3FishingStations_Prototype.uasset
+- AGENTS.md、Docs/FISHING_SYSTEM.md、UI_SPEC.md、ROADMAP.md、GAME_DESIGN.md、BOAT_SYSTEM.md
+
+手動再PIEはUI_SPEC末尾のScreen-space手順。画面上の軸一致/自然な見かけの長さ/Quick時のGrip固定をユーザーが確認するまでR4正式完了は保留。R5以降/H/M11は未着手。
+
+
+### R4A-1 実Runtime観測（2026-09-30）
+R4は手動PIEにより正式不合格。第1段階の観測・診断だけを実装。保存MapからGame Worldを起動し、通常Input/World Tick/Active Camera/実Rod Meshを観測する。Camera-only local pose不変が両舷でExpected FAIL。Pure Mouseの軸ずれとDeploy→Shakuri→RetrieveのLockは今回未再現。症状を隠すSolver/設定変更は行わない。
+
+新規4件のうち1件は意図したFAIL（assert4件）、3件は実行成功。関連73件成功、試験内警告0。UHT/実C++/Development Editor Win64成功。計測値、警告、実行フィルタ、変更一覧、ログと再検証の証跡は [R4A-1観測記録](R4A1_RUNTIME_OBSERVATION.md) を参照。
+
+R4A-2 Station-local正本移行は未実装。既知FAILを次段階の基準にできるが、R4正式合格とはしない。R5以降/H/M11未着手。

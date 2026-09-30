@@ -498,3 +498,54 @@ R3保存PrototypeのBackspace/Cancel Actionは釣り座選択の取消専用と�
 3. 同操作を10回程度繰り返し、最後はEnterで投入、Qで回収できること。船が跳ばず自然Driftを継続すること。
 4. 右舷でもC→A→Backspaceを同様に確認。Navigation操作が釣り中に有効にならず、回収後Eでの通常復帰は維持されること。
 従来R3の他項目はユーザー手動合格済み。今回修正したCancel経路のみ再確認待ち。R4以降の操作変更は未実装。
+
+### R4 現行Fishing入力（2026-09-25）
+R3はユーザー正式合格済み。以下がR3のMouse FPS Look記述に代わる現行操作。旧記録は履歴。
+
+|状態|W/S|A/D|Mouse|
+|---|---|---|---|
+|Navigation|前進/後退|操舵|三人称Camera|
+|Fishing通常|視線上/下|視線左/右|Rod上下左右|
+|舷選択|視線へ配送しない|左舷/右舷選択|Rodへ配送しない|
+
+視線は釣り座に固定された相対角度で、歩行/船移動ではない。解放後の角度保持、CameraとRodの独立を保証する。右クリック1入力1Shakuri、左保持通常回収、F再Fall、Q回収、ReadyでC釣り座/Tab装備/Enter投入、E帰還、Insert詳細は維持。Shakuri/Reel量は変更していない。
+Camera調整はDA_TR_R3FishingStations_PrototypeのFishingCameraYawRateDegPerS=45、PitchRate=35、MinYawDeg=-55、MaxYawDeg=55、MinPitchDeg=-65、MaxPitchDeg=10。Prototype仮値。旧SensitivityDegは互換フィールドでWASDには使用しない。
+Mouse2Dは相対Delta、既存のCapturePermanently_IncludingInitialMouseDown/LockOnCaptureとGameOnlyを使用。UIはGameAndUI/カーソル表示で遮断。Mode/選択/UI/Focus/Pause境界で軸状態・保留Rod入力を破棄し、押されたWASDがすべて物理解放されるまで視線入力を再受付しない。復帰境界の最初のMouseサンプルも破棄する。Focus外で解放を受信できなかった場合は一度押して離す。
+
+手動PIE（自動実行しない）:
+1. Editor再起動、既存L_TR_M105_Prototype。NavigationのWASD/Mouse/Home/Shiftを確認。Enter→A/D→EnterでFishing。
+2. W/Sで視線上下、A/Dで左右。解放後に角度保持、船首/船位置/Rod基準姿勢が入力で変わらないこと。
+3. Mouseだけ動かしRod上下左右、Camera角度不変。画面端まで相対操作を続けても入力が止まらないこと。右クリック/左保持/解放の従来操作も確認。
+4. 両舷と船首0/90/180/270度で操作方向を確認。投入後のFreeFall/Bottom/StayでもRod操作を確認。
+5. C選択でA/Dが視線へ漏れず、Backspaceで元Side/FPS/入力へ戻ること。Tab装備UI中はRod/右/左操作が漏れず、閉じると復帰すること。
+6. Wを保持したMode切替、Focus外し、Pause解除で自動視線再開やMouse急変がなく、WASDを解放/押し直して操作できること。
+保存InputだけにFishingCameraYaw/Pitchの専用Actionを追加。Station設定もUE保存で検証したが、新項目が既定値と同じため資産バイト変更はInputのみ。製品最終配置ではない。
+
+
+### R4 Geometry手動再確認（2026-09-28・手動不合格の旧手順）
+操作/Camera/感度/可動域は変更なし。自動PIEは起動しない。
+1. Editorを再起動し、保存L_TR_M105_PrototypeでPIE。Enter→A→Enterで左舷Fishing Ready。右舷も同じ手順で確認する。
+2. W/S/A/Dで見やすい視線にして手を離し、Mouse Xだけを左右/両Clampまで操作。Mouse Yだけと斜め操作も確認する。CameraはMouseに追従しない。
+3. Rodの根元から先端までの実長が一定であることを確認。透視画面では水平円弧でも画面Yや投影長が変化するため、pixel上の変化だけで物理的伸縮と判定しない。必要ならPIEを一時停止してRodControl SnapshotのRootWorldPositionM/TipWorldPositionM/LengthMをDetails/Blueprintデバッグで比較する。新たな操作キーやConsole依存は追加していない。
+4. Pitch上限を含めて操作し、Rod/Tip/Lineが連続し、船首0/90/180/270度・左右舷で同じ規則となること。保存Rodは従来の長さ/可動域のまま。Cameraの有限視界から先端が出ることと、実長が増えることは別に評価する。画面内に収めるための長さ補正はない。
+5. 投入後の右クリックShakuri/左保持回収・解放、Tab UI/Focus/Pauseも再確認。Shakuri中も同じ物理長、Cameraは独立。
+今回の数値/表示Transform自動試験は成功したが、申告された画面上の2症状の解消とR4正式合格はこの手動再確認まで保留する。
+
+
+### R4 Screen-space操作・手動PIE再評価（現行、2026-09-28）
+旧Geometryの手動PIEは不合格。今回は画面上の入力方向とTip移動方向の一致を正式契約とする。MouseはScreen Control、WASDはFPS視線。Camera LookでControl値は変えず、新しいCamera画面を基準にRodを解く。根元は船のGripに固定、長さは固定。細かい調整項目/安全域/計算の正本はFISHING_SYSTEM末尾。
+
+自動PIEは起動しない。Editorを再起動し、保存 `/Game/TipRun/Prototype/M105/L_TR_M105_Prototype` を1920×1080または2560×1440で開く。
+1. Enter→A→EnterでPort、右舷はDで開始。Mouse左右だけでTipが画面上を水平に移動し、上下往復だけで画面Xがずれないこと。左右/上下/斜め/端のClampを確認。
+2. WASDで視線を変えてからMouse操作。同じ画面基準の方向で動き、MouseでCameraが回転しないこと。強く下を見る場合はRodの海面貫通を避ける安全範囲内で動くこと。
+3. 根元/リールがGripから離れず、物理長が変わらないこと。透視投影による多少の長さ差はあるが、竿が不自然に伸縮して見えないことを手動評価する。通常域の投影長計測はROADMAPの試験結果を参照。
+4. 投入後の右クリック1回/複数回Shakuri、左保持回収/解放を確認。Shakuri終了後に同じScreen Baseへ戻ること。
+5. 竿を中央以外へ向けてQ。Quick前/中/完了ReadyでGrip/リールが手前へ移動せず、同じBase姿勢を保つこと。Boat Driftによる船全体の移動は継続する。Q後の装備変更/次Deployも確認。
+6. 両舷、船首0/90/180/270度で繰り返す。Tab/舷選択/Focus/Pause復帰時の入力遮断と再開、Cameraの独立を確認する。
+今回も手動PIE合格をAutomationの成功で代行しない。R4正式完了とR5進行は別途ユーザー確認・明示依頼が必要。
+
+
+### R4A-1 観測用詳細HUD（2026-09-30）
+R4は手動PIE不合格。今回は入力方式/Camera/製品HUDを修正せず、Insert詳細の末尾にRuntime診断行を追加した。実MeshとSnapshotのRoot/Tip差、Local pose、Active Camera/FOV/ViewRect、frame/tick、Mouse各段階、Command受付、終了/安全停止理由と終了前状態を読取専用で表示する。既存スクロール/折返しを使用。操作感や可読性を今回手動合格とはしていない。
+
+診断方法と未再現項目は [R4A-1観測記録](R4A1_RUNTIME_OBSERVATION.md)。通常HUDと操作割当は変更なし。Station-local正本移行は次段階であり未実装。

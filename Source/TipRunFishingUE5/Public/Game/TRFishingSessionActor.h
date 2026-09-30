@@ -41,6 +41,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodTuningDataAsset> RodTuning;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodControlComponent> RodControl;
 	bool SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1);
+	bool SubmitRodView(FVector2D YawPitchDeg,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1);
 	// Configuration-time entry points may resolve assets; never invoke inside a fixed step.
 	bool Initialize(UTRSimulationWorldSubsystem* Simulation, FTRActorSimId InBoatId,
 		UDataTable* Egis, UDataTable* Sinkers, UTRFishingTuningDataAsset* Tuning,
@@ -76,7 +77,11 @@ public:
 	void ClearPlayerCommands();
 	FTRCommandProcessed OnCommandProcessed;
 	FTRCastCompleted OnCastCompleted;
-	bool HasResult() const { return bHasResult; }
+	FString GetRuntimeDiagnostics() const;
+ FVector2D DiagnosticConsumedMouse=FVector2D::ZeroVector;
+ int64 DiagnosticConsumedCount=0;
+ FString DiagnosticLastRod, DiagnosticLastAction, DiagnosticLastFailure, DiagnosticAbortContext;
+ bool HasResult() const { return bHasResult; }
 	FTRActorSimId GetRegistrationId() const { return RegistrationId; }
 	ETRCommandResult GetLastCommandResult() const { return LastCommandResult; }
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TipRun|Session")
@@ -101,7 +106,7 @@ private:
 	bool ReadEnvironment(FTRBoatSnapshot& Boat, FTROceanSample& Ocean) const;
 	bool Register();
 	void Unregister();
-	void AbortInternal();
+	void AbortInternal(const FString& Reason=TEXT("Session.ExplicitAbort"));
 	void FinishInternal(ETRCastOutcome Outcome, bool bReturnedOnboard, bool bQuickReturned = false);
 	void ConsumeInputReset();
 	void ResetInternal();

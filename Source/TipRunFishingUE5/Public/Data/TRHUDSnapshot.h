@@ -12,6 +12,9 @@ USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 {
 	GENERATED_BODY()
+ // R4A-1 observation only; never consumed by simulation or compact HUD.
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Debug") FString RuntimeDiagnostics;
+ UPROPERTY(BlueprintReadOnly) bool bMouseRodInputActive=false;
  UPROPERTY(BlueprintReadOnly) FTRFishingStationSnapshot Station;
  UPROPERTY(BlueprintReadOnly) FTRFishingCameraSnapshot FishingCamera;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FTRPlayerModeSnapshot PlayerMode;

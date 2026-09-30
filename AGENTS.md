@@ -1,5 +1,13 @@
 # TipRunFishingUE5 — Codex実装規約
 
+2026-09-30 R4A-1: R4はユーザー手動PIEで正式不合格。今回はRuntime観測・診断・Failing Integration Testのみ。保存Mapの実Game World/Active Camera/Visual Mesh経路でCamera-onlyによるRod移動をExpected FAILとして再現。Pure Mouse軸ずれとLockは未再現であり、解消扱いにしない。Rod方式/係数/Config/Contentは今回未変更。結果と限界はDocs/R4A1_RUNTIME_OBSERVATION.md。R4A-2、R5以降/H/M11は未着手。以下のR4自動成功は受入の代用にならない履歴。
+
+2026-09-29 R4 Screen最終確認: 旧Geometry方式はユーザー手動PIE不合格。Camera画面基準の2D Control＋固定Grip/固定長球面へ改訂し、Quick中のRod追従停止/完了時初期姿勢Fallbackを修正。UHT・実C++/Development Editor Win64成功、新規4件＋関連44件の最終結果成功。水平FOVを実Viewportにも明示。旧World軸試験だけで合格にせず、画面再投影と手動PIEを受入とする。操作感の正式合否は手動待ち、R5以降/H/M11未着手。現行契約/手順はFISHING_SYSTEM/UI_SPEC末尾、証跡はROADMAP末尾。
+
+2026-09-28 R4 Geometry: 固定LengthMをSnapshotへ公開しStation Basisから毎Tick再計算。表示Root/Tipを同一Rod Snapshotへ統一。UHT8生成・実C++/Development Editor Win64成功、新規Geometry3件＋関連34件成功。旧Simulationにも固定長契約があり、PIE症状の原因/解消は断定せず手動再確認待ち。R5以降/H/M11未着手。証跡/限界はROADMAP末尾。
+
+2026-09-25 R4: R3はユーザーが自動/手動PIEとも正式合格。R4はFishing WASD視線とMouse Rodを独立化し、保存Inputへ明示接続。UHT7生成・実C++/Development Editor Win64成功、R4 4件＋関連回帰43件の最終結果成功。R4操作感/実Mouse captureは手動PIE待ち。Shakuri/Reel/環境係数は保持、R5以降/H/M11未着手。現行操作はUI_SPEC末尾、証跡はROADMAP末尾。
+
 2026-09-25 R3 Cancel修正: 手動PIEでFishing内舷選択の取消後に観測Camera/操作不能となる不具合を受け、選択開始元と変更前Sideを明示化。R3 Cancel入力をSession終了へ流さず、開始元のMode/Context/Camera/Sideを維持する。UHT6生成・実C++/Development Editor Win64成功、R3 6件＋関連回帰27件の最終結果成功。今回取消経路の手動再PIE待ち。R4以降/H/M11未着手。
 
 2026-09-24 R3最終修正: 既存の両舷FPS構図/Gunwale/Rod/Reel/Line/Mouse Look/Drift追従はユーザー手動合格。Fishing Ready内のC釣り座変更を追加し、Mode/船動態を維持。UHT7生成・実C++/Development Editor Win64成功、R3 5件＋R1/R2/F/G回帰27件成功。今回C経路の手動再確認待ち。R4入力/R5-R6巻取り/R7環境の補足は文書のみで未実装。R4以降/H/M11未着手。

@@ -355,3 +355,12 @@ Fishing内の釣り座変更はReady/Onboard/Cast終了/UnlockedをSessionの固
 ### R3 Cancel Return Context（2026-09-25）
 FTRPlayerModeSnapshotにSideSelectionOrigin（None/NavigationStart/FishingReadyChange）とPreviousFishingSideを追加。開始時に確定Sideを保存し、PendingSideだけを変更する。CancelはOriginに対応するModeを検証し、確定SideをPreviousへ復元、選択を終了しModeEpochを更新する。Mode遷移や船リセットは呼ばない。Navigation起点はNavigation、Fishing起点はFishing Readyのまま。Camera/Context/HUDは同じ確定Snapshotから復帰し、取消でFishing Lookをリセットしない。
 R3のCancel Actionは選択中のみ取消Commandへ配送する。選択終了後に遅れて届くStartedをEndFishingへ解釈しない。旧未設定fixtureの中断経路とは分離する。Session終了/再生成を復帰の代用にしない。
+
+### R4 入力責務（2026-09-25）
+FishingContextに独立したCameraYaw/Pitch Actionを追加。Controllerは保持軸を検証し、CameraManagerへ毎Frameの角速度入力として渡す。Cameraは純表示、1更新dt上限0.1秒で長い停止後の飛びを防ぐ。Simulation時計/Boat/RodをCameraから変更しない。
+Mouse2D→Controller→Session.SubmitRodAim→固定Input Queue→RodControlを再使用し、CastId/登録世代/ModeEpoch/Sequence契約を維持。舷選択を最優先とし通常入力を停止。Navigation ContextとFishing Contextは排他的に維持。旧Cancel経路の正式合格契約を変更しない。
+Snapshotは既存FishingCamera.YawDeg/PitchDeg、Rod.BaseYawRad/BasePitchRad/TipWorldRotation（竿方向のWorld回転）/TipWorldPositionM/Tick/CastIdを再利用。HUDSnapshot.bMouseRodInputActiveは入力受付可能状態を示し、実際の移動速度やMouse保持状態ではない。UI/Focus/Pause/Quick中はfalse。
+
+
+### R4 Screen改訂（2026-09-28）
+ユーザー手動PIEで旧World角度方式は不合格。現行MouseはCamera画面上の2D Controlを正本とし、固定Gripと固定Length球面へ解決する。Camera Lookの表示更新は維持し、その相対視線値だけをRodView固定CommandでSimulationへ渡す。これは上記「Camera情報をSimulationへ一切渡さない」記述のR4改訂であり、表示Actor/CameraからSimulationを直接更新するものではない。視線変更はControlを変えないがWorldのRod方向は新しい画面基準へ変化し得る。QuickのRod更新停止/完了時初期姿勢Fallbackを廃止。詳細はFISHING_SYSTEM末尾、受入は画面への再投影＋手動PIE。R5以降/H/M11は未着手。

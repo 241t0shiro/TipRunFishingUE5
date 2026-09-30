@@ -199,3 +199,6 @@ Prototype仮値: Player=(0.6,±0.6,0.3)、Eye/Camera=(0.6,±0.4,1.6)、RodMount=
 
 ### 後続R7 Tip-run環境調整（文書のみ・未実装）
 Wind/Surface Current/Depth Currentは独立Vector。Prototype標準で3つを同方向・同速度へ固定しない。代表条件ではBoatがWind＋Surface Current＋hull responseで流れ、EgiはDepth Current＋weight＋line tensionへ応答する。Stay中に相対位置差が生じ、Boat先行によってRod/LineからEgiが一定量引かれる状態を観測できるよう調整する。常に理想状態を強制せず、Wind/Current/Heading/weightにより良い流しと悪い流しを維持する。今回環境値/Drift計算は変更しない。
+
+
+R4 Screen改訂（2026-09-28）: 保存PrototypeのRodMountだけを(0.6,±1,1.1)mへ変更。RootLocalは釣り座確定後固定し、Quick中もBoatへの追従を継続。上記R3の(0.85,±1,1.25)は旧配置。Boat Physics/環境係数/Camera anchorは変更しない。計算契約はFISHING_SYSTEM末尾。

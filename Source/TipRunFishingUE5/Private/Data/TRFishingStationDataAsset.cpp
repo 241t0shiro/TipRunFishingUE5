@@ -5,8 +5,8 @@ const FTRFishingStation* FTRFishingStationParameters::Find(ETRFishingSide Side) 
 bool FTRFishingStationParameters::Validate() const
 {
  if(Stations.Num()!=2 || !Find(ETRFishingSide::Port) || !Find(ETRFishingSide::Starboard)){return false;}
- for(double V:{MinPitchDeg,MaxPitchDeg,InitialPitchDeg,MaxYawDeg,SensitivityDeg,FOV}){if(!FMath::IsFinite(V)){return false;}}
- if(MinPitchDeg<-80 || MaxPitchDeg>30 || MinPitchDeg>=MaxPitchDeg || InitialPitchDeg<MinPitchDeg || InitialPitchDeg>MaxPitchDeg || MaxYawDeg<=0 || MaxYawDeg>80 || SensitivityDeg<=0 || SensitivityDeg>2 || FOV<40 || FOV>110){return false;}
+ for(double V:{MinPitchDeg,MaxPitchDeg,InitialPitchDeg,MinYawDeg,MaxYawDeg,FishingCameraYawRateDegPerS,FishingCameraPitchRateDegPerS,SensitivityDeg,FOV}){if(!FMath::IsFinite(V)){return false;}}
+ if(MinPitchDeg<-80 || MaxPitchDeg>30 || MinPitchDeg>=MaxPitchDeg || InitialPitchDeg<MinPitchDeg || InitialPitchDeg>MaxPitchDeg || MinYawDeg < -80 || MinYawDeg>0 || MaxYawDeg<=0 || MaxYawDeg>80 || MinYawDeg>=MaxYawDeg || FishingCameraYawRateDegPerS<=0 || FishingCameraYawRateDegPerS>180 || FishingCameraPitchRateDegPerS<=0 || FishingCameraPitchRateDegPerS>180 || SensitivityDeg<=0 || SensitivityDeg>2 || FOV<40 || FOV>110){return false;}
  for(const auto& S:Stations)
  {
   const double Sign=S.Side==ETRFishingSide::Port?-1:1;
@@ -19,7 +19,7 @@ FTRFishingStationParameters FTRFishingStationParameters::Prototype()
 {
  FTRFishingStationParameters P;
  for(auto Side:{ETRFishingSide::Port,ETRFishingSide::Starboard})
- {const double S=Side==ETRFishingSide::Port?-1:1;FTRFishingStation Row;Row.Side=Side;Row.PlayerM=FVector(.6,S*.6,.3);Row.EyeM=Row.CameraM=FVector(.6,S*.4,1.6);Row.RodMountM=FVector(.85,S*1.,1.25);Row.FacingDeg=S*90;P.Stations.Add(Row);}
+ {const double S=Side==ETRFishingSide::Port?-1:1;FTRFishingStation Row;Row.Side=Side;Row.PlayerM=FVector(.6,S*.6,.3);Row.EyeM=Row.CameraM=FVector(.6,S*.4,1.6);Row.RodMountM=FVector(.6,S*1.,1.1);Row.FacingDeg=S*90;P.Stations.Add(Row);}
  return P;
 }
 #if WITH_EDITOR
