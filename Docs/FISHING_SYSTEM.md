@@ -482,7 +482,7 @@ FreeFall等のActive CastとReadyで固定RodAimを受理、Quick中は既存拒
 - R5以降のSequence/0.8m巻取り/Slack-aware/環境調整は行っていない。
 
 
-### R4 Screen-space Rod Control（2026-09-28・現行契約）
+### R4 Screen-space Rod Control（2026-09-28・R4A-2で正本を廃止した旧契約）
 今回のユーザー再評価により、上記のEuler Base Aimと「World Z一定なら合格」という受入は廃止。以下が保存Fishing Stationを使用するPrototypeの正本。旧D単体fixture等のStation未設定経路は互換試験用に保持し、保存Prototypeで意図しないFallbackは許可しない。
 
 - Mouseの正本はRodSnapshot.ScreenControl（X右、Y上）の2D状態。単位はCamera水平半画面幅で、Yも同じ尺度を使う。Mouse X/Yはそれぞれの値だけを感度・反転・1固定Tickの軸別速度予算・矩形Clampを通して更新する。BaseYaw/Pitchは結果の方向から導出する互換観測値となる。
@@ -503,3 +503,50 @@ Prototype調整（製品値ではない）:
 - SnapshotにScreenControl、ResolvedScreenControl、bScreenControl、bScreenSafetyLimited、AimCameraWorldM/Rotation/FOVDegを追加。Root/Tip/Length/回転は継続使用。
 
 正式受入はPlayer Cameraへの再投影。Pure Mouse XでProjected Y不変、Pure YでProjected X不変、両舷×Heading0/90/180/270、Camera Look後、連続入力、Clamp、実長/表示長/投影長、Quick前中後を評価する。Worldの固定長試験だけで手動合格を代用しない。
+
+### R4A-2 Station-local Rod Pose（2026-10-04記録・現行正本）
+
+R4は手動PIEで正式不合格。R4A-1で確認したCamera-onlyの竿移動を修正するため、ScreenControl＋現在Cameraによる毎TickのBase再生成を廃止した。永続正本はRodControlが所有する固定`RootLocal`、正規化`BaseDirectionLocal`、初期化時に凍結した既存`LengthM`。Station-localの原点は選択Station.PlayerM、基底はStation.Facing（BoatへはHeadingで変換）。RootLocalはRodMountMをこの基底へ変換して固定する。
+
+`BaseTipLocal = RootLocal + BaseDirectionLocal * LengthM`。Boat移動/HeadingはStationのWorld Transformだけを更新する。Mouse入力なしではCamera Lookが変わってもRoot/BaseDirection/BaseTipは完全不変。Side確定時だけ新Stationの既存初期設定からLocal poseを初期化する。R3取消では確定済みSide/poseを変更しない。
+
+CameraのFrame更新からRodViewの配送を撤去。旧RodView/ApplyView APIは互換の検証のみでposeを書かない。非ゼロRodAimコマンドを消費した固定TickだけBaseDirectionを更新する。コマンドには発行時の実Camera POV・FOV・ViewRect・Side・Camera frameと同時点のBoat Transformを保持し、既存CastId/ModeEpoch/登録世代/Tick/Sequenceで受付を検証する。消費時に最新Cameraを再読込しない。
+
+MouseはR4A-2限定の暫定互換。前回凍結した入力観測へBaseDirectionを投影して旧Control領域の読取値を導出し、従来の感度/反転/軸別固定Tick予算/Clampでdeltaを適用し、今回コマンドの凍結観測を使う旧球面SolverでLocal方向へ保存する。現在Tipを今回Active Cameraへ投影してdeltaを加える完成版はR4A-3であり、今回未実装。Camera Look後の最初のMouseで旧絶対画面目標へ寄る可能性があるため、操作感合格とはしない。
+
+Shakuriの既存Up/Return Tick・振幅・Reel Pulseは保持。Baseを変更せず、凍結した入力観測のStation-local平面で既存一時Offsetを合成しFinalDirection/FinalTipを得る。Offset終了時はFinalをBaseへ完全一致させる。Root/LengthはAction/回収で変更しない。SnapshotにRodRootLocal、BaseRodDirectionLocal、BaseRodTipLocal、FinalRodDirectionLocal、FinalRodTipLocalを追加。Euler/ScreenControlは導出読取値。
+
+表示は同じFinal RootWorld/TipWorldの一組からRod MeshとLine Startを生成する。Station設定済みでSnapshotが無効ならFishing表示を隠し、別の初期姿勢を合成しない。Camera/表示からposeへの書戻しなし。単位はSimulation m、Presentation境界でcm。Grip/長さ/Camera/FOV/Clamp/感度/Shakuri/Reel/Egi安全閾値/Environment/Content/Configは今回変更していない。
+
+実Runtime検証と残る失敗は [R4A-2記録](R4A2_STATION_LOCAL_POSE.md)。舷変更後Shakuriの安全停止はR4A-4向け証拠として残しており、R4全体は未合格。
+
+
+### R4A-3 Mouse Deltaから永続Local poseへの変換（2026-10-04）
+
+R4A-2の固定RodRootLocal・正規化BaseRodDirectionLocal・凍結LengthMを維持する。ScreenControl/Eulerは読取値であり位置正本ではない。以下はA2の暫定絶対Screen互換を置き換える現行入力契約。
+
+- Controllerは入力時の実Camera POV、LocalPlayerのProjection係数/offset/ViewRect、Camera frame、Side、同時点のBoat transformをCommandへ凍結する。CastId/ModeEpoch/Sequence/登録世代は既存配送契約。固定消費時に最新Cameraを読み直さない。
+- 各Commandごとに現在Base Tipをその観測へ投影する。Target = Current + delta×既存Screen.Sensitivity。感度は両軸とも横半画面単位、Y上向き。実Projectionの縦横係数で正規化座標へ変換する。既存MaxMouseDeltaと軸別固定Tick予算を維持。複数CommandはSequence順で直前のBaseから処理する。
+- TargetのRayを固定Grip中心/LengthM半径の球面と交差させ、前方の遠い交点からStation-local方向を正規化して保存する。Camera外/交点なし/背後/Station外向き半球外/既存海面クリアランス違反では直前Baseを保持し拒否理由を記録。画面端の1e-12正規化単位だけを丸め、別軸の操作を阻害しない。Egi安全閾値ではない。
+- 旧Screen.Min/Max（X±0.28）はMouse操作域の正本ではなく初期互換設定として残す。Input域は実画面内、球面到達可能性、船外向き、海面安全条件で決まる。Grip、Length、Camera/FOV、感度値、環境資産を変更して域を広げない。
+- MouseなしでLocal Baseは不変。Boatの位置/HeadingだけでWorldを導出する。既存Shakuri Up/Return/振幅/Reel量は維持し、凍結入力のLocal投影平面でFinalのみへ一時作用。終了時はBaseへ正確に戻す。QuickもBase/Grip/Lengthを変更しない。
+- 実Rod Meshは同一SnapshotのFinal Root/Tipから生成し、Line始点も同じTip。設定StationでSnapshot無効時は表示を隠しCamera依存代替poseを生成しない。Simulation m→Presentation cmは境界で一度だけ。
+
+受入は保存MapのRuntime World/実Controller/Queue/Camera/実Mesh投影。Math成功だけでPIE合格とはしない。新入力域では極端な透視短縮が発生し、既存ActionのAbort/Lockは11条件へ増えた。R4A-4での安全停止/復旧調査と後続表示評価へ証拠を渡すだけで、今回は修正していない。測定/試験/限界は [R4A-3記録](R4A3_MOUSE_DELTA_INTEGRATION.md)。R4全体は正式不合格、R5以降/H/M11未着手。
+
+
+### R4A-4 Action境界と技術Abort復旧（2026-10-04）
+
+R4A-3のStation-local Base/固定Grip/凍結Length・同一Final Tipを維持する。Rod profile使用時のJerking→Retrieve/Fallは既存Up/Return完了までPendingとし、Base復帰Tickで開始する。Release/Focus/Pauseは保留Retrieveを解除。Quickは即時に釣り評価を止め、一時Rod profileだけ自然完了する。Baseへ一時Offsetを焼き込まない。R5 Sequence/0.8m巻取りは未実装。
+
+海面接触時のReelラインは、動くRodの高さと水平距離を同時に満たす既存幾何式を下限にする。高さだけのLine増加で海面交差円が0へ潰れる不整合を撤去した。係数・最大速度/移動量・非有限防御は保持。複合安全停止理由をPosition/Velocity/Travel/LineCorrection/Candidate/Constraintに分割し、詳細はInsertへ読取表示する。
+
+技術AbortはResult/Aborted、船外、装備Lockを保持。Fishing ModeでNを明示要求した場合だけ、安全な回収状態ResetとしてReady/Onboard/Unlockへ移す。LastCastResult=Aborted、結果CastId/装備/詳細理由は保持しRetrievedを捏造しない。現在Castを未活動値にし、登録世代を更新、Pending/Held/一時profileを解除する。Boat動態・Mode/Side/Camera/Base/Lengthは変更しない。明示的AbortCast/EndFishing（Session.ExplicitAbort）はこの技術復旧に含めず旧中断契約を保持する。通常Retrieved→Result→NとQuick→Readyも維持。
+
+同一42入力列の結果・舷変更・意図的異常/復旧・決定性・限界は [R4A-4記録](R4A4_ACTION_BOUNDARY_RECOVERY.md)。R4全体の手動合否、投影長の視覚評価は未合格。A5/R5以降/H/M11へ自動進行しない。
+
+### R4A-5 Station-local Ergonomic Envelope（2026-10-04）
+
+固定RodRootLocal/BaseRodDirectionLocal/LengthMを維持。FTRRodParameters.Envelopeをopt-in追加し保存Prototypeはyaw±40度/pitch-10〜35度。Mouseの候補Local Directionを最も近い有効球面方向へ連続制限し、既存海面clearanceも維持する。設定はPrototype技術候補で製品値ではない。恒久Screen Rectangleや累積Eulerを正本へ戻さない。
+
+Shakuriの既存profile/量は変更せずTemporary Finalにも方向制約を適用、Base/Root/Lengthを保持する。境界では安全を優先し軸ずれを診断する。外向き入力で境界上の接線移動はあり得るがTarget蓄積はなく、入力停止後は不変/反対入力で即内向きへ戻る。SnapshotにEnvelope有効/直近制限/理由を公開。VisualとLineは同じFinal Tip、表示長は2m固定。A4 Pending/技術Abort/N復旧/旧入力拒否は保持。詳細、720姿勢Sweepと同一42条件Abort0の証跡は [R4A-5記録](R4A5_RUNTIME_ACCEPTANCE.md)。手動未合格、R5/H/M11未着手。

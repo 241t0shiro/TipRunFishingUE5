@@ -19,6 +19,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "TipRun|Fishing")
 	FTREgiSnapshot GetSnapshot() const;
 	FTREgiAction GetAction() const;
+ bool HasPendingRetrieve() const { return bPendingRetrieve; }
 	FTRRetrievalSnapshot GetRetrievalSnapshot(int64 Tick) const;
 	ETRCommandResult GetCommandAvailability(ETRFishingCommandType Command) const;
 	FTRFishingStateChanged OnFishingStateChanged;
@@ -42,6 +43,8 @@ private:
 	float LastRetrieveSpeedMps = 0.0f;
 	double RangeObservationSeconds = 0.0, StepSeconds = 0.0;
 	bool bSeriesClosed = false, bReeling = false;
+    bool bPendingRetrieve = false, bPendingFall = false;
+ bool bUseRodProfileBoundaries = false;
 	TArray<TPair<ETRFishingState, ETRFishingState>> PendingTransitions;
 	void PublishStateChanges();
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Fishing", meta = (AllowPrivateAccess = "true"))

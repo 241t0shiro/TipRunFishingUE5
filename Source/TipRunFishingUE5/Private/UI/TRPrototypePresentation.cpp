@@ -67,7 +67,7 @@ TArray<FTRPrototypeReadoutRow> UTRFishingHUDWidget::BuildReadout(const FTRHUDSna
   Rows[1].Label=LOCTEXT("Mode","モード");
   Rows[1].Value=Value(S.bPaused?TEXT("一時停止 / 操船 (Navigation)"):TEXT("操船 (Navigation)"));
  }
- Add(LOCTEXT("RuntimeDiagnostics", "R4A-1 Runtime診断（読取専用）"),S.RuntimeDiagnostics);
+ Add(LOCTEXT("RuntimeDiagnostics", "Rod / Input / Action 最終診断（読取専用）"),S.RuntimeDiagnostics);
  return Rows;
 }
 TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapshot& S)
@@ -100,6 +100,7 @@ TArray<FTRPrototypeGuideRow> UTRFishingHUDWidget::BuildGuide(const FTRHUDSnapsho
 }
 FText UTRFishingHUDWidget::BuildCompactGuide(const FTRHUDSnapshot& S)
 {
+ if(S.bRecoveryAvailable) { return LOCTEXT("TechnicalRecovery", "シミュレーション異常：回収状態をリセットしてください\nN：安全復旧して次投準備へ / Insert：異常詳細"); }
  if(S.PlayerMode.bSideSelectionActive)
  {
   const auto Side=S.PlayerMode.PendingSide;

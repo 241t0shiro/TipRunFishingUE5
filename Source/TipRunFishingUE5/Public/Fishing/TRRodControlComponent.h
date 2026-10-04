@@ -3,6 +3,7 @@
 #include "Components/ActorComponent.h"
 #include "Data/TRRodTuningDataAsset.h"
 #include "Data/TRSnapshots.h"
+#include "Data/TREvents.h"
 #include "Data/TRFishingStationDataAsset.h"
 #include "Data/TRSimulationTypes.h"
 #include "TRRodControlComponent.generated.h"
@@ -14,25 +15,34 @@ class TIPRUNFISHINGUE5_API UTRRodControlComponent : public UActorComponent
 public:
 	UTRRodControlComponent();
 	bool Initialize(const FTRRodParameters& Parameters, double StepSeconds, TArray<FText>& Errors);
-	bool ApplyAim(FVector2D Delta, const FTRSimTime& Time);
+	bool ApplyAim(FVector2D Delta, const FTRSimTime& Time, const FTRRodAimObservation& View = {}, int64 Sequence = 0);
 	bool Step(const FTRSimTime& Time, const FTRBoatSnapshot& Boat, const FTREgiSnapshot& Fishing, double SurfaceZ);
 	FTRRodSnapshot GetSnapshot() const { return Snapshot; }
 	bool IsInitialized() const { return bInitialized; }
 	int64 GetJerkTicks() const { return UpTicks+ReturnTicks; }
 	float GetReelPulseMps(const FTRSimTime& Time, const FTREgiSnapshot& Fishing) const;
-	void SetStation(FVector MountM,double FacingRad){StationMountM=MountM;StationYawRad=FacingRad;bUseStation=true;Snapshot.BasePitchRad=FMath::Clamp(0.,Frozen.MinPitchRad,Frozen.MaxPitchRad);Snapshot.BaseYawRad=0;Snapshot.bValid=false;}
+	void SetStation(FVector MountM,double FacingRad);
 	void SetScreenStation(const FTRFishingStation& Station,const FTRFishingStationParameters& Camera);
 	bool ApplyView(FVector2D YawPitchDeg);
 	void Reset();
+	void ClearAction() { ProfileStartTick=-1; Snapshot.bShakuriActive=false; Snapshot.TemporaryShakuriOffsetRad=0; }
 	void InvalidateSnapshot() { Snapshot.bValid=false; Snapshot.bShakuriActive=false; }
 	void ObserveOperationStart(const FTREgiSnapshot& Fishing);
 private:
-	FTRFishingStationParameters ScreenCameraSettings;
-	FVector CameraMountM=FVector::ZeroVector;
-	FVector2D CameraYawPitchDeg=FVector2D::ZeroVector;
-	bool ResolveScreenPose(FTRRodSnapshot& Next,const FQuat& Basis,double Offset,double SurfaceZ) const;
+ // Persistent pose. Camera and snapshot readouts never own this direction.
+ FVector RootLocal=FVector::ZeroVector;
+ FVector BaseDirectionLocal=FVector::ForwardVector;
+ FVector StationOriginM=FVector::ZeroVector;
+ FVector CompatibilityCameraLocal=FVector::ZeroVector;
+ FRotator CompatibilityCameraRotation=FRotator::ZeroRotator;
+ double CompatibilityFOV=0,SurfaceLocalZ=0;
+ bool bPoseInitialized=false,bCompatibilitySafetyLimited=false;
+ FVector2D DeriveCompatibilityControl() const;
+ FVector ConstrainLocalDirection(const FVector& Direction, FString& Reason) const;
+ FTRRodSnapshot MakeLocalSolve() const;
+ void PublishLocalPose(FTRRodSnapshot& Next,const FVector& FinalDirection) const;
+	bool ResolveScreenPose(FTRRodSnapshot& Next,const FQuat& Basis,double Offset,double SurfaceZ, bool bDirectProjection=false) const;
 	bool bUseStation=false;
-	FVector StationMountM=FVector::ZeroVector;
 	double StationYawRad=0;
 	FTRRodParameters Frozen;
 	FTRRodSnapshot Snapshot;
@@ -41,4 +51,5 @@ private:
 	bool bInitialized=false;
 	FTRCastId ObservedCast;
 	int64 ObservedJerkCount=0;
+ int64 ProfileStartTick=-1;
 };

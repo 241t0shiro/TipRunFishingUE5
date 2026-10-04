@@ -3,7 +3,30 @@
 #include "CoreMinimal.h"
 #include "Data/TRIdentifiers.h"
 #include "Data/TRTypes.h"
+#include "Data/TRPlayerModeTypes.h"
 #include "TREvents.generated.h"
+
+// Immutable observation captured with a mouse command. Identity/order live in its
+// enclosing command and registration; never sample a newer camera on consumption.
+USTRUCT()
+struct TIPRUNFISHINGUE5_API FTRRodAimObservation
+{
+ GENERATED_BODY()
+ UPROPERTY() bool bValid=false;
+ UPROPERTY() FVector CameraWorldM=FVector::ZeroVector;
+ UPROPERTY() FRotator CameraRotation=FRotator::ZeroRotator;
+ UPROPERTY() double FOVDeg=0;
+ UPROPERTY() FIntRect ViewRect=FIntRect(0,0,0,0);
+ // Perspective coefficients from the actual LocalPlayer projection (including offset).
+ UPROPERTY() bool bHasProjection=false;
+ UPROPERTY() FVector2D ProjectionScale=FVector2D::ZeroVector;
+ UPROPERTY() FVector2D ProjectionOffset=FVector2D::ZeroVector;
+ UPROPERTY() ETRFishingSide Side=ETRFishingSide::Unselected;
+ UPROPERTY() int64 CameraFrame=0;
+ // Same observation's boat transform permits conversion to the station frame.
+ UPROPERTY() FVector BoatWorldM=FVector::ZeroVector;
+ UPROPERTY() double BoatHeadingRad=0;
+};
 
 // Payloads and signatures only. M01 does not process commands, approve bites or resolve casts.
 
@@ -26,6 +49,7 @@ struct TIPRUNFISHINGUE5_API FTRFishingCommand
 	float AxisValue = 0.0f;
 	// Mouse displacement, not rate; no render-dt multiplication.
 	UPROPERTY(BlueprintReadOnly, Category="TipRun") FVector2D Axis2D = FVector2D::ZeroVector;
+ UPROPERTY() FTRRodAimObservation RodView;
 
 	// M06: identity observed when input was submitted; sessions reject stale casts.
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")

@@ -362,5 +362,13 @@ Mouse2D→Controller→Session.SubmitRodAim→固定Input Queue→RodControlを�
 Snapshotは既存FishingCamera.YawDeg/PitchDeg、Rod.BaseYawRad/BasePitchRad/TipWorldRotation（竿方向のWorld回転）/TipWorldPositionM/Tick/CastIdを再利用。HUDSnapshot.bMouseRodInputActiveは入力受付可能状態を示し、実際の移動速度やMouse保持状態ではない。UI/Focus/Pause/Quick中はfalse。
 
 
-### R4 Screen改訂（2026-09-28）
+### R4 Screen改訂（2026-09-28・R4A-2以前の履歴）
 ユーザー手動PIEで旧World角度方式は不合格。現行MouseはCamera画面上の2D Controlを正本とし、固定Gripと固定Length球面へ解決する。Camera Lookの表示更新は維持し、その相対視線値だけをRodView固定CommandでSimulationへ渡す。これは上記「Camera情報をSimulationへ一切渡さない」記述のR4改訂であり、表示Actor/CameraからSimulationを直接更新するものではない。視線変更はControlを変えないがWorldのRod方向は新しい画面基準へ変化し得る。QuickのRod更新停止/完了時初期姿勢Fallbackを廃止。詳細はFISHING_SYSTEM末尾、受入は画面への再投影＋手動PIE。R5以降/H/M11は未着手。
+
+### R4A-2正本移行（2026-10-04記録）
+
+R4は正式不合格を維持。永続Rod poseは固定Station-local Grip・BaseDirection・LengthMとし、Camera継続更新を正本から切断した。CameraAnchorとRodGripはBoat/Stationの兄弟系統としてWorldへ追従し、互いのTransformを所有しない。非ゼロMouse Commandだけが発行時の凍結Camera観測を通してLocal方向を更新する。現在CameraへのTip投影＋delta方式の完成版はR4A-3で未実装。現行契約はFISHING_SYSTEM末尾、検証結果とR4A-4向け安全停止証拠は [R4A-2記録](R4A2_STATION_LOCAL_POSE.md)。R5以降/H/M11へ進まない。
+
+### R4A-5 技術受入と正式合格ゲート（2026-10-04）
+
+Rodの永続正本はStation-local固定Grip/BaseDirection/LengthM。Cameraは兄弟系統の視線で、非ゼロMouse入力だけが実投影を用いてLocal Baseを変更する。Station-local ergonomic envelopeを保存Rodへ明示適用し、Root/2m/FOV80を維持して極端な短縮を除外する。表示とLineは同じFinal Snapshot端点を使う。技術受入93件は成功だが、手動6項目は未実施。R4正式不合格を維持し、R5/H/M11へ進行しない。制約/実測/限界/正式受入手順は [R4A-5記録](R4A5_RUNTIME_ACCEPTANCE.md)。

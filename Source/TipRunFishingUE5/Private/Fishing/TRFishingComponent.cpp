@@ -5,7 +5,7 @@ void UTRFishingComponent::Prepare()
 {
 	PendingTransitions.Empty(); State = ETRFishingState::Ready; Snapshot = {}; Snapshot.FishingState = State;
 	JerkCount = SeriesJerkCount = PendingJerkCount = StayPenaltyJerkCount = StateEnteredTick = 0;
-	RangeObservationSeconds = 0.0; bSeriesClosed = bReeling = false;
+	RangeObservationSeconds = 0.0; bSeriesClosed = bReeling = bPendingRetrieve = bPendingFall = false;
 	QuickRetrieveTicks = 0;
 	LastRetrieveSpeedMps = 0.0f;
 }
@@ -45,7 +45,7 @@ ETRCommandResult UTRFishingComponent::GetCommandAvailability(ETRFishingCommandTy
 	{
 		return QuickRetrieveTicks > 0 ? ETRCommandResult::Accepted : ETRCommandResult::RejectedMissingData;
 	}
-	if (Command == ETRFishingCommandType::RetrieveStopped && State == ETRFishingState::Retrieving) { return ETRCommandResult::Accepted; }
+	if (Command == ETRFishingCommandType::RetrieveStopped && (State == ETRFishingState::Retrieving || bPendingRetrieve)) { return ETRCommandResult::Accepted; }
 	if (Command == ETRFishingCommandType::RetrieveStarted && (bFishing || State == ETRFishingState::Retrieving)) { return ETRCommandResult::Accepted; }
 	if ((bFishing || State == ETRFishingState::Retrieving) && Command == ETRFishingCommandType::Jerk)
 	{
@@ -62,7 +62,7 @@ ETRCommandResult UTRFishingComponent::HandleCommand(const FTRFishingCommand& Com
 	if (Command.Type == ETRFishingCommandType::QuickRetrieve)
 	{
 		if (Time.TickIndex > MAX_int64 - QuickRetrieveTicks) { return ETRCommandResult::RejectedInvalidState; }
-		PendingJerkCount = 0; bReeling = false;
+		PendingJerkCount = 0; bReeling = bPendingRetrieve = bPendingFall = false;
 		TransitionTo(ETRFishingState::QuickRetrieving, Time.TickIndex);
 		return ETRCommandResult::Accepted;
 	}
@@ -72,12 +72,14 @@ ETRCommandResult UTRFishingComponent::HandleCommand(const FTRFishingCommand& Com
 	}
 	if (Command.Type == ETRFishingCommandType::RetrieveStarted)
 	{
-		PendingJerkCount = 0; bReeling = true; TransitionTo(ETRFishingState::Retrieving, Time.TickIndex); return ETRCommandResult::Accepted;
+		PendingJerkCount = 0; bPendingFall = false;
+        if (bUseRodProfileBoundaries && State == ETRFishingState::Jerking) { bPendingRetrieve = true; return ETRCommandResult::Pending; }
+        bPendingRetrieve = false; bReeling = true; TransitionTo(ETRFishingState::Retrieving, Time.TickIndex); return ETRCommandResult::Accepted;
 	}
 	if (Command.Type == ETRFishingCommandType::Jerk)
 	{
 		// A new action replaces normal retrieve; never sum two independent reel rates.
-		bReeling=false;
+		bReeling=bPendingRetrieve=bPendingFall=false;
 		if (State == ETRFishingState::Jerking)
 		{
 			++PendingJerkCount;
@@ -87,7 +89,9 @@ ETRCommandResult UTRFishingComponent::HandleCommand(const FTRFishingCommand& Com
 	}
 	if (Command.Type == ETRFishingCommandType::Fall)
 	{
-		PendingJerkCount = 0; TransitionTo(ETRFishingState::FreeFall, Time.TickIndex); return ETRCommandResult::Accepted;
+		PendingJerkCount = 0; bPendingRetrieve = false;
+        if (bUseRodProfileBoundaries && State == ETRFishingState::Jerking) { bPendingFall = true; return ETRCommandResult::Pending; }
+        TransitionTo(ETRFishingState::FreeFall, Time.TickIndex); return ETRCommandResult::Accepted;
 	}
 	if (Command.Type == ETRFishingCommandType::TensionFall)
 	{
@@ -100,7 +104,9 @@ void UTRFishingComponent::PrepareStep(const FTRSimTime& Time)
 	if (State == ETRFishingState::Jerking && Time.TickIndex - StateEnteredTick >= JerkTicks)
 	{
 		TransitionTo(ETRFishingState::TensionFall, Time.TickIndex);
-	}
+        if (bPendingRetrieve) { bPendingRetrieve=false; bReeling=true; TransitionTo(ETRFishingState::Retrieving,Time.TickIndex); }
+        else if (bPendingFall) { bPendingFall=false; TransitionTo(ETRFishingState::FreeFall,Time.TickIndex); }
+    }
 	if (State == ETRFishingState::TensionFall && PendingJerkCount > 0)
 	{
 		--PendingJerkCount; BeginJerk(Time.TickIndex);
@@ -128,6 +134,7 @@ bool UTRFishingComponent::CompleteDeployment(const FTRBoatSnapshot& Boat, const 
 }
 void UTRFishingComponent::StopNormalRetrieve(int64 Tick)
 {
+	bPendingRetrieve = false;
 	if (State != ETRFishingState::Retrieving) { return; }
 	bReeling = false;
 	// No position, velocity or line reset at the command boundary.
@@ -141,7 +148,7 @@ bool UTRFishingComponent::IsQuickRetrieveComplete(const FTRSimTime& Time) const
 void UTRFishingComponent::FinishCast(int64 Tick, bool bQuickReturned)
 {
 	TransitionTo(bQuickReturned ? ETRFishingState::Ready : ETRFishingState::Result, Tick);
-	PendingJerkCount = JerkCount = SeriesJerkCount = StayPenaltyJerkCount = 0; bReeling = false;
+	PendingJerkCount = JerkCount = SeriesJerkCount = StayPenaltyJerkCount = 0; bReeling = bPendingRetrieve = bPendingFall = false;
 }
 void UTRFishingComponent::Stop() { Prepare(); State = ETRFishingState::Inactive; Snapshot = {}; CastEquipment = {}; }
 void UTRFishingComponent::ApplyEgiStep(const FTREgiSnapshot& Updated, ETREgiStepEvent Event, bool bTransientComplete)

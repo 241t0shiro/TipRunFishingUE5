@@ -197,6 +197,11 @@ USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRRodSnapshot
 {
 	GENERATED_BODY()
+ UPROPERTY(BlueprintReadOnly) double TemporaryShakuriOffsetRad = 0;
+ UPROPERTY(BlueprintReadOnly) bool bEnvelopeEnabled=false;
+ UPROPERTY(BlueprintReadOnly) bool bEnvelopeLimited=false;
+ UPROPERTY(BlueprintReadOnly) FString EnvelopeReason;
+
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") bool bValid=false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") int64 Tick=0;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FTRCastId CastId;
@@ -206,10 +211,24 @@ struct TIPRUNFISHINGUE5_API FTRRodSnapshot
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double FinalYawRad=0;
 	// Frozen physical length in meters; independent of aim and Shakuri pose.
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double LengthM=0;
+ // Station origin = Player anchor; basis = Boat heading + station facing.
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector RodRootLocal=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector BaseRodDirectionLocal=FVector::ForwardVector;
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector BaseRodTipLocal=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector FinalRodDirectionLocal=FVector::ForwardVector;
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector FinalRodTipLocal=FVector::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") bool bScreenControl=false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector2D ScreenControl=FVector2D::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector2D ResolvedScreenControl=FVector2D::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") bool bScreenSafetyLimited=false;
+ // Last command diagnostics; screen coordinates are actual ViewRect pixels, Y down.
+ UPROPERTY() FVector2D AimCurrentPixel=FVector2D::ZeroVector;
+ UPROPERTY() FVector2D AimTargetPixel=FVector2D::ZeroVector;
+ UPROPERTY() FVector2D AimMouseDelta=FVector2D::ZeroVector;
+ UPROPERTY() int64 AimCameraFrame=0;
+ UPROPERTY() int64 AimSequence=0;
+ UPROPERTY() FString AimResult;
+
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector AimCameraWorldM=FVector::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FRotator AimCameraRotation=FRotator::ZeroRotator;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") double AimCameraFOVDeg=0;

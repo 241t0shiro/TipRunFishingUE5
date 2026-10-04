@@ -10,6 +10,8 @@ class TIPRUNFISHINGUE5_API ATRPlayerCameraManager : public APlayerCameraManager
  GENERATED_BODY()
 public:
  uint64 DiagnosticCameraFrame=0;
+ FVector ObservationBoatWorldM=FVector::ZeroVector;
+ double ObservationBoatHeadingRad=0;
  virtual void UpdateCamera(float DeltaTime) override;
  void ConfigureFishing(const FTRFishingStationParameters& P);
  void ResetFishingLook();

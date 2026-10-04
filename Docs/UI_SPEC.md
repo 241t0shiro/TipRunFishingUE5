@@ -532,7 +532,7 @@ Mouse2Dは相対Delta、既存のCapturePermanently_IncludingInitialMouseDown/Lo
 今回の数値/表示Transform自動試験は成功したが、申告された画面上の2症状の解消とR4正式合格はこの手動再確認まで保留する。
 
 
-### R4 Screen-space操作・手動PIE再評価（現行、2026-09-28）
+### R4 Screen-space操作・手動PIE再評価（2026-09-28・R4A-2以前の旧手順）
 旧Geometryの手動PIEは不合格。今回は画面上の入力方向とTip移動方向の一致を正式契約とする。MouseはScreen Control、WASDはFPS視線。Camera LookでControl値は変えず、新しいCamera画面を基準にRodを解く。根元は船のGripに固定、長さは固定。細かい調整項目/安全域/計算の正本はFISHING_SYSTEM末尾。
 
 自動PIEは起動しない。Editorを再起動し、保存 `/Game/TipRun/Prototype/M105/L_TR_M105_Prototype` を1920×1080または2560×1440で開く。
@@ -549,3 +549,45 @@ Mouse2Dは相対Delta、既存のCapturePermanently_IncludingInitialMouseDown/Lo
 R4は手動PIE不合格。今回は入力方式/Camera/製品HUDを修正せず、Insert詳細の末尾にRuntime診断行を追加した。実MeshとSnapshotのRoot/Tip差、Local pose、Active Camera/FOV/ViewRect、frame/tick、Mouse各段階、Command受付、終了/安全停止理由と終了前状態を読取専用で表示する。既存スクロール/折返しを使用。操作感や可読性を今回手動合格とはしていない。
 
 診断方法と未再現項目は [R4A-1観測記録](R4A1_RUNTIME_OBSERVATION.md)。通常HUDと操作割当は変更なし。Station-local正本移行は次段階であり未実装。
+
+### R4A-2現行観測と手動確認（2026-10-04）
+
+Mouseは暫定互換の竿入力、WASDは視線。視線だけを変えてもBoat/Station-localの竿Baseは変化しない。新しい正本/互換Mouseの限界はFISHING_SYSTEM末尾。Insert詳細へRootLocal、BaseDirectionLocal、BaseTipLocal、FinalDirectionLocal、FinalTipLocal、Lengthを追加し、A1の実Mesh/Camera/frame/Command/安全停止診断と併用する。通常HUD・入力割当・保存設定は変更しない。
+
+自動GUI PIEは起動していない。今回段階の任意の手動確認は以下4項目に限定できる。画面軸・投影長・操作感の最終合否はR4A-3/A-5へ残す。
+
+1. Editor再起動後、保存 `/Game/TipRun/Prototype/M105/L_TR_M105_Prototype` からPIE。Enter→A→Enterで左舷、別途Dで右舷。Insert詳細でLocal Baseを確認し、Mouseを動かさずWASD。Cameraは動き、Root/BaseDirection/BaseTipは同じままになること。透視投影の見え方は変化し得る。
+2. ReadyでC→反対舷→Enter、再C→仮選択→Backspace。Camera/Rod/Gunwaleの舷対応と取消復帰を確認する。確定後のWASDだけでは新舷のLocal Baseも変化しないこと。
+3. Mouseで姿勢を変え、投入してQ。Quick前/中/ReadyでRootLocal/BaseDirection/Lengthが同じで、船のDriftだけWorld位置へ反映されること。
+4. ShakuriではBaseとFinalを区別して観測する。追加試験の「右舷Ready→Cで左舷確定→視線Dを約1/3秒→投入後約1秒→右クリック」は安全停止する証拠がある。再現時はEnd/Failure/Before Abort cleanupを保存し、合格扱いにしない。回復Actionを新設した段階ではない。
+
+Pure Mouse X/Yは自動Runtime条件ではPASS、以前の手動PIE症状は未解決。今回手動PIEは未実施。試験結果・Lock証拠は [R4A-2記録](R4A2_STATION_LOCAL_POSE.md)。
+
+
+### R4A-3 実CameraによるMouse入力と観測（2026-10-04）
+
+WASDはFishing視線だけ、Mouseは入力発行時点の視界からLocal Rod poseを変更する。視線変更後、最初のMouseで旧絶対Screen目標へ寄せ直さない。Root/Lengthは固定、旧中央28%の矩形をMouse域に使わない。キー、保存Input、感度、Camera anchor/FOV、通常HUDは今回変更しない。
+
+Insert詳細のR4A-3診断に最後のMouse delta、入力時Current/Target pixel、Camera Observation Frame、Command Sequence、交点/拒否理由を追加。A2のBaseDirection/BaseTip/FinalTip/Lengthと、A1の現在Active Cameraへの実Mesh Tip投影・Snapshot誤差・frame/tickも併読する。`lastMouse currentPixel`は最後のCommand開始点、`ScreenTip`は最新表示Frameの実Mesh投影。混同しない。理由はValid/ScreenBoundary/NoSphereIntersection/BehindCamera/InvalidProjection/SafetyLimit。通常HUDへ常時追加しない。
+
+手動PIEの再確認（自動GUI PIEは起動していない）:
+1. 保存`/Game/TipRun/Prototype/M105/L_TR_M105_Prototype`を開いてPIE。Enter→AまたはD→Enter、Insertで診断を開く。Port/Starboard各々、1080p/1440pでMouse左右/上下/斜めを確認する。復帰直後の最初の非ゼロMouseは従来のジャンプ防止で破棄される。
+2. Mouseを止めWASDで大きく視線を変更。Local Root/BaseDirection/BaseTip/Lengthが不変であること、その後のMouse右/上が現在画面の右/上へ動くことを確認する。画面端や海面安全域では拒否理由を確認する。
+3. 操作域端の見かけ長さも確認する。広域で竿が視線方向へ向き極端に短縮する条件は未解消。投入12秒程度後の右1クリック/保持、左保持/解放、Q完了でBase/Grip固定を確認する。直後ShakuriのAbort/LockはA4向け既知不合格であり、通常回収成功と扱わない。
+
+実OS Mouse capture/GPU描画/主観操作感はheadless試験の対象外。Runtime試験成功をR4手動合格に代用しない。結果と警告は [R4A-3記録](R4A3_MOUSE_DELTA_INTEGRATION.md)。R4A-4以降未着手。
+
+
+### R4A-4 Pending操作・技術復旧（2026-10-04）
+
+既存キーは維持。Shakuri中の左保持回収は、Rodが既存profileを終えBaseへ戻るまで保留し、その後開始する。早期左ReleaseまたはPause/Focusで保留回収を取消す。ActionとBaseの数値正本はFISHING_SYSTEM末尾。
+
+技術Abort時は通常操作ガイドの代わりに「シミュレーション異常：回収状態をリセットしてください / N：安全復旧して次投準備へ / Insert：異常詳細」を表示する。Nは明示Resetであり、Abortを回収成功へ変更しない。通常ResultのNは従来の次投準備、QuickはN不要。明示Session中断の帰還を捏造する仕様には変更していない。
+
+InsertにRecoveryAvailable/PendingAction/TemporaryShakuriOffset、Rod前後/Delta/Velocity、Egi前後/Velocity、Line必要長/補正量と終了理由を追加。通常HUDの行数/配置、操作係数、保存Assetは変更なし。再確認は [R4A-4記録の手動3項目](R4A4_ACTION_BOUNDARY_RECOVERY.md)。自動GUI PIEは起動していない。投影長品質はA5へ残し、R4全体の正式合格は宣言しない。
+
+### R4A-5 最終診断と手動受入（2026-10-04）
+
+通常HUD/入力キーは保持。Insert詳細の読取専用診断へEnvelope有効/直近制限理由を追加し、既存Root/Base/Final/Length・実投影長・Camera/Mouse・Pending/Result/Failure・Lock/Onboardと併読する。境界ではEnvelopeYaw/Pitch/YawPitch、実画面端ではViewportBoundary、Temporary profile制限はAction.を表示する。
+
+保存MapとFOV80/CameraAnchor/Grip/Gunwaleは保持。実投影長と到達域は改善したが、OS Mouse/GPU描画/主観操作感は自動試験の代用外。**正式手動受入は [R4A-5記録の最大6項目](R4A5_RUNTIME_ACCEPTANCE.md#手動pie最大6項目正式受入の残作業) だけ**。両舷Mouse軸/Camera独立/可動域と見かけ長さ/即Shakuri回収/Quick保持/UI・Pause・Focus・舷変更を確認する。自動GUI PIEは起動していない。R4正式不合格を維持、R5/H/M11未着手。

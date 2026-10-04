@@ -244,7 +244,7 @@ bool FTRShakuriSequenceGTest::RunTest(const FString& Parameters)
   R.PC->ActionReleased(ETRPlayerAction::Retrieve);R.F.Step(30);
   TestTrue(TEXT("Release does not cancel pulse, then Stay"),R.F.Session->Fishing->GetState()==ETRFishingState::Stay);
   R.PC->ActionStarted(ETRPlayerAction::Jerk);R.PC->ActionReleased(ETRPlayerAction::Jerk);R.PC->ActionStarted(ETRPlayerAction::Retrieve);R.F.Step();
-  TestTrue(TEXT("Sequence determines conflicting action"),R.F.Session->Fishing->GetState()==ETRFishingState::Retrieving);
+  TestTrue(TEXT("Sequence retains later Retrieve as Pending until Base return"),R.F.Session->Fishing->GetState()==ETRFishingState::Jerking && R.F.Session->Fishing->HasPendingRetrieve() && R.F.Session->GetLastCommandResult()==ETRCommandResult::Pending);
   R.PC->ActionReleased(ETRPlayerAction::Retrieve);R.F.Step();
   R.PC->ActionStarted(ETRPlayerAction::Jerk);R.F.Step(4);S=R.F.Session->Fishing->GetSnapshot();
   R.PC->SetPauseRequested(true);R.F.Step(30);TestEqual(TEXT("Pause does not reel"),R.F.Session->Fishing->GetSnapshot().LineLengthM,S.LineLengthM);

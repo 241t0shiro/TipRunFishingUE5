@@ -6,6 +6,8 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/GameViewportClient.h"
+#include "SceneView.h"
 #include "Framework/Application/SlateApplication.h"
 #include "InputKeyEventArgs.h"
 
@@ -278,14 +280,36 @@ bool ATRPlayerController::SubmitMouseDelta(FVector2D Delta,int64 TargetTick)
 {
 	SynchronizeSession();
 	if(bPrototypePanelOpen || !bInputFocused || IsActorBeingDestroyed() || Delta.ContainsNaN() || !BoundSession.IsValid() || BoundSession->IsPlayerPaused()){return false;}
-	if(BoundSession->UsesFishingStations())
-	{
-		const auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager);
-		if(!Camera){return false;}
-		const auto View=Camera->GetFishingSnapshot(BoundSession->GetStationSnapshot());
-		if(!View.bActive || !BoundSession->SubmitRodView(FVector2D(View.YawDeg,View.PitchDeg),ObservedCast,ObservedRegistration,TargetTick)){return false;}
-	}
-	const bool Queued=BoundSession->SubmitRodAim(Delta,ObservedCast,ObservedRegistration,TargetTick);
+ FTRRodAimObservation Observation;
+ if(BoundSession->UsesFishingStations())
+ {
+  const auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager);
+  if(!Camera){return false;}
+  const auto Station=BoundSession->GetStationSnapshot();const auto View=Camera->GetFishingSnapshot(Station);
+  if(!View.bActive){return false;}
+  // Freeze the actual displayed POV and matching boat reference in one command.
+  const auto& POV=Camera->GetCameraCacheView();Observation.bValid=true;
+  Observation.CameraWorldM=POV.Location*.01;Observation.CameraRotation=POV.Rotation;Observation.FOVDeg=POV.FOV;
+  Observation.BoatWorldM=Camera->ObservationBoatWorldM;Observation.BoatHeadingRad=Camera->ObservationBoatHeadingRad;
+  Observation.CameraFrame=int64(Camera->DiagnosticCameraFrame);Observation.Side=BoundSession->GetPlayerModeSnapshot().FishingSide;
+  if(auto* LP=GetLocalPlayer();LP && LP->ViewportClient && LP->ViewportClient->Viewport)
+  {
+   FSceneViewProjectionData Projection;
+   if(!LP->GetProjectionData(LP->ViewportClient->Viewport,Projection)){return false;}
+   Observation.ViewRect=Projection.GetConstrainedViewRect();
+   Observation.bHasProjection=true;
+   Observation.ProjectionScale=FVector2D(Projection.ProjectionMatrix.M[0][0],Projection.ProjectionMatrix.M[1][1]);
+   Observation.ProjectionOffset=FVector2D(Projection.ProjectionMatrix.M[2][0],Projection.ProjectionMatrix.M[2][1]);
+  }
+  else
+  {
+   // Legacy non-viewport unit fixtures: capture their logical view now, not later.
+   FMinimalViewInfo Logical;if(!Camera->BuildFishingView(Station,Logical)){return false;}
+   Observation.CameraWorldM=Logical.Location*.01;Observation.CameraRotation=Logical.Rotation;Observation.FOVDeg=Logical.FOV;
+   const auto Boat=BoundSession->GetHUDSnapshot().Boat;Observation.BoatWorldM=Boat.PositionM;Observation.BoatHeadingRad=Boat.HeadingRad;
+  }
+ }
+ const bool Queued=BoundSession->SubmitRodAim(Delta,ObservedCast,ObservedRegistration,TargetTick,Observation);
  DiagnosticLastQueue=FString::Printf(TEXT("delta=%s queued=%d frame=%llu target=%lld"),*Delta.ToString(),Queued,GFrameCounter,TargetTick);
  if(Queued){DiagnosticQueuedMouse+=Delta;++DiagnosticQueuedSamples;}return Queued;
 }
@@ -315,6 +339,9 @@ FTRHUDSnapshot ATRPlayerController::GetDebugSnapshot() const
  {if(Axis.AxisKeyName==EKeys::MouseX.GetFName() || Axis.AxisKeyName==EKeys::MouseY.GetFName())
   {Copy.RuntimeDiagnostics+=FString::Printf(TEXT("%s sensitivity=%.6g exponent=%.6g deadzone=%.6g invert=%d\n"),*Axis.AxisKeyName.ToString(),double(Axis.AxisProperties.Sensitivity),double(Axis.AxisProperties.Exponent),double(Axis.AxisProperties.DeadZone),Axis.AxisProperties.bInvert);}}
  if(BoundSession.IsValid()){Copy.RuntimeDiagnostics+=BoundSession->GetRuntimeDiagnostics()+TEXT("\n"); if(!BoundSession->DiagnosticAbortContext.IsEmpty()){Copy.RuntimeDiagnostics+=TEXT("Before Abort cleanup:\n")+BoundSession->DiagnosticAbortContext+TEXT("\n");}}
+ Copy.RuntimeDiagnostics+=FString::Printf(TEXT("R4A2 RodRootLocal=%s BaseDirectionLocal=%s BaseTipLocal=%s\nFinalDirectionLocal=%s FinalTipLocal=%s Length=%.9g\n"),*Copy.Rod.RodRootLocal.ToString(),*Copy.Rod.BaseRodDirectionLocal.ToString(),*Copy.Rod.BaseRodTipLocal.ToString(),*Copy.Rod.FinalRodDirectionLocal.ToString(),*Copy.Rod.FinalRodTipLocal.ToString(),Copy.Rod.LengthM);
+ Copy.RuntimeDiagnostics+=FString::Printf(TEXT("R4A5 Envelope enabled=%d limited=%d reason=%s (Station-local, read-only)\n"),Copy.Rod.bEnvelopeEnabled,Copy.Rod.bEnvelopeLimited,*Copy.Rod.EnvelopeReason);
+ Copy.RuntimeDiagnostics+=FString::Printf(TEXT("R4A3 lastMouse=%s currentPixel=%s targetPixel=%s cameraFrame=%lld sequence=%lld result=%s\n"),*Copy.Rod.AimMouseDelta.ToString(),*Copy.Rod.AimCurrentPixel.ToString(),*Copy.Rod.AimTargetPixel.ToString(),Copy.Rod.AimCameraFrame,Copy.Rod.AimSequence,*Copy.Rod.AimResult);
  if(PrototypeObserver.IsValid()){Copy.RuntimeDiagnostics+=PrototypeObserver->GetRuntimeObservation().Describe();}
 
  Copy.bMouseRodInputActive=Copy.bSessionValid && BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing) && bInputFocused && !bPrototypePanelOpen && !Copy.Retrieval.bIsQuickRetrieving;
@@ -561,7 +588,6 @@ void ATRPlayerController::AdvanceFishingCamera(double DeltaSeconds)
  if(auto* Camera=Cast<ATRPlayerCameraManager>(PlayerCameraManager))
  {
   Camera->AdvanceFishingLook(FishingLookAxes,DeltaSeconds);
-  const auto View=Camera->GetFishingSnapshot(BoundSession->GetStationSnapshot());
-  if(View.bActive){BoundSession->SubmitRodView(FVector2D(View.YawDeg,View.PitchDeg),BoundSession->GetCastId(),BoundSession->GetRegistrationId());}
+  // R4A-2: view-only input never emits a Rod command.
  }
 }

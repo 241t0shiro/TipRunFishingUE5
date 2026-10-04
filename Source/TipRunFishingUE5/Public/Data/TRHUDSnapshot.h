@@ -12,6 +12,7 @@ USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 {
 	GENERATED_BODY()
+ UPROPERTY(BlueprintReadOnly) bool bRecoveryAvailable=false;
  // R4A-1 observation only; never consumed by simulation or compact HUD.
  UPROPERTY(BlueprintReadOnly, Category="TipRun|Debug") FString RuntimeDiagnostics;
  UPROPERTY(BlueprintReadOnly) bool bMouseRodInputActive=false;

@@ -33,10 +33,10 @@
 
 namespace
 {
-	const FString Root = TEXT("/Game/TipRun/Prototype/M105/");
-	const FString MapPath = Root + TEXT("L_TR_M105_Prototype");
-	const FString ModePath = Root + TEXT("BP_TR_M105GameMode_Prototype");
-	FString DataPath(const TCHAR* Kind) { return Root + TEXT("Data/DA_TR_M105") + Kind + TEXT("_Prototype"); }
+	const FString PrototypeAssetRoot = TEXT("/Game/TipRun/Prototype/M105/");
+	const FString MapPath = PrototypeAssetRoot + TEXT("L_TR_M105_Prototype");
+	const FString ModePath = PrototypeAssetRoot + TEXT("BP_TR_M105GameMode_Prototype");
+	FString DataPath(const TCHAR* Kind) { return PrototypeAssetRoot + TEXT("Data/DA_TR_M105") + Kind + TEXT("_Prototype"); }
 	template<class T> T* NewAsset(const FString& Path)
 	{ return NewObject<T>(CreatePackage(*Path), *FPackageName::GetLongPackageAssetName(Path), RF_Public|RF_Standalone); }
 	bool SaveAsset(UObject* Asset, bool bMap=false)
@@ -130,7 +130,7 @@ bool FTRPrototypeAssetsGTest::RunTest(const FString& Parameters)
 	if (!TestNotNull(TEXT("Stored config loads"),Config) || !TestNotNull(TEXT("Stored GameMode loads"),BP) || !TestNotNull(TEXT("Stored Level loads"),World)) { return false; }
 	if(FParse::Param(FCommandLine::Get(),TEXT("TRMigrateM105GView")))
 	{
-		const FString MaterialPath=Root+TEXT("M_TR_Observation_Prototype");
+		const FString MaterialPath=PrototypeAssetRoot+TEXT("M_TR_Observation_Prototype");
 		UMaterial* Material=nullptr;
 		if(FPaths::FileExists(FPackageName::LongPackageNameToFilename(MaterialPath,TEXT(".uasset"))))
 		{Material=LoadObject<UMaterial>(nullptr,*MaterialPath);}

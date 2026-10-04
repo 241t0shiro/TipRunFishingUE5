@@ -18,8 +18,8 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 	FVector Position = Start, V = MotionVelocityMps;
 	const FVector RodStart = bHasPreviousRod ? PreviousRodTipM : Boat.RodTipM;
 	const FVector RodVelocity = (Boat.RodTipM - RodStart) / Time.StepSeconds;
-	if (RodVelocity.ContainsNaN() || (Boat.RodTipM - RodStart).Size() > P.MaxStepTravelM)
-	{ return DiagnosticFail(TEXT("Spatial.InvalidRodVelocityOrTravel"), __LINE__); }
+	if (RodVelocity.ContainsNaN()) { return DiagnosticFail(TEXT("Spatial.RodVelocityNonFinite"), __LINE__); }
+    if ((Boat.RodTipM - RodStart).Size() > P.MaxStepTravelM) { return DiagnosticFail(TEXT("Spatial.RodTipDeltaExceeded"), __LINE__); }
 	double Line = Snapshot.LineLengthM, Correction = 0, Residual = ResidualLiftMps;
 	double Travel = 0;
 	FTROceanSample Local = Ocean;
@@ -44,6 +44,8 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 		const FVector Rod = FMath::Lerp(RodStart, Boat.RodTipM, double(Sub+1)/Count);
 		if (!Read(Position, Local)) { return DiagnosticFail(TEXT("Spatial.InvalidOceanAtEgi"), __LINE__); }
 		const FVector Old = Position;
+		const FVector OldVelocity = V;
+		const double OldLine = Line;
 		if (Action.FishingState == ETRFishingState::Jerking) { Residual = Action.LiftMps; }
 		else if (Action.FishingState == ETRFishingState::TensionFall)
 		{
@@ -91,14 +93,16 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			Trial[Axis] += Dt*(V[Axis]*Phi+Equilibrium*(1-Phi));
 			V[Axis] += (Equilibrium-V[Axis])*Alpha;
 		}
-		if (Trial.ContainsNaN() || V.ContainsNaN() || V.Size() > P.MaxEgiSpeedMps)
-		{ return DiagnosticFail(TEXT("Spatial.InvalidCandidateVelocity"), __LINE__); }
+		if (Trial.ContainsNaN()) { return DiagnosticFail(TEXT("Spatial.PositionNonFinite"), __LINE__); }
+        if (V.ContainsNaN()) { return DiagnosticFail(TEXT("Spatial.VelocityNonFinite"), __LINE__); }
+        if (V.Size() > P.MaxEgiSpeedMps) { return DiagnosticFail(TEXT("Spatial.EgiCandidateVelocityExceeded"), __LINE__); }
 		// FreeFall pays only demand. TF keeps length; no automatic TF slack accumulation.
 		if (Action.FishingState == ETRFishingState::FreeFall && Action.LineMode == ETRLineMode::Payout)
 		{
 			const double Needed = (Trial-Rod).Size()+P.LineSlackAllowanceM;
 			Line += FMath::Min(FMath::Max(0.0, Needed-Line), double(P.PayoutMps)*Dt);
 		}
+		const double RequiredUnconstrained=(Trial-Rod).Size();
 		double ActualReelMps = 0.0;
 		if (Action.LineMode == ETRLineMode::ReelIn)
 		{
@@ -114,7 +118,10 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 				// by surface arc geometry, not by moving the Egi directly.
 				const double Radius = FMath::Max(0.0,(Position-Rod).Size2D()-double(Action.ReelMps)*Dt);
 				const double SurfaceLine = FMath::Sqrt(SurfaceHeight*SurfaceHeight+Radius*Radius);
-				Line = FMath::Max(Line,FMath::Min(PreviousLine,SurfaceLine));
+				// A rising rod can require MORE line to remain compatible with the
+                // surface contact. Capping this span at PreviousLine collapses
+                // the surface circle to zero and teleports the endpoint sideways.
+                Line = FMath::Max(Line,SurfaceLine);
 			}
 			ActualReelMps = FMath::Max(0.0,(PreviousLine-Line)/Dt);
 		}
@@ -140,7 +147,9 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 				if (XY.Size()>FMath::Sqrt(Radius2)+EpsilonM)
 				{
 					const auto Limited=XY.GetSafeNormal()*FMath::Sqrt(Radius2);
-					Trial.X=Rod.X+Limited.X; Trial.Y=Rod.Y+Limited.Y;
+					const FVector BeforeSurfaceCorrection=Trial;
+                    Trial.X=Rod.X+Limited.X; Trial.Y=Rod.Y+Limited.Y;
+                    Correction+=(Trial-BeforeSurfaceCorrection).Size();
 					continue; // Re-query the moved horizontal position before committing.
 				}
 			}
@@ -159,9 +168,13 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			if (Outward>0) { V -= N*Outward; }
 		}
 		const double StepTravel = (Trial-Old).Size(); Travel+=StepTravel;
+        SpatialDiagnostics = FString::Printf(TEXT("tick=%lld sub=%d RodPrevious=%s RodCurrent=%s RodTipDelta=%.12g RodVelocity=%s EgiPrevious=%s EgiCandidate=%s EgiPreviousVelocity=%s EgiVelocity=%s EgiStepSpeed=%.12g LinePrevious=%.12g LineCurrent=%.12g LineRequired=%.12g LineRequiredBeforeCorrection=%.12g LineCorrection=%.12g Reel=%.12g Tension=%.12g"),
+            Time.TickIndex,Sub,*RodStart.ToString(),*Rod.ToString(),(Boat.RodTipM-RodStart).Size(),*RodVelocity.ToString(),*Old.ToString(),*Trial.ToString(),*OldVelocity.ToString(),*V.ToString(),StepTravel/Dt,OldLine,Line,(Trial-Rod).Size(),RequiredUnconstrained,Correction,ActualReelMps,Correction/double(P.TensionReferenceM));
 		if (!FMath::IsFinite(Travel) || Travel>P.MaxStepTravelM || StepTravel/Dt>P.MaxEgiSpeedMps ||
 			V.ContainsNaN() || V.Size()>P.MaxEgiSpeedMps || TRUnits::MetersToCentimeters(Trial).ContainsNaN())
-		{ DiagnosticFail(TEXT("Spatial.ExcessiveMotionOrNonFinite"), __LINE__); DiagnosticFailure += FString::Printf(TEXT(" travel=%.9g/%.9g stepSpeed=%.9g/%.9g velocity=%.9g rodSpeed=%.9g"),Travel,double(P.MaxStepTravelM),StepTravel/Dt,double(P.MaxEgiSpeedMps),V.Size(),RodVelocity.Size()); return ETREgiStepEvent::EnvironmentInvalid; }
+		{ const TCHAR* Failure = !FMath::IsFinite(Travel) || TRUnits::MetersToCentimeters(Trial).ContainsNaN() ? TEXT("Spatial.PositionNonFinite") :
+            Travel>P.MaxStepTravelM ? TEXT("Spatial.EgiTravelExceeded") : StepTravel/Dt>P.MaxEgiSpeedMps ? TEXT("Spatial.LineCorrectionExceeded") :
+            V.ContainsNaN() ? TEXT("Spatial.VelocityNonFinite") : TEXT("Spatial.EgiConstraintVelocityExceeded"); DiagnosticFail(Failure, __LINE__); DiagnosticFailure += FString::Printf(TEXT(" travel=%.9g/%.9g stepSpeed=%.9g/%.9g velocity=%.9g rodSpeed=%.9g"),Travel,double(P.MaxStepTravelM),StepTravel/Dt,double(P.MaxEgiSpeedMps),V.Size(),RodVelocity.Size()); return ETREgiStepEvent::EnvironmentInvalid; }
 		Position=Trial;
 	}
 	// Callbacks cannot revive an old cast or a destroyed owner.

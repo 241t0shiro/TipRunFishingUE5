@@ -89,7 +89,7 @@ void UTRSimulationWorldSubsystem::Unregister(FTRActorSimId Id)
 }
 
 bool UTRSimulationWorldSubsystem::EnqueueCommand(FTRActorSimId SessionId, ETRFishingCommandType Type,
-	float AxisValue, int64 TargetTick, FTRCastId ExpectedCastId, FVector2D Axis2D, int64 ExpectedModeEpoch)
+	float AxisValue, int64 TargetTick, FTRCastId ExpectedCastId, FVector2D Axis2D, int64 ExpectedModeEpoch, const FTRRodAimObservation& RodView)
 {
 	const FRegistration* Entry = FindLive(SessionId);
 	if (!bConfigured || IsSimulationPaused() || !Entry || Entry->bSquid || Entry->bBoat || !FMath::IsFinite(AxisValue) || Axis2D.ContainsNaN() ||
@@ -103,6 +103,7 @@ bool UTRSimulationWorldSubsystem::EnqueueCommand(FTRActorSimId SessionId, ETRFis
 	Queued.Value.Type = Type;
 	Queued.Value.AxisValue = AxisValue;
 	Queued.Value.Axis2D = Axis2D;
+ Queued.Value.RodView = RodView;
 	Queued.Value.TargetTick = TargetTick;
 	Queued.Value.Sequence = NextSequence++;
 	Queued.Value.ExpectedCastId = ExpectedCastId;

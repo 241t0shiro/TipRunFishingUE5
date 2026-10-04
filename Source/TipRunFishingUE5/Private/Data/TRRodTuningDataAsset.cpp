@@ -12,11 +12,18 @@ bool FTRRodScreenParameters::Validate() const
 		FMath::IsFinite(SurfaceClearanceM) && SurfaceClearanceM>=0 && SurfaceClearanceM<=.5;
 }
 
+bool FTRRodEnvelopeParameters::Validate() const
+{
+ for(double V:{MinYawDeg,MaxYawDeg,MinPitchDeg,MaxPitchDeg}){if(!FMath::IsFinite(V)){return false;}}
+ return MinYawDeg>-85 && MaxYawDeg<85 && MinYawDeg<=0 && MaxYawDeg>=0 && MinYawDeg<MaxYawDeg &&
+  MinPitchDeg>-60 && MaxPitchDeg<75 && MinPitchDeg<MaxPitchDeg;
+}
+
 bool FTRRodParameters::Validate(TArray<FText>& Errors) const
 {
 	const double Values[]={MinPitchRad,MaxPitchRad,MinYawRad,MaxYawRad,InitialPitchRad,InitialYawRad,
 		SensitivityXRad,SensitivityYRad,MaxMouseDelta,MaxAimRateRadPerS,LengthM,ShakuriAmplitudeRad,ShakuriUpSeconds,ShakuriReturnSeconds,ShakuriReelSpeedMps,ShakuriReelSeconds};
-	bool Valid=!MountOffsetM.ContainsNaN() && Screen.Validate();
+	bool Valid=!MountOffsetM.ContainsNaN() && Screen.Validate() && Envelope.Validate();
 	Valid &= (ShakuriReelSpeedMps==0 && ShakuriReelSeconds==0) ||
 		(ShakuriReelSpeedMps>0 && ShakuriReelSpeedMps<=MAX_flt && ShakuriReelSeconds>0 && ShakuriReelSeconds<=ShakuriReturnSeconds && FMath::IsFinite(ShakuriReelSpeedMps*ShakuriReelSeconds));
 	for(double Value:Values){Valid &= FMath::IsFinite(Value);}

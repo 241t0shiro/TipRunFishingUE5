@@ -1,5 +1,13 @@
 # TipRunFishingUE5 — Codex実装規約
 
+2026-10-04 R4A-5: 固定Station-local Root/BaseDirection/2mを維持し、保存Rodへopt-inのErgonomic Envelope（yaw±40/pitch-10〜35度）を追加。Camera/Grip/FOV80/感度/Action係数は保持。保存実Runtime受入は新規5＋関連88、採用93件成功（外部HTTP警告1件）、正常42条件はTechnical Abort0。投影長は同一A1列で比100.67→1.92257、広域720姿勢で435.991〜1382.100px（比3.17002）。UHT生成・実C++/Development Editor Win64成功。表示端点最大差約5.03e-15m。手動6項目未実施、R4全体は正式不合格を維持。証跡/限界/境界挙動/手順はDocs/R4A5_RUNTIME_ACCEPTANCE.md。R5以降/H/M11未着手。以下は履歴。
+
+2026-10-04 R4A-4: 同一42条件の8Abortと舷変更後3Abortを、Shakuri上昇中の海面/短Line交差円の不整合へ分類。必要幾何長の整合、既存profileのBase復帰までRetrieve/FallをPending、技術Abort後の明示N復旧を実装。安全閾値/係数/Config/Contentは保持、LastResult=Abortedを保持。最終採用は新規3件＋関連109件成功、試験内警告0。同一42条件は28回収/14操作可能Stay/Abort0、舷変更6条件成功。UHT生成・実C++/Development Editor Win64成功。投影長10.9937〜1106.74pxの視覚問題は残り、R4全体は正式不合格。証跡/限界/変更一覧はDocs/R4A4_ACTION_BOUNDARY_RECOVERY.md。A5/R5以降/H/M11未着手。以下は履歴。
+
+2026-10-04 R4A-3: Mouse Commandの実Camera/Projection/ViewRect観測で現在Base Tipを投影し、DeltaからStation-local BaseDirectionへ確定。固定Grip/Length・Camera-only不変性・実Mesh/Line端点契約を維持し旧±0.28入力矩形を撤去。UHT生成・実C++/Development Editor Win64成功。最終85件は83成功（外部HTTP警告付き1件含む）/2既知Lock試験FAIL。新規4件/直接回帰72件は成功。舷変更後3条件は残存、従来42条件では34回収/8Abortへ変化。安全閾値/Abort/Egi/Shakuri係数は未変更。広い操作域で投影長の極端な短縮も観測し、R4正式不合格を維持。証跡と制限はDocs/R4A3_MOUSE_DELTA_INTEGRATION.md。R4A-4以降/R5以降/H/M11未着手。以下は履歴。
+
+2026-10-04 R4A-2完了記録: Rodの永続正本を固定Station-local Grip・BaseDirection・LengthMへ移行し、Camera-only更新から切断。中断前9/30の最終UHT生成/実C++/Development Editor Win64・81試験の証跡を再確認。80成功/1失敗、関連72件成功、試験内警告0。旧Camera-only FAILはPASSへ変化し、同じ42条件Lock probeは全Retrieved。追加の舷変更後Shakuriでは3条件の安全停止/Lockを検出し、指示どおり未修正でR4A-4証拠として保持。Mouseは入力時の凍結Cameraを使う暫定互換でありR4A-3完成版ではない。R4正式不合格を維持。現行正本はFISHING_SYSTEM末尾、証跡/限界/変更一覧はDocs/R4A2_STATION_LOCAL_POSE.md。R4A-3以降/R5以降/H/M11未着手。以下は各時点の履歴。
+
 2026-09-30 R4A-1: R4はユーザー手動PIEで正式不合格。今回はRuntime観測・診断・Failing Integration Testのみ。保存Mapの実Game World/Active Camera/Visual Mesh経路でCamera-onlyによるRod移動をExpected FAILとして再現。Pure Mouse軸ずれとLockは未再現であり、解消扱いにしない。Rod方式/係数/Config/Contentは今回未変更。結果と限界はDocs/R4A1_RUNTIME_OBSERVATION.md。R4A-2、R5以降/H/M11は未着手。以下のR4自動成功は受入の代用にならない履歴。
 
 2026-09-29 R4 Screen最終確認: 旧Geometry方式はユーザー手動PIE不合格。Camera画面基準の2D Control＋固定Grip/固定長球面へ改訂し、Quick中のRod追従停止/完了時初期姿勢Fallbackを修正。UHT・実C++/Development Editor Win64成功、新規4件＋関連44件の最終結果成功。水平FOVを実Viewportにも明示。旧World軸試験だけで合格にせず、画面再投影と手動PIEを受入とする。操作感の正式合否は手動待ち、R5以降/H/M11未着手。現行契約/手順はFISHING_SYSTEM/UI_SPEC末尾、証跡はROADMAP末尾。

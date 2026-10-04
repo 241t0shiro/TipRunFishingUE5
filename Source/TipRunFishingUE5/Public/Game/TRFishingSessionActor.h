@@ -40,7 +40,7 @@ public:
 	bool IsInputModeAllowed(ETRPlayerMode RequiredMode) const;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodTuningDataAsset> RodTuning;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodControlComponent> RodControl;
-	bool SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1);
+	bool SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1,const FTRRodAimObservation& View={});
 	bool SubmitRodView(FVector2D YawPitchDeg,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1);
 	// Configuration-time entry points may resolve assets; never invoke inside a fixed step.
 	bool Initialize(UTRSimulationWorldSubsystem* Simulation, FTRActorSimId InBoatId,
@@ -81,6 +81,7 @@ public:
  FVector2D DiagnosticConsumedMouse=FVector2D::ZeroVector;
  int64 DiagnosticConsumedCount=0;
  FString DiagnosticLastRod, DiagnosticLastAction, DiagnosticLastFailure, DiagnosticAbortContext;
+ bool IsRecoveryAvailable() const;
  bool HasResult() const { return bHasResult; }
 	FTRActorSimId GetRegistrationId() const { return RegistrationId; }
 	ETRCommandResult GetLastCommandResult() const { return LastCommandResult; }

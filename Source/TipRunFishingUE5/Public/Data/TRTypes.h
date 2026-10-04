@@ -141,7 +141,8 @@ enum class ETRCommandResult : uint8
 	RejectedInvalidState,
 	RejectedBusy,
 	RejectedInvalidEnvironment,
-	RejectedMissingData
+	RejectedMissingData,
+	Pending
 };
 
 UENUM(BlueprintType)

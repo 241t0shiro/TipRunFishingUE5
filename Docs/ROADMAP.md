@@ -853,3 +853,39 @@ R4は手動PIEにより正式不合格。第1段階の観測・診断だけを�
 新規4件のうち1件は意図したFAIL（assert4件）、3件は実行成功。関連73件成功、試験内警告0。UHT/実C++/Development Editor Win64成功。計測値、警告、実行フィルタ、変更一覧、ログと再検証の証跡は [R4A-1観測記録](R4A1_RUNTIME_OBSERVATION.md) を参照。
 
 R4A-2 Station-local正本移行は未実装。既知FAILを次段階の基準にできるが、R4正式合格とはしない。R5以降/H/M11未着手。
+
+### R4A-2 Station-local正本移行（2026-09-30検証、2026-10-04中断再開・記録完了）
+
+- 固定Station-local Grip・BaseDirection・LengthMを正本化。Camera-only→RodView→Base再計算を撤去し、非ゼロMouse Commandの凍結観測による暫定互換だけを残した。ShakuriのBase/Temporary/Finalと同一Snapshotの表示端点を明示。調整値/Config/Contentの今回追加変更なし。
+- 最終81件は **80 Success / 1 Fail（assert3件）、notRun0、試験内警告0**。関連72件は全成功。旧Camera-only Expected FAILはAcceptance PASSへ変化し、永続Local値の差0、再変換したTip差約1.11e-16m。同じ42条件Lock probeは全Retrieved/Onboard/NextCast Unlock、Abort0。
+- 残るFAILは追加Runtimeの舷変更後Shakuri。30/60/120fpsの3条件でSpatial.ExcessiveMotionOrNonFinite→Aborted/Onboard=false/Locked=trueを検出。安全閾値/Abort/回復処理を変更せず、R4A-4向け失敗証拠として保存。全試験成功やLock解消とは報告しない。
+- UHT追加生成コード、変更.cpp実コンパイル/Link/Development Editor Win64成功を確認。中断前の最終ビルド/試験を再確認し、10/04の文書更新だけで無関係な成功試験は繰り返していない。git diff --check成功。
+- 計測、試験別分類、警告、変更ファイル、実行ログは [R4A-2記録](R4A2_STATION_LOCAL_POSE.md)。A2の正本移行/Camera独立性は確認できたが、R4全体は正式不合格。R4A-3を開始する基盤はある。完成版Mouse変換、R4A-4以降、R5以降/H/M11は未実装。
+
+
+### R4A-3 Mouse Delta / Runtime Presentation Integration（2026-10-04）
+
+入力発行時の実Camera/Projection/ViewRectを凍結し、現在Base Tipの投影＋Delta→Ray/Sphere→Station-local方向へ変更。旧±0.28のMouse矩形を撤去。固定Root/Length、Camera-only不変性、Base/Final分離、実Mesh/Line整合を保持。保存Content/Config/係数の追加変更なし。
+
+最終`Saved/Automation/R4A3Final2/index.json`: **85試験、83成功（うち外部HTTP警告付き1件）、2 FAIL、notRun0**。R4A-3新規4件/直接回帰72件は成功。2 FAILは42条件Lock sweepの8Abortと、舷変更後の従来3Abort。既知失敗を成功へ抑制せず、安全閾値/Abort意味/Egi/Shakuri強度を変更しない。
+
+実Viewport cross差最大0.0000610352px（許容0.05px）、両軸各2000往復の累積投影差0px、Local差約5.67e-15。左右実測約画面100%、実物理長2m。広域で見かけ長さ約11pxへ短縮する条件も数値化し、正式PIE品質は未合格。UHT追加反射生成、実C++/Link/Development Editor Win64、git diff --check成功。残る警告/詳細値/変更一覧/再現条件は [R4A-3記録](R4A3_MOUSE_DELTA_INTEGRATION.md)。R4A-4調査へ渡す証拠は揃ったが未実装。R5以降/H/M11未着手。
+
+
+### R4A-4 Fishing Action Boundary / Spatial Abort / Lock Recovery（2026-10-04）
+
+修正前に同一42入力条件の34 Retrieved/8 Abortedと舷変更後3 Abortを再現し、全11件の診断を保存。真因はRetrieve前のShakuri Up中、Rod高さに対してLineが必要な水平距離を保持せず海面交差円を潰す幾何不整合。既存式で必要長を満たし、速度/移動量/非有限の安全閾値、Reel/Shakuri/環境/Camera/Grip/Lengthの調整値は変更しない。
+
+既存profile使用時だけShakuri→Retrieve/FallをBase復帰までPendingとし、Release/Focus/Pauseで保留回収を解除。Quickは即時開始し、Rod一時profileは自然に完了。技術AbortはAbortedを保持し、Fishing Modeから明示NでReady/Onboard/Unlockへ復旧。LastResult/Side/Base/Camera/Boat動態を維持し、旧Cast/登録世代/ModeEpoch入力を拒否する。明示Session中断と通常Result/Quick契約は変更しない。
+
+**最終採用112件成功（新規3件＋関連109件）、試験内警告0、未実行0**。複数回の最終結果を採用元付きで記録し、途中失敗を削除していない。同一42条件は28通常回収＋14Release後Stay継続でTechnical Abort0。14件は別追試のQでReady/Unlock。舷変更既知6条件成功、意図的NonFiniteと明示復旧は両舷×3fps成功。固定Tickリプレイの30/60/120fpsでCommand/状態遷移列一致。A3の正本/投影/長さ/Camera不変/Quick契約を維持。
+
+UHT反射生成、変更Runtimeと最終試験の実C++/Link、Development Editor Win64成功。残る既存MSVC推奨版/include順通知と、全採用元・途中試験修正・変更14 Source＋5 Markdown・手動3項目は [R4A-4記録](R4A4_ACTION_BOUNDARY_RECOVERY.md)。Config/Contentの今回追加変更なし。投影長10.9937〜1106.74px（比100.67）の問題は残る。R4全体は正式不合格、A5を開始できる技術基盤のみ確認。A5/R5以降/H/M11は未着手。
+
+### R4A-5 Runtime Integration / Rod Ergonomics / Final Acceptance（2026-10-04）
+
+保存RodへStation方向Envelopeをopt-inで明示適用。固定Grip/Base/Length2m、FOV80、CameraAnchor、感度、Action/環境係数を保持。Mouse内側の実投影軸差最大0.0000610352px、Camera-only Local完全不変、各軸2000往復の投影差0px。720姿勢の見かけ長さ435.991〜1382.100px（比3.17002）、同一A1列は516.600〜993.199px（旧比100.67→1.92257）。両舷/代表視線の最小操作域は横68.76%/縦35.48%、解像度比率一致。
+
+**最終採用93件成功（新規5＋関連88）、errors0/notRun0、外部HTTP警告1件。** 正常42条件は42Retrieved/Abort0（旧14Stayを不合格へ変更せず、今回はEnvelopeで結果が変化）。意図的Abort/N復旧、Pending Retrieve/Fall、Quick、UI/Side/Pause/Focus、120境界Commandの30/60/120fps一致も成功。UHT反射生成・変更Runtimeと最終試験の実C++/Link・Development Editor Win64・git diff --check成功。
+
+採用元/途中失敗/警告/10Source＋RodAsset＋6Markdownの変更一覧、実測/限界、最大6項目の手動PIE手順は [R4A-5記録](R4A5_RUNTIME_ACCEPTANCE.md)。自動GUI PIEは起動していない。**A5自動受入成功、手動6項目待ち。R4全体は正式不合格を維持。** R5以降/H/M11未着手。

@@ -275,14 +275,18 @@ bool FTRR4Axes::RunTest(const FString&)
   R.PC->RoutePrototypeMouse(FVector2D::ZeroVector,false); // discard the boundary sample
   TestTrue(TEXT("Mouse dispatched to queue"),R.PC->RoutePrototypeMouse(FVector2D(8,8),false));
   TestEqual(TEXT("Rod changes only at fixed step"),R.PC->GetDebugSnapshot().Rod.ScreenControl.X,S.Rod.ScreenControl.X);R.F.Step();auto Aim=R.PC->GetDebugSnapshot();
-  TestTrue(TEXT("Mouse up/right changes rod only"),Aim.Rod.ScreenControl.X>S.Rod.ScreenControl.X && Aim.Rod.ScreenControl.Y>S.Rod.ScreenControl.Y && Aim.FishingCamera.YawDeg==S.FishingCamera.YawDeg && Aim.FishingCamera.PitchDeg==S.FishingCamera.PitchDeg);
-  R.PC->RoutePrototypeMouse(FVector2D(-8,-8),false);R.F.Step();TestTrue(TEXT("Mouse down/left"),R.PC->GetDebugSnapshot().Rod.ScreenControl.Y<Aim.Rod.ScreenControl.Y && R.PC->GetDebugSnapshot().Rod.ScreenControl.X<Aim.Rod.ScreenControl.X);
+  TestTrue(TEXT("Mouse up/right changes rod only"),Aim.Rod.AimResult==TEXT("Valid") && Aim.Rod.AimTargetPixel.X>Aim.Rod.AimCurrentPixel.X && Aim.Rod.AimTargetPixel.Y<Aim.Rod.AimCurrentPixel.Y && Aim.FishingCamera.YawDeg==S.FishingCamera.YawDeg && Aim.FishingCamera.PitchDeg==S.FishingCamera.PitchDeg);
+  R.PC->RoutePrototypeMouse(FVector2D(-8,-8),false);R.F.Step();TestTrue(TEXT("Mouse down/left"),R.PC->GetDebugSnapshot().Rod.AimResult==TEXT("Valid") && R.PC->GetDebugSnapshot().Rod.AimTargetPixel.Y>R.PC->GetDebugSnapshot().Rod.AimCurrentPixel.Y && R.PC->GetDebugSnapshot().Rod.AimTargetPixel.X<R.PC->GetDebugSnapshot().Rod.AimCurrentPixel.X);
   R.PC->SetFishingLookInput(FVector2D(1,1));for(int I=0;I<50;++I){R.PC->AdvanceFishingCamera(.1);R.PC->RoutePrototypeMouse(FVector2D(100,100),false);R.F.Step();}
   auto Clamped=R.PC->GetDebugSnapshot();const auto& Rod=R.F.Session->RodTuning->Parameters;
-  TestTrue(TEXT("Camera and rod clamp"),Clamped.FishingCamera.YawDeg==R.Stations->Parameters.MaxYawDeg && Clamped.FishingCamera.PitchDeg==R.Stations->Parameters.MaxPitchDeg && Clamped.Rod.ScreenControl.X<=Rod.Screen.Max.X && Clamped.Rod.ScreenControl.Y<=Rod.Screen.Max.Y);
+  TestTrue(TEXT("Camera and rod clamp"),Clamped.FishingCamera.YawDeg==R.Stations->Parameters.MaxYawDeg && Clamped.FishingCamera.PitchDeg==R.Stations->Parameters.MaxPitchDeg && Clamped.Rod.BaseRodDirectionLocal.X>0 && FMath::IsNearlyEqual((Clamped.Rod.BaseRodTipLocal-Clamped.Rod.RodRootLocal).Size(),Rod.LengthM,1.e-9));
   TestTrue(TEXT("Local to world direction follows heading/side"),Clamped.Rod.TipWorldRotation.Rotator().Vector().Equals(Clamped.Rod.TipDirection,1.e-6));
-  R.PC->SetFishingLookInput(FVector2D::ZeroVector);R.Action(ETRPlayerAction::Deploy);R.F.Step(300);
-  R.PC->RoutePrototypeMouse(FVector2D::ZeroVector,false);const auto Before=R.PC->GetDebugSnapshot();R.PC->RoutePrototypeMouse(FVector2D(-5,-5),false);R.F.Step();TestTrue(TEXT("Rod available during cast"),R.PC->GetDebugSnapshot().Rod.ScreenControl.X<Before.Rod.ScreenControl.X && R.PC->GetDebugSnapshot().bMouseRodInputActive);
+  // Return to a visible station default through the real side-change commands before
+  // checking in-cast input; a camera clamped off the rod is a reachability rejection.
+  R.PC->SetFishingLookInput(FVector2D::ZeroVector);R.Key(EKeys::C);R.Key(Port?EKeys::A:EKeys::D);R.Key(EKeys::Enter);
+  R.Action(ETRPlayerAction::Deploy);R.F.Step(300);
+  R.PC->RoutePrototypeMouse(FVector2D::ZeroVector,false);const auto Before=R.PC->GetDebugSnapshot();R.PC->RoutePrototypeMouse(FVector2D(-5,-5),false);R.F.Step();const auto During=R.PC->GetDebugSnapshot();
+  TestTrue(TEXT("Rod available during cast"),During.Rod.AimResult==TEXT("Valid") && !During.Rod.BaseRodDirectionLocal.Equals(Before.Rod.BaseRodDirectionLocal,1.e-10) && During.bMouseRodInputActive);
  }
  return true;
 }

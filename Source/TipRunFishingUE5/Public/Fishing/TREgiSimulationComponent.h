@@ -12,6 +12,7 @@ class TIPRUNFISHINGUE5_API UTREgiSimulationComponent : public UActorComponent
 {
 	GENERATED_BODY()
 public:
+	FString GetSpatialDiagnostics() const { return SpatialDiagnostics; }
 	UTREgiSimulationComponent();
 	bool InitializeCast(const FTREgiSnapshot& Initial, const FTREquipmentSnapshot& Equipment,
 		const FTROceanSample& Ocean, TArray<FText>& Errors, const FTRBoatSnapshot* InitialBoat = nullptr);
@@ -25,7 +26,10 @@ public:
  FString GetLastDiagnosticFailure() const { return DiagnosticFailure; }
 	bool IsTransientComplete() const { return ResidualLiftMps <= FrozenEquipment.Parameters.TensionLiftCompletionMps; }
 private:
+	// Runtime test may corrupt motion explicitly; no shipping input can call a bypass.
+	friend class FTRRuntimeRecovery;
  FString DiagnosticFailure;
+	FString SpatialDiagnostics;
  ETREgiStepEvent DiagnosticFail(const TCHAR* Reason, int32 Site);
 	ETREgiStepEvent StepSpatial(FTRCastId ExpectedCastId, const FTRSimTime& Time,
 		const FTROceanSample& Ocean, const FTRBoatSnapshot& Boat, const FTREgiAction& Action,

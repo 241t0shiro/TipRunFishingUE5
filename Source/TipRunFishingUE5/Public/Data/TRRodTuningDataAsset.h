@@ -4,7 +4,8 @@
 #include "TRRodTuningDataAsset.generated.h"
 
 // Camera-plane coordinates: +X right, +Y up, both in horizontal half-screen units.
-// Prototype values; keep a compact visible working region rather than a sphere-wide Euler aim.
+// Legacy initialization/action profile bounds. R4A-3 mouse reach uses visibility/geometry,
+// not Min/Max as a permanent rectangle. Sensitivity/rate remain shared tuning.
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRRodScreenParameters
 {
@@ -20,12 +21,27 @@ struct TIPRUNFISHINGUE5_API FTRRodScreenParameters
 	bool Validate() const;
 };
 
+// Station-local ergonomic direction limits. Opt-in; never a screen-position authority.
+// These defaults are Prototype candidates, not product balance or measured human limits.
+USTRUCT(BlueprintType)
+struct TIPRUNFISHINGUE5_API FTRRodEnvelopeParameters
+{
+ GENERATED_BODY()
+ UPROPERTY(EditAnywhere, BlueprintReadOnly) bool bEnabled=false;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(Units="deg")) double MinYawDeg=-40;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(Units="deg")) double MaxYawDeg=40;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(Units="deg")) double MinPitchDeg=-10;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(Units="deg")) double MaxPitchDeg=35;
+ bool Validate() const;
+};
+
 // Explicit Prototype/Test configuration. Angles are radians, lengths meters, time seconds.
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRRodParameters
 {
 	GENERATED_BODY()
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod|Screen") FTRRodScreenParameters Screen;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod|Envelope") FTRRodEnvelopeParameters Envelope;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double MinPitchRad=0;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double MaxPitchRad=0;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double MinYawRad=0;

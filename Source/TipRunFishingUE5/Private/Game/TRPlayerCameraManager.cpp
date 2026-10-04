@@ -73,4 +73,9 @@ void ATRPlayerCameraManager::AdvanceFishingLook(FVector2D Axes,double DeltaSecon
 }
 
 void ATRPlayerCameraManager::UpdateCamera(float DeltaTime)
-{Super::UpdateCamera(DeltaTime);DiagnosticCameraFrame=GFrameCounter;}
+{
+ Super::UpdateCamera(DeltaTime);DiagnosticCameraFrame=GFrameCounter;
+ const auto* PC=Cast<ATRPlayerController>(PCOwner);
+ if(const auto* Session=PC?PC->GetBoundSession():nullptr)
+ {const auto Boat=Session->GetHUDSnapshot().Boat;ObservationBoatWorldM=Boat.PositionM;ObservationBoatHeadingRad=Boat.HeadingRad;}
+}

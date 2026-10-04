@@ -23,8 +23,11 @@ namespace
  void Segment(UStaticMeshComponent* Mesh, FVector A, FVector B, double RadiusM)
  {
   const FVector Delta=B-A;
-  Mesh->SetWorldLocation(TRUnits::MetersToCentimeters((A+B)*.5));
-  Mesh->SetWorldRotation(Delta.Rotation());
+  // Apply the displayed endpoint pair together, without camera compensation
+  // or presentation interpolation.
+  // Rendering-only components must not retain MoveComponent's near-equal
+  // rotation tolerance: their endpoints represent this exact snapshot.
+  Mesh->SetWorldLocationAndRotationNoPhysics(TRUnits::MetersToCentimeters((A+B)*.5),Delta.Rotation());
   // Engine cube is 1m on each axis. Geometry thickness is display only.
   Mesh->SetWorldScale3D(FVector(FMath::Max(.001,Delta.Size()),RadiusM,RadiusM));
  }
@@ -118,6 +121,9 @@ void ATRPrototypeViewActor::ApplyObservation(const FTRHUDSnapshot& S,const FTRRo
  SeabedVisual->SetWorldLocation(TRUnits::MetersToCentimeters(FVector(O.X,O.Y,SurfaceM-DepthM-.2)));
  BackgroundVisual->SetWorldLocation(TRUnits::MetersToCentimeters(O+FVector(0,100,0)));
  if(!FishingVisible){return;}
+ // Configured stations require an authoritative rod pair; never synthesize a
+ // camera/initial-pose fallback when a snapshot is invalid. Legacy preview only.
+ if(S.Station.bValid && !S.Rod.bValid){return;}
  // Both endpoints must belong to the same fixed-step snapshot. Mixing a live station
  // root with an older rod tip stretches the mesh when boat/station transforms differ.
  const FVector Mount=S.Rod.bValid?S.Rod.RootWorldPositionM:(S.Station.bValid?S.Station.RodRootWorldM:S.Boat.PositionM+FQuat(FVector::UpVector,S.Boat.HeadingRad).RotateVector(Rod.MountOffsetM));

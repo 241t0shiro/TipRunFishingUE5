@@ -111,10 +111,10 @@ ETRCommandResult ATRFishingSessionActor::StartFishing(TArray<FText>& Errors)
 	return bInitialized && bFishingStarted && !IsActorBeingDestroyed() && Coordinator.IsValid() &&
 		Coordinator->EnqueueCommand(RegistrationId, Type, 0.0f, TargetTick, ExpectedCastId, FVector2D::ZeroVector, PlayerMode->GetSnapshot().ModeEpoch);
 }
-bool ATRFishingSessionActor::SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick)
+bool ATRFishingSessionActor::SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick,const FTRRodAimObservation& View)
 {
 	return IsInputModeAllowed(ETRPlayerMode::Fishing) && RodControl->IsInitialized() && ExpectedCastId==CurrentCastId && ExpectedRegistration==RegistrationId &&
-		Coordinator->EnqueueCommand(RegistrationId,ETRFishingCommandType::RodAim,0,TargetTick,ExpectedCastId,Delta,PlayerMode->GetSnapshot().ModeEpoch);
+		Coordinator->EnqueueCommand(RegistrationId,ETRFishingCommandType::RodAim,0,TargetTick,ExpectedCastId,Delta,PlayerMode->GetSnapshot().ModeEpoch,View);
 }
 bool ATRFishingSessionActor::SubmitRodView(FVector2D View,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick)
 {
@@ -224,7 +224,7 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 	switch (Command.Type)
 	{
 	case ETRFishingCommandType::RodAim:
-		if((bCastActive || Phase==ETRSessionPhase::Ready) && RodControl->ApplyAim(Command.Axis2D,Coordinator->GetSimulationTime()))
+		if((bCastActive || Phase==ETRSessionPhase::Ready) && (!Command.RodView.bValid || Command.RodView.Side==PlayerMode->GetSnapshot().FishingSide) && RodControl->ApplyAim(Command.Axis2D,Coordinator->GetSimulationTime(),Command.RodView,Command.Sequence))
 		{LastCommandResult=ETRCommandResult::Accepted;} break;
 	case ETRFishingCommandType::Deploy:
 		if (Fishing->GetState() == ETRFishingState::Ready && CanChangeEquipment() && IsValid(SelectedEgiMesh) && NextCastValue < MAX_int64)
@@ -236,6 +236,7 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 			CastStartTick = Coordinator->GetSimulationTime().TickIndex;
 			bCastActive = true; bHasResult = false; DiagnosticLastFailure.Reset(); DiagnosticAbortContext.Reset();
 			Fishing->BeginCast(CurrentCastId, Coordinator->GetSimulationTime(), LockedEquipment);
+			Fishing->bUseRodProfileBoundaries=RodControl->IsInitialized();
 			if(RodControl->IsInitialized()){Fishing->JerkTicks=RodControl->GetJerkTicks();}
 			LastCommandResult = ETRCommandResult::Accepted;
 		}
@@ -356,7 +357,7 @@ void ATRFishingSessionActor::FinishInternal(ETRCastOutcome Outcome, bool bReturn
 	Fishing->FinishCast(Coordinator.IsValid() ? Coordinator->GetSimulationTime().TickIndex : LastCommandTick, bQuickReturned);
 	Phase = bQuickReturned ? ETRSessionPhase::Ready : ETRSessionPhase::Result;
 	if (bQuickReturned) { bEquipmentLocked = false; }
-	if(!bReturnedOnboard){RodControl->InvalidateSnapshot();} bClearRodReservations=false; bClearNormalRetrieve=false;
+	if(!bReturnedOnboard){RodControl->ClearAction();RodControl->InvalidateSnapshot();} bClearRodReservations=false; bClearNormalRetrieve=false;
 	if (Coordinator.IsValid()) { CaptureHUD(Coordinator->GetSimulationTime()); }
 	Unregister(); // Invalidates all queued and already-extracted commands for this registration.
 	if (!IsActorBeingDestroyed()) { Register(); }
@@ -366,8 +367,16 @@ ETRCommandResult ATRFishingSessionActor::AbortCast(FTRCastId ExpectedCastId)
 	if (!bCastActive || ExpectedCastId != CurrentCastId || IsActorBeingDestroyed() || !Coordinator.IsValid() || !Coordinator->IsInitialized()) { return ETRCommandResult::RejectedInvalidState; }
 	AbortInternal(); return ETRCommandResult::Accepted;
 }
+bool ATRFishingSessionActor::IsRecoveryAvailable() const
+{
+    return bInitialized && bFishingStarted && !bCastActive && bHasResult && LastResult.Outcome==ETRCastOutcome::Aborted &&
+        DiagnosticLastFailure!=TEXT("Session.ExplicitAbort") && Phase==ETRSessionPhase::Result && IsInputModeAllowed(ETRPlayerMode::Fishing);
+}
 void ATRFishingSessionActor::ResetInternal()
 {
+    // Explicit technical recovery, never a successful retrieval or a new result event.
+    if (IsRecoveryAvailable()) { ReleaseEgi(); bEgiOnboard=true; CurrentCastId={}; }
+    RodControl->ClearAction(); bClearRodReservations=bClearNormalRetrieve=false;
 	Fishing->Prepare(); Phase = ETRSessionPhase::Ready; bEquipmentLocked = !bEgiOnboard;
 	CaptureHUD(Coordinator->GetSimulationTime());
 	Unregister(); Register(); // New queue generation, unchanged equipment lock and cast counter.
@@ -429,7 +438,7 @@ void ATRFishingSessionActor::HandleCommand(const FTRFishingCommand& Command)
 	ProcessCommand(Command);
  const FString Observed=FString::Printf(TEXT("%s %s target=%lld seq=%lld cast=%lld epoch=%lld consumedAt=%lld frame=%llu delta=%s"),
  *StaticEnum<ETRFishingCommandType>()->GetNameStringByValue(int64(Command.Type)),*StaticEnum<ETRCommandResult>()->GetNameStringByValue(int64(LastCommandResult)),Command.TargetTick,Command.Sequence,Command.ExpectedCastId.Value,Command.ExpectedModeEpoch,Coordinator.IsValid()?Coordinator->GetSimulationTime().TickIndex:-1,GFrameCounter,*Command.Axis2D.ToString());
- if(Command.Type==ETRFishingCommandType::RodAim){DiagnosticLastRod=Observed;if(LastCommandResult==ETRCommandResult::Accepted){DiagnosticConsumedMouse+=Command.Axis2D;++DiagnosticConsumedCount;}}
+ if(Command.Type==ETRFishingCommandType::RodAim){DiagnosticLastRod=Observed+FString::Printf(TEXT(" cameraObservation=%lld side=%d fov=%.9g rect=%s"),Command.RodView.CameraFrame,int32(Command.RodView.Side),Command.RodView.FOVDeg,*Command.RodView.ViewRect.ToString());if(LastCommandResult==ETRCommandResult::Accepted){DiagnosticConsumedMouse+=Command.Axis2D;++DiagnosticConsumedCount;}}
  else if(Command.Type!=ETRFishingCommandType::RodView){DiagnosticLastAction=Observed;}
 	if (!IsActorBeingDestroyed()) { OnCommandProcessed.Broadcast(Command, LastCommandResult); }
 }
@@ -449,7 +458,7 @@ void ATRFishingSessionActor::ClearPlayerCommands()
 void ATRFishingSessionActor::ConsumeInputReset()
 {
 	if(bClearNavigationInput){Navigation->Clear();bClearNavigationInput=false;}
-	if (bClearRodReservations) { Fishing->PendingJerkCount = 0; bClearRodReservations = false; }
+	if (bClearRodReservations) { Fishing->PendingJerkCount = 0; Fishing->bPendingFall = false; bClearRodReservations = false; }
 	if (bClearNormalRetrieve)
 	{
 		Fishing->StopNormalRetrieve(Coordinator->GetSimulationTime().TickIndex);
@@ -480,6 +489,7 @@ FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
 	Copy.bSessionValid = true; Copy.bEgiValid = bCastActive; Copy.bEquipmentLocked = bEquipmentLocked;
 	Copy.bEgiOnboard = bEgiOnboard; Copy.bCanChangeEquipment = CanChangeEquipment();
 	Copy.Phase = Phase; Copy.CastId = CurrentCastId; Copy.Equipment = GetEquipmentSnapshot();
+	Copy.bRecoveryAvailable=IsRecoveryAvailable();
 	Copy.bPaused = IsPlayerPaused(); Copy.EquipmentBlockReason = GetEquipmentBlockReason();
 	Copy.AvailableCommands.Reset();
 	for (const auto Command : { ETRFishingCommandType::Deploy, ETRFishingCommandType::NextCast, ETRFishingCommandType::RodAim,
@@ -598,5 +608,6 @@ FString ATRFishingSessionActor::GetRuntimeDiagnostics() const
  *StaticEnum<ETRPlayerMode>()->GetNameStringByValue(int64(M.Mode)),*StaticEnum<ETRFishingSide>()->GetNameStringByValue(int64(M.FishingSide)),*StaticEnum<ETRFishingState>()->GetNameStringByValue(int64(F.FishingState)),CurrentCastId.Value,M.ModeEpoch,RegistrationId.Value,
  bCastActive,bEgiOnboard,bEquipmentLocked,F.PendingJerkCount,Fishing->bReeling,F.JerkCount,F.StateEnteredTick,F.Tick,double(F.LineLengthM),*F.WorldPositionM.ToString(),
  *(Coordinator.IsValid()?Coordinator->GetDiagnosticQueue(RegistrationId):TEXT("unregistered")),*DiagnosticLastRod,*DiagnosticLastAction,*DiagnosticConsumedMouse.ToString(),DiagnosticConsumedCount,
- *(bHasResult?StaticEnum<ETRCastOutcome>()->GetNameStringByValue(int64(LastResult.Outcome)):TEXT("None")),*DiagnosticLastFailure,*Available);
+ *(bHasResult?StaticEnum<ETRCastOutcome>()->GetNameStringByValue(int64(LastResult.Outcome)):TEXT("None")),*DiagnosticLastFailure,*Available)
+ + FString::Printf(TEXT("\nRecoveryAvailable=%d PendingAction=%s\nBase=%s Final=%s TemporaryShakuriOffset=%.12g\nSpatial: %s"),IsRecoveryAvailable(),Fishing->bPendingRetrieve?TEXT("Retrieve"):Fishing->bPendingFall?TEXT("Fall"):TEXT("None"),*RodControl->GetSnapshot().BaseRodDirectionLocal.ToString(),*RodControl->GetSnapshot().FinalRodDirectionLocal.ToString(),RodControl->GetSnapshot().TemporaryShakuriOffsetRad,*EgiSimulation->GetSpatialDiagnostics());
 }
