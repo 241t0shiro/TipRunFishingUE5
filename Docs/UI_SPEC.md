@@ -1,5 +1,7 @@
 # UI・入力接続技術設計
 
+2026-10-08 最新: ユーザーがR5のAutomation・最終手動PIEを正式合格と確認。R6のみ共有Slack-aware ReelとRequested/Actual/Net分離を実装し、自動受入126件成功（新規4＋関連122）、正常42条件Technical Abort0。UHT10生成・実C++/Development Editor Win64成功。Config/Content/係数は保持、R6手動PIE未実施。現行契約はFISHING_SYSTEM末尾、証跡/途中FAIL/警告/手動5項目は[R6記録](R6_SLACK_AWARE_REEL.md)。R7以降/H/M11は未着手。以下は履歴。
+
 2026-10-04 最新: R5手動Camera Down不具合を受けR5A修正・自動検証完了、R5正式合格は手動再確認待ち。既存キー/感度/Camera/FOV/通常HUDを変更しない。再確認は本書末尾と[R5A記録](R5A_CAMERA_INDEPENDENCE.md)。R6以降/R7/H/M11未着手。以下は履歴。
 
 2026-10-04 R5実装・自動受入完了: ユーザーがR4をAutomation・Runtime Integration・最終手動PIEまで正式合格と確認。R5はUp/Recover予約Sequence＋最大1turn/Action・名目0.8mの限定巻取り要求を保存Rodへ明示適用。固定Root/Base/Length2m、A4 Pending/技術復旧を維持。UHT生成・実C++/Development Editor Win64成功、最終採用101件（新規8＋関連93）成功・errors0、外部HTTP警告4。今回R5手動PIE未実施。R6以降/R7/H/M11は未着手。現行契約はFISHING_SYSTEM末尾、証跡/限界/変更一覧は[R5実施記録](R5_SHAKURI_SEQUENCE.md)。以下のR4不合格/手動待ち記録は各時点の履歴。
@@ -631,3 +633,11 @@ Insert詳細にmapping、OnScreen/OffScreen/BehindCamera/ProjectionInvalid、pro
 通常HUD/操作キーは保持。Insert詳細のR5既存Sequence/要求/実績/Pendingに、R5CのlineRequired、slack、deficit、lastCorrection、geometrySpanAccommodationを追加。最後の技術停止理由とAbort前Contextは従来どおり表示する。Actual累積は各Tickの正のライン短縮の合計であり、キャスト全体の開始長−終了長ではない（必要span増加を別途伴い得る）。
 
 手動確認は[R5C記録](R5C_OFFSCREEN_REPEATED_SHAKURI.md)の3項目。水深約5mから約10回連打し、水面付近でWASDの下/左右視線とMouseの竿左右を分けて確認する。正常操作でN復旧が必要なら未合格。R5の正式手動受入は保留、R6以降/H/M11は開始しない。
+
+### R6 Reel診断（2026-10-08）
+
+通常HUD、既存キー、感度/Camera/FOV/Envelopeは変更しない。Insert詳細の既存「Rod / Input / Action 最終診断」へR6のSource（Shakuri/NormalRetrieve/None）、成功Tick、Requested/Actual current/total、Slack Before/After/Consumed、Taut Applied、Unrealized、Required Before/Final、Line Before/After、Net Delta、Payout、Geometry Growth、float Publication Delta、Tension Before/After、Taut Budgetを追加。読取専用でSimulationへ逆流させない。
+
+Actualはスプール短縮実績であり、Net Deltaは最終ラインの増減。要求0.8mに対してActualが小さいこと自体は正常。初期化直後のReel Tick0は未評価、Quick中は最後の水中観測を凍結したまま。Sequence側の名目予約累積とReel側の発行済み累積の区別はFISHING_SYSTEMのR6現行契約を参照。
+
+R5はユーザーが最終手動PIEまで正式合格と確認。R6の手動確認は [R6記録](R6_SLACK_AWARE_REEL.md) の最大5項目。R7以降/H/M11へ自動進行しない。

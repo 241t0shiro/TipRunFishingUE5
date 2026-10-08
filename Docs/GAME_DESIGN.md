@@ -1,5 +1,7 @@
 # TipRun Fishing — 全体技術設計の正本
 
+2026-10-08 最新: ユーザーがR5のAutomation・最終手動PIEを正式合格と確認。R6のみ共有Slack-aware ReelとRequested/Actual/Net分離を実装し、自動受入126件成功（新規4＋関連122）、正常42条件Technical Abort0。UHT10生成・実C++/Development Editor Win64成功。Config/Content/係数は保持、R6手動PIE未実施。現行契約はFISHING_SYSTEM末尾、証跡/途中FAIL/警告/手動5項目は[R6記録](R6_SLACK_AWARE_REEL.md)。R7以降/H/M11は未着手。以下は履歴。
+
 2026-10-04 最新状態: R4正式合格を維持。R5は最終手動PIEのCamera Down不具合により正式合格保留。R5AはTemporary ShakuriをCameraから切り離しStation-localへ修正、自動検証完了・手動再確認待ち。現行契約/証跡は[R5A記録](R5A_CAMERA_INDEPENDENCE.md)。R6以降/R7/H/M11には着手しない。以下のR5自動成功は修正前の履歴。
 
 2026-10-04 R5実装・自動受入完了: ユーザーがR4をAutomation・Runtime Integration・最終手動PIEまで正式合格と確認。R5はUp/Recover予約Sequence＋最大1turn/Action・名目0.8mの限定巻取り要求を保存Rodへ明示適用。固定Root/Base/Length2m、A4 Pending/技術復旧を維持。UHT生成・実C++/Development Editor Win64成功、最終採用101件（新規8＋関連93）成功・errors0、外部HTTP警告4。今回R5手動PIE未実施。R6以降/R7/H/M11は未着手。現行契約はFISHING_SYSTEM末尾、証跡/限界/変更一覧は[R5実施記録](R5_SHAKURI_SEQUENCE.md)。以下のR4不合格/手動待ち記録は各時点の履歴。
@@ -389,3 +391,9 @@ R5Aの手動Camera Down評価は不合格。R5BでViewRectとBase可動域を分
 ### R5C受入状態（2026-10-05）
 
 R5B手動で残った水面付近の連続Shakuri後の停止を、Hold時の短Line/海面幾何不整合と分類し修正。Sequence/名目0.8m、安全停止/明示N復旧、Camera/環境の契約は保持。現行幾何契約はFISHING_SYSTEM末尾、修正前FAIL/自動受入/最小手動確認は[R5C記録](R5C_OFFSCREEN_REPEATED_SHAKURI.md)。R5正式不合格を維持し、修正後ユーザーPIEを待つ。R6以降/R7/H/M11へ進まない。
+
+### R6実効巻取りの責務（2026-10-08）
+
+ユーザーがR5の自動/最終手動PIEを正式合格と確認。R6はSequence/Normalの要求生成と、Egi Spatial内の共有Slack-aware Reel Resolverによる物理適用を分離する。Actualは弛み消費＋安全予算内のTaut短縮、Unrealizedは未実現要求。ラインのネット変化とは別の正本値を公開する。R5C海面幾何は共通ヘルパーへ移し全LineModeへ適用する。Coordinator/UIに物理式を移さない。
+
+現行数値契約はFISHING_SYSTEM末尾、診断はUI_SPEC末尾、実装/受入証跡は [R6記録](R6_SLACK_AWARE_REEL.md)。R7以降/H/M11の実装・環境調整・本格Drag/Range/BITEは行わない。過去のR5不合格記録は各時点の履歴として保持する。

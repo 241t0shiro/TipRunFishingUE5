@@ -22,6 +22,12 @@ struct TIPRUNFISHINGUE5_API FTRShakuriSequenceSnapshot
  UPROPERTY(BlueprintReadOnly) double TotalRequestedRetrieveM=0;
  UPROPERTY(BlueprintReadOnly) double ActualRetrieveM=0;
  UPROPERTY(BlueprintReadOnly) double TotalActualRetrieveM=0;
+ UPROPERTY(BlueprintReadOnly) double SlackConsumedM=0;
+ UPROPERTY(BlueprintReadOnly) double TautRetrieveAppliedM=0;
+ UPROPERTY(BlueprintReadOnly) double UnrealizedRetrieveM=0;
+ UPROPERTY(BlueprintReadOnly) double TotalSlackConsumedM=0;
+ UPROPERTY(BlueprintReadOnly) double TotalTautRetrieveAppliedM=0;
+ UPROPERTY(BlueprintReadOnly) double TotalUnrealizedRetrieveM=0;
  UPROPERTY(BlueprintReadOnly) double TickDemandM=0;
  UPROPERTY(BlueprintReadOnly) bool bPendingRetrieve=false;
  UPROPERTY(BlueprintReadOnly) bool bPendingReFall=false;

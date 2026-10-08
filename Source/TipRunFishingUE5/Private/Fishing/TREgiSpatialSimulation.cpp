@@ -1,6 +1,7 @@
 #include "Fishing/TREgiSimulationComponent.h"
 #include "GameFramework/Actor.h"
 #include <cmath>
+#include "Fishing/TRReelResolver.h"
 
 ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId, const FTRSimTime& Time,
 	const FTROceanSample& Ocean, const FTRBoatSnapshot& Boat, const FTREgiAction& Action,
@@ -24,7 +25,12 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
     if ((Boat.RodTipM - RodStart).Size() > P.MaxStepTravelM) { return DiagnosticFail(TEXT("Spatial.RodTipDeltaExceeded"), __LINE__); }
 	double Line = Snapshot.LineLengthM, Correction = 0, Residual = ResidualLiftMps;
 	double Travel = 0, GeometryAccommodation = 0;
-	FTROceanSample Local = Ocean;
+	FTRReelSnapshot Reel;
+ Reel.Tick=Time.TickIndex;Reel.LineLengthBeforeM=Line;Reel.TensionBefore01=Snapshot.Tension01;
+ Reel.Source=Action.LineMode==ETRLineMode::ReelIn ?
+  (Action.FishingState==ETRFishingState::Jerking?ETRReelSource::Shakuri:ETRReelSource::NormalRetrieve):ETRReelSource::None;
+ const auto PreviousReel=Snapshot.Reel;
+ FTROceanSample Local = Ocean;
 	bool bBottom = false, bSurface = false;
 	auto Read = [&](const FVector& Point, FTROceanSample& Out)
 	{
@@ -103,39 +109,29 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 		if (Action.FishingState == ETRFishingState::FreeFall && Action.LineMode == ETRLineMode::Payout)
 		{
 			const double Needed = (Trial-Rod).Size()+P.LineSlackAllowanceM;
-			Line += FMath::Min(FMath::Max(0.0, Needed-Line), double(P.PayoutMps)*Dt);
+			const double Payout=FMath::Min(FMath::Max(0.0, Needed-Line), double(P.PayoutMps)*Dt);
+   Line+=Payout;Reel.PayoutM+=Payout;
 		}
 		const double RequiredUnconstrained=(Trial-Rod).Size();
-		const double PreviousLine = Line;
-		double ActualReelMps = 0.0, ReelM = 0.0;
-		if (Action.LineMode == ETRLineMode::ReelIn)
-		{
-			ReelM = Action.bLimitedReelDemand ? Action.RequestedRetrieveM/double(Count) : double(Action.ReelMps)*Dt;
-			if (Action.bLimitedReelDemand)
-			{
-				// Nominal demand is a ceiling. Unavailable motion budget is never forced.
-				const double AvailableSpeed = FMath::Max(0.,double(P.MaxEgiSpeedMps)-RodVelocity.Size()-V.Size());
-				ReelM = FMath::Min(ReelM,AvailableSpeed*Dt);
-			}
-			Line = FMath::Max(FMath::Max(double(P.MinLineM),Rod.Z-Local.SurfaceZ_M),Line-ReelM);
-		}
-		// R5C: surface/short-line feasibility belongs to the geometry, not just
-		// ReelIn. Stay/Hold after a completed sequence can otherwise leave L<h
-		// when mouse aim raises the tip, or collapse the water-surface circle.
-		// Preserve A4's reachable surface span before projection. This only
-		// accommodates the necessary span; it neither injects endpoint velocity
-		// nor guarantees nominal reel demand. Camera/viewport never enter here.
-		const double SurfaceHeight = Rod.Z-Local.SurfaceZ_M;
-		const FVector TrialOffset = Trial-Rod;
-		const FVector Constrained = TrialOffset.Size()>Line ? Rod+TrialOffset.GetSafeNormal()*Line : Trial;
-		if (Position.Z>=Local.SurfaceZ_M-EpsilonM || Constrained.Z>=Local.SurfaceZ_M-EpsilonM)
-		{
-			const double Radius = FMath::Max(0.0,(Position-Rod).Size2D()-ReelM);
-			const double SurfaceLine = FMath::Sqrt(SurfaceHeight*SurfaceHeight+Radius*Radius);
-			GeometryAccommodation += FMath::Max(0.,SurfaceLine-Line);
-			Line = FMath::Max(Line,SurfaceLine);
-		}
-		if (Action.LineMode==ETRLineMode::ReelIn) { ActualReelMps=FMath::Max(0.0,(PreviousLine-Line)/Dt); }
+  const double Request=Action.LineMode==ETRLineMode::ReelIn ?
+   (Action.bLimitedReelDemand?Action.RequestedRetrieveM/double(Count):double(Action.ReelMps)*Dt):0.;
+  // Reserve the existing rod and candidate endpoint speed before taut shortening.
+  // Slack winds onto the spool without any additional endpoint motion.
+  const double Budget=FMath::Max(0.,double(P.MaxEgiSpeedMps)-RodVelocity.Size()-V.Size())*Dt;
+  const double ProspectiveSlack=FMath::Max(0.,Line-TRLineGeometry::Required(Rod,Position,Trial,Local.SurfaceZ_M,P.MinLineM,false));
+  const double ProspectiveReel=FMath::Min(Request,ProspectiveSlack)+FMath::Min(FMath::Max(0.,Request-ProspectiveSlack),Budget);
+  const double ProspectiveLine=FMath::Max(FMath::Max(double(P.MinLineM),Rod.Z-Local.SurfaceZ_M),Line-ProspectiveReel);
+  const bool Surface=TRLineGeometry::NeedsSurfaceSpan(Rod,Position,Trial,Local.SurfaceZ_M,ProspectiveLine);
+  const double Required=TRLineGeometry::Required(Rod,Position,Trial,Local.SurfaceZ_M,P.MinLineM,Surface);
+  // Accommodate moving-rod surface geometry separately, before measuring reel work.
+  const double Span=Surface?TRLineGeometry::SurfaceSpan(Rod,Position,Local.SurfaceZ_M,0):0.;
+  const double Growth=FMath::Max(0.,Span-Line);GeometryAccommodation+=Growth;Line+=Growth;
+  const auto Applied=TRReelResolver::Resolve(Request,Line,Required,P.MinLineM,Budget,Rod,Position,Local.SurfaceZ_M,Surface);
+  if(Sub==0){Reel.RequiredLineBeforeM=Required;Reel.SlackBeforeM=Applied.SlackM;}
+  Reel.RequestedRetrieveM+=Request;Reel.SlackConsumedM+=Applied.SlackConsumedM;
+  Reel.TautRetrieveAppliedM+=Applied.TautAppliedM;Reel.TautBudgetM+=Budget;
+  Line=Applied.LineM;
+  const double ActualReelMps=Applied.TautAppliedM/Dt;
 		if (!FMath::IsFinite(Line) || Line < P.MinLineM || Line > P.MaxLineLengthM)
 		{ return DiagnosticFail(TEXT("Spatial.InvalidLineLength"), __LINE__); }
 		bool bSolved = false;
@@ -205,25 +201,41 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 	Snapshot.WorldPositionM=Position; Snapshot.PositionXYM=FVector2D(Position.X,Position.Y);
 	Snapshot.DepthM=float(Depth); Snapshot.DepthVelocityMps=float(DepthVelocity);
 	Snapshot.VelocityMps=(Position-Start)/Time.StepSeconds;
-	// Round limited demand conservatively at the existing float line boundary.
+	// Round revision 2 line conservatively at the existing float boundary.
  // Never shorten an extra float ULP beyond the double physical budget.
  float PublishedLine=float(Line);
- if(Action.bLimitedReelDemand && double(PublishedLine)<Line){PublishedLine=std::nextafter(PublishedLine,INFINITY);}
+ if(double(PublishedLine)<Line){PublishedLine=std::nextafter(PublishedLine,INFINITY);}
  Snapshot.LineLengthM=PublishedLine;
- if(Action.bLimitedReelDemand){Line=double(PublishedLine);}
+ Reel.PublicationDeltaM=double(PublishedLine)-Line;Line=double(PublishedLine);
 	Snapshot.HorizontalOffsetFromBoatM=FVector2D(Position.X-Boat.PositionM.X,Position.Y-Boat.PositionM.Y);
 	Snapshot.HorizontalOffsetFromRodTipM=FVector2D(Position.X-Boat.RodTipM.X,Position.Y-Boat.RodTipM.Y);
 	Snapshot.HorizontalDistanceFromBoatM=Snapshot.HorizontalOffsetFromBoatM.Size();
 	Snapshot.HorizontalDistanceFromRodTipM=Snapshot.HorizontalOffsetFromRodTipM.Size();
 	Snapshot.BoatToEgiDistanceM=(Position-Boat.PositionM).Size(); Snapshot.RodToEgiDistanceM=(Position-Boat.RodTipM).Size();
 	Snapshot.LineDirection=(Position-Boat.RodTipM).GetSafeNormal();
-	Snapshot.SlackM=FMath::Max(0.0,Line-Snapshot.RodToEgiDistanceM);
+	// Slack is published below from the same required geometry used by reel.
 	Snapshot.LineConstraintCorrectionM=Correction;
 	Snapshot.GeometrySpanAccommodationM=GeometryAccommodation;
 	Snapshot.LineAngleRad=float(FMath::Atan2(Snapshot.HorizontalOffsetFromRodTipM.Size(),FMath::Max(0.0,Boat.RodTipM.Z-Position.Z)));
 	Snapshot.CurrentAtEgiDepthMps=Local.CurrentMps;
 	Snapshot.Tension01=float(FMath::Clamp(Correction/double(P.TensionReferenceM),0.0,1.0));
-	Snapshot.bBottomContact=bBottom; Snapshot.bSurfaceContact=bSurface; Snapshot.Tick=Time.TickIndex;
+	Reel.LineLengthAfterM=Line;Reel.NetLineLengthDeltaM=Line-Reel.LineLengthBeforeM;
+ Reel.RequiredLineLengthM=TRLineGeometry::Required(Boat.RodTipM,Position,Position,Local.SurfaceZ_M,P.MinLineM,bSurface);
+ Reel.SlackAfterM=FMath::Max(0.,Line-Reel.RequiredLineLengthM);
+ Snapshot.SlackM=Reel.SlackAfterM;
+ Reel.ActualRetrieveM=Reel.SlackConsumedM+Reel.TautRetrieveAppliedM;
+ Reel.UnrealizedRetrieveM=FMath::Max(0.,Reel.RequestedRetrieveM-Reel.ActualRetrieveM);
+ Reel.GeometryAccommodationM=GeometryAccommodation;Reel.TensionAfter01=Snapshot.Tension01;
+ Reel.TotalRequestedRetrieveM=PreviousReel.TotalRequestedRetrieveM+Reel.RequestedRetrieveM;
+ Reel.TotalSlackConsumedM=PreviousReel.TotalSlackConsumedM+Reel.SlackConsumedM;
+ Reel.TotalTautRetrieveAppliedM=PreviousReel.TotalTautRetrieveAppliedM+Reel.TautRetrieveAppliedM;
+ Reel.TotalActualRetrieveM=Reel.TotalSlackConsumedM+Reel.TotalTautRetrieveAppliedM;
+ Reel.TotalUnrealizedRetrieveM=PreviousReel.TotalUnrealizedRetrieveM+Reel.UnrealizedRetrieveM;
+ Reel.TotalNetLineLengthDeltaM=PreviousReel.TotalNetLineLengthDeltaM+Reel.NetLineLengthDeltaM;
+ Reel.TotalPayoutM=PreviousReel.TotalPayoutM+Reel.PayoutM;
+ Reel.TotalGeometryAccommodationM=PreviousReel.TotalGeometryAccommodationM+GeometryAccommodation;
+ Snapshot.Reel=Reel;
+ Snapshot.bBottomContact=bBottom; Snapshot.bSurfaceContact=bSurface; Snapshot.Tick=Time.TickIndex;
 	MotionVelocityMps=V; PreviousRodTipM=Boat.RodTipM; bHasPreviousRod=true; bOnBottom=bBottom;
 	ResidualLiftMps=Residual; LastSurfaceZ_M=Local.SurfaceZ_M;
 	if (Action.FishingState==ETRFishingState::Retrieving && Action.ReelMps>0 && Depth<=P.RetrievalToleranceM &&

@@ -19,7 +19,7 @@ public:
  bool IsEnabled() const { return State.bEnabled; }
  void BeginCast(FTRCastId CastId);
  void Advance(const FTRSimTime& Time,const FTREgiSnapshot& Fishing,bool PendingRetrieve,bool PendingFall);
- bool RecordActual(double ActualM);
+ bool RecordActual(const FTRReelSnapshot& Reel);
  void Stop();
  void Reset();
  FTRShakuriSequenceSnapshot GetSnapshot() const { return State; }

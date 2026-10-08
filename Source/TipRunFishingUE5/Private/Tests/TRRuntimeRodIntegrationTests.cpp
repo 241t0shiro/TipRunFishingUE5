@@ -1585,4 +1585,145 @@ bool FTRR5CReplay::RunTest(const FString&)
  return true;
 }
 
+namespace
+{
+ void R6Check(FAutomationTestBase& T,const FTRHUDSnapshot& H)
+ {
+  const auto& R=H.Egi.Reel;
+  T.TestTrue(TEXT("R6 finite nonnegative allocation"),FMath::IsFinite(R.ActualRetrieveM) && R.SlackConsumedM>=0 && R.TautRetrieveAppliedM>=0 && R.UnrealizedRetrieveM>=0 && H.Egi.LineLengthM>=0);
+  T.TestTrue(TEXT("Actual is slack + taut, not net line delta"),FMath::IsNearlyEqual(R.ActualRetrieveM,R.SlackConsumedM+R.TautRetrieveAppliedM,1.e-10) && R.ActualRetrieveM<=R.RequestedRetrieveM+1.e-9 && FMath::IsNearlyEqual(R.RequestedRetrieveM,R.ActualRetrieveM+R.UnrealizedRetrieveM,1.e-9));
+  T.TestTrue(TEXT("Taut obeys existing motion budget"),R.TautRetrieveAppliedM<=R.TautBudgetM+1.e-10);
+  T.TestTrue(TEXT("Published slack uses authoritative required geometry"),FMath::IsNearlyEqual(H.Egi.SlackM,FMath::Max(0.,double(H.Egi.LineLengthM)-R.RequiredLineLengthM),1.e-10));
+  T.TestTrue(TEXT("Net change accounts separately for payout/span/rounding"),FMath::IsNearlyEqual(R.NetLineLengthDeltaM,R.PayoutM+R.GeometryAccommodationM-R.ActualRetrieveM+R.PublicationDeltaM,1.e-8));
+  T.TestTrue(TEXT("Shared required geometry and no endpoint teleport"),H.Egi.RodToEgiDistanceM<=double(H.Egi.LineLengthM)+1.e-5 && H.Egi.VelocityMps.Size()<=H.Equipment.Parameters.MaxEgiSpeedMps+1.e-9);
+  T.TestTrue(TEXT("Cast totals preserve allocation identity"),FMath::IsNearlyEqual(R.TotalActualRetrieveM,R.TotalSlackConsumedM+R.TotalTautRetrieveAppliedM,1.e-9) && FMath::IsNearlyEqual(R.TotalRequestedRetrieveM,R.TotalActualRetrieveM+R.TotalUnrealizedRetrieveM,1.e-8));
+ }
+ FString R6Report(const FTRHUDSnapshot& H)
+ {
+  const auto& R=H.Egi.Reel;const auto& Q=H.Shakuri;
+  return FString::Printf(TEXT("completed=%lld requested=%.12g slack=%.12g taut=%.12g actual=%.12g unrealized=%.12g net=%.12g payout=%.12g growth=%.12g depth=%.12g line=%.12g required=%.12g ShakuriSlack=%.12g ShakuriTaut=%.12g ShakuriUnrealized=%.12g"),
+   Q.CompletedCount,R.TotalRequestedRetrieveM,R.TotalSlackConsumedM,R.TotalTautRetrieveAppliedM,R.TotalActualRetrieveM,R.TotalUnrealizedRetrieveM,R.TotalNetLineLengthDeltaM,R.TotalPayoutM,R.TotalGeometryAccommodationM,double(H.Egi.DepthM),double(H.Egi.LineLengthM),R.RequiredLineLengthM,Q.TotalSlackConsumedM,Q.TotalTautRetrieveAppliedM,Q.TotalUnrealizedRetrieveM);
+ }
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRR6Allocations,"TipRun.R6.Runtime.SlackTautAndPartial",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FTRR6Allocations::RunTest(const FString&)
+{
+ for(bool Port:{true,false})for(int Kind:{0,1,2})
+ {
+  FRuntimeRodWorld R;R.bTraceFrames=false;
+  const FString Name=FString::Printf(TEXT("R6_Allocation_%d_%d"),Port,Kind);
+  if(!R.Start(*this,Name,60,Port)){return false;}
+  auto* S=R.PC->GetBoundSession();
+  if(Kind==0)
+  {
+   TArray<FText> Errors;
+   TestTrue(TEXT("Rich fixture uses existing table equipment, no tuning override"),S->TrySetEquipment(TEXT("Egi_4"),TEXT("Sinker_50"),Errors)==ETRCommandResult::Accepted);
+   if(!R5BAim(R,FVector2D(0,34))){return false;}
+  }
+  if(Kind==2 && !R5BAim(R,FVector2D(0,34))){return false;}
+  R.Tap(EKeys::Enter);R.Frames(Kind==0?300:4);
+  if(Kind==0)
+  {
+   if(!R5BAim(R,FVector2D(0,-9))){return false;}
+   R.Frames(2);
+   // The saved R5 profile issues reel demand during Recover. A completed
+   // preparatory action leaves real return slack; no line or tuning injection.
+   R.Tap(EKeys::RightMouseButton);R.Frames(60);
+  }
+  const auto Before=S->GetHUDSnapshot();R.Key(EKeys::RightMouseButton,true);R.Frame();R.Key(EKeys::RightMouseButton,false);
+  double MaxSlack=0,MaxTaut=0,DemandStartSlack=-1;bool SawNetMismatch=false;
+  for(int I=0;I<100;++I)
+  {
+   R.Frame();const auto H=S->GetHUDSnapshot();if(S->HasResult()){AddError(Name+S->GetRuntimeDiagnostics());break;}
+   R6Check(*this,H);
+   if(H.Egi.Reel.RequestedRetrieveM>0)
+   {
+    if(DemandStartSlack<0){DemandStartSlack=H.Egi.Reel.SlackBeforeM;}
+    MaxSlack=FMath::Max(MaxSlack,H.Egi.Reel.SlackBeforeM);
+   }
+   MaxTaut=FMath::Max(MaxTaut,H.Egi.Reel.TautRetrieveAppliedM);
+   SawNetMismatch|=FMath::Abs(H.Egi.Reel.ActualRetrieveM+H.Egi.Reel.NetLineLengthDeltaM)>1.e-5;
+   TestTrue(TEXT("R6 retains real mesh endpoints"),R.Observe().TipErrorM<1.e-7 && H.Rod.RodRootLocal==Before.Rod.RodRootLocal && H.Rod.LengthM==2);
+  }
+  const auto H=S->GetHUDSnapshot();const auto Q=H.Shakuri;
+  TestTrue(TEXT("One sequence with nominal 0.8 and no Abort"),!S->HasResult() && Q.CompletedCount==Before.Shakuri.CompletedCount+1 && FMath::IsNearlyEqual(Q.TotalRequestedRetrieveM-Before.Shakuri.TotalRequestedRetrieveM,.8,1.e-9));
+  if(Kind==0){TestTrue(TEXT("Rich geometry consumes available slack"),Before.Egi.SlackM>=.8 && FMath::IsNearlyEqual(Q.SlackConsumedM,.8,1.e-9) && Q.TautRetrieveAppliedM==0);}
+  if(Kind==1){TestTrue(TEXT("Near-taut applies safe taut shortening"),MaxTaut>0 && Q.TotalTautRetrieveAppliedM>0);}
+  if(Kind==2){TestTrue(TEXT("Partial/unrealized is a valid continuing cast"),Q.TotalActualRetrieveM<.8-1.e-5 && Q.TotalUnrealizedRetrieveM>0 && S->IsCommandAvailable(ETRFishingCommandType::Jerk));}
+  AddInfo(Name+TEXT(" ")+R6Report(H)+FString::Printf(TEXT(" beforeClickSlack=%.12g firstDemandSlack=%.12g maxDemandSlack=%.12g maxTaut=%.12g distinguishesNet=%d"),Before.Egi.SlackM,DemandStartSlack,MaxSlack,MaxTaut,SawNetMismatch));
+ }
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRR6Normal,"TipRun.R6.Runtime.NormalReleaseRefallAndQuick",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FTRR6Normal::RunTest(const FString&)
+{
+ for(bool Port:{true,false})
+ {
+  FRuntimeRodWorld R;R.bTraceFrames=false;if(!R.Start(*this,FString::Printf(TEXT("R6_Normal_%d"),Port),60,Port)){return false;}
+  auto* S=R.PC->GetBoundSession();R.Tap(EKeys::Enter);R.Frames(480);R.Key(EKeys::LeftMouseButton,true);
+  double Actual=0;
+  for(int I=0;I<60;++I){R.Frame();const auto H=S->GetHUDSnapshot();R6Check(*this,H);TestTrue(TEXT("Normal held uses the same resolver source/rate"),H.Egi.Reel.Source==ETRReelSource::NormalRetrieve && FMath::IsNearlyEqual(H.Egi.Reel.RequestedRetrieveM,double(H.Equipment.Parameters.ReelMps)/60,1.e-9));Actual+=H.Egi.Reel.ActualRetrieveM;}
+  TestTrue(TEXT("Normal reel actually winds line"),Actual>0);R.Key(EKeys::LeftMouseButton,false);R.Frames(3);const auto Released=S->GetHUDSnapshot();
+  R.Frames(60);auto H=S->GetHUDSnapshot();TestTrue(TEXT("Release stops demands without resetting position or line"),H.Egi.Reel.RequestedRetrieveM==0 && H.Egi.Reel.TotalRequestedRetrieveM==Released.Egi.Reel.TotalRequestedRetrieveM && H.Egi.FishingState==ETRFishingState::Stay);
+  R.Tap(EKeys::F);const double Before=H.Egi.LineLengthM;bool SawPayout=false;
+  for(int I=0;I<60;++I){R.Frame();H=S->GetHUDSnapshot();R6Check(*this,H);SawPayout|=H.Egi.Reel.PayoutM>0;TestTrue(TEXT("Re-Fall pays out, never negative retrieve"),H.Egi.Reel.Source==ETRReelSource::None && H.Egi.Reel.RequestedRetrieveM==0 && H.Egi.Reel.ActualRetrieveM==0);}
+  TestTrue(TEXT("Re-Fall increases needed line"),SawPayout && H.Egi.LineLengthM>Before);
+  const auto Base=H.Rod;const auto Camera=R.PC->GetDebugSnapshot().FishingCamera;
+  R.Tap(EKeys::Q);R.Frames(180);H=R.PC->GetDebugSnapshot();
+  TestTrue(TEXT("Quick stays independent, fixed-duration Ready/unlock, fixed rod/camera"),S->CanChangeEquipment() && S->Fishing->GetState()==ETRFishingState::Ready && H.Rod.RodRootLocal==Base.RodRootLocal && H.Rod.BaseRodDirectionLocal==Base.BaseRodDirectionLocal && H.Rod.LengthM==2 && H.FishingCamera.YawDeg==Camera.YawDeg && H.FishingCamera.PitchDeg==Camera.PitchDeg);
+  // Quick does not run additional underwater reel resolution.
+  TestTrue(TEXT("Quick does not turn into prolonged normal winding"),S->GetLastResult().bQuickRetrieved);
+  const auto Observation=S->GetHUDSnapshot();const FString Diagnostics=S->GetRuntimeDiagnostics();
+  const auto ReadAgain=S->GetHUDSnapshot();const auto Rows=UTRFishingHUDWidget::BuildReadout(R.PC->GetDebugSnapshot());
+  bool InDetailedReadout=false;for(const auto& Row:Rows){InDetailedReadout|=Row.Value.ToString().Contains(TEXT("R6 source="));}
+  TestTrue(TEXT("Insert readout exposes allocation diagnostics without modifying simulation"),InDetailedReadout &&
+   Diagnostics.Contains(TEXT("slackBefore=")) && Diagnostics.Contains(TEXT("taut=")) && Diagnostics.Contains(TEXT("unrealized=")) &&
+   Diagnostics.Contains(TEXT("netDelta=")) && Observation.Egi.Tick==ReadAgain.Egi.Tick &&
+   Observation.Egi.WorldPositionM==ReadAgain.Egi.WorldPositionM && Observation.Egi.LineLengthM==ReadAgain.Egi.LineLengthM);
+  AddInfo(R6Report(Released));
+ }
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTRR6Replay,"TipRun.R6.Runtime.OffscreenStressAndFixedTickAccounting",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FTRR6Replay::RunTest(const FString&)
+{
+ for(bool Port:{true,false})for(int Count:{10,20,50})
+ {
+  TArray<FString> Reference;FVector ReferenceEgi;double ReferenceActual=0;FTRReelSnapshot ReferenceReel;
+  for(int FPS:{30,60,120})
+  {
+   FRuntimeRodWorld R;R.bTraceFrames=false;if(!R.Start(*this,FString::Printf(TEXT("R6_Replay_%d_%d"),FPS,Port),60,Port)){return false;}
+   R5BLook(R,FVector2D(0,-65));auto* S=R.PC->GetBoundSession();auto* Sim=R.World->GetSubsystem<UTRSimulationWorldSubsystem>();const auto Base=S->RodControl->GetSnapshot();
+   const auto O=R5BVisual(R);TestTrue(TEXT("Replay starts with actual offscreen mesh"),!O.bProjected || !R5BInside(O.ViewRect,O.PixelTip));
+   const int64 Start=Sim->GetSimulationTime().TickIndex+120;R.Dt=1./FPS;
+   TestTrue(TEXT("Real controller queues Deploy"),R.PC->ActionStarted(ETRPlayerAction::Deploy,Start));R.PC->ActionReleased(ETRPlayerAction::Deploy);
+   auto* Observer=R.World->SpawnActor<AActor>();int64 ObservedTicks=0;
+   const auto Id=Sim->RegisterSession(Observer,FTRSimulationStep::CreateLambda([&](ETRSimulationPhase Phase,const FTRSimTime& Time)
+   {
+    if(Phase==ETRSimulationPhase::Publish && S->GetEgiActor()!=nullptr && !S->HasResult() &&
+     S->GetHUDSnapshot().Egi.Reel.Tick==Time.TickIndex)
+    {++ObservedTicks;R6Check(*this,S->GetHUDSnapshot());}
+   }),FTRSimulationCommand::CreateLambda([](const FTRFishingCommand&){}));
+   TestTrue(TEXT("Read-only reel observer registered for every fixed publish tick"),Id.IsValid());
+   TArray<FString> Events;auto H=S->OnCommandProcessed.AddLambda([&](const FTRFishingCommand& C,ETRCommandResult Result){Events.Add(FString::Printf(TEXT("%lld:%d:%d"),C.TargetTick,int32(C.Type),int32(Result)));});
+   auto SH=S->Fishing->OnFishingStateChanged.AddLambda([&](ETRFishingState,ETRFishingState To){Events.Add(FString::Printf(TEXT("state:%lld:%d"),Sim->GetSimulationTime().TickIndex,int32(To)));});
+   while(Sim->GetSimulationTime().TickIndex<Start+60){R.Frame();}
+   for(int I=0;I<Count;++I){TestTrue(TEXT("One Started per queued Shakuri"),R.PC->ActionStarted(ETRPlayerAction::Jerk,Start+600+I*2));R.PC->ActionReleased(ETRPlayerAction::Jerk);}
+   while(Sim->GetSimulationTime().TickIndex<Start+2000){R.Frame();}
+   S->OnCommandProcessed.Remove(H);S->Fishing->OnFishingStateChanged.Remove(SH);
+   Sim->Unregister(Id);Observer->Destroy();TestTrue(TEXT("All active fixed reel ticks observed"),ObservedTicks>1900);
+   const auto N=S->GetHUDSnapshot();
+   TestTrue(TEXT("All sequences without Abort/lock, queue0/temp0/base/root/length fixed"),!S->HasResult() && N.Shakuri.CompletedCount==Count && N.Shakuri.QueuedCount==0 && N.Rod.TemporaryShakuriOffsetRad==0 && N.Rod.BaseRodDirectionLocal==Base.BaseRodDirectionLocal && N.Rod.FinalRodDirectionLocal==Base.BaseRodDirectionLocal && N.Rod.RodRootLocal==Base.RodRootLocal && N.Rod.LengthM==2);
+   TestTrue(TEXT("Requested nominal distance per turn is not forced"),N.Shakuri.TotalRequestedHandleTurns==Count && FMath::IsNearlyEqual(N.Shakuri.TotalRequestedRetrieveM,Count*.8,1.e-9) && N.Shakuri.TotalActualRetrieveM<=Count*.8+1.e-9);
+   if(FPS==30){Reference=Events;ReferenceEgi=N.Egi.WorldPositionM;ReferenceActual=N.Shakuri.TotalActualRetrieveM;ReferenceReel=N.Egi.Reel;}
+   else{TestTrue(TEXT("30/60/120 exact input/state events and same physical endpoint/reel"),Events==Reference && ReferenceEgi.Equals(N.Egi.WorldPositionM,1.e-8) && ReferenceActual==N.Shakuri.TotalActualRetrieveM && ReferenceReel.TotalSlackConsumedM==N.Egi.Reel.TotalSlackConsumedM && ReferenceReel.TotalTautRetrieveAppliedM==N.Egi.Reel.TotalTautRetrieveAppliedM && ReferenceReel.TotalUnrealizedRetrieveM==N.Egi.Reel.TotalUnrealizedRetrieveM && ReferenceReel.LineLengthAfterM==N.Egi.Reel.LineLengthAfterM);}
+   if(S->HasResult()){AddError(S->DiagnosticAbortContext+S->GetRuntimeDiagnostics());}
+   R6Check(*this,N);AddInfo(FString::Printf(TEXT("R6 stress side=%d fps=%d count=%d "),Port,FPS,Count)+R6Report(N));
+   AddInfo(FString::Printf(TEXT("R5C replay side=%d fps=%d count=%lld depth=%.12g line=%.12g required=%.12g requested=%.12g actual=%.12g"),Port,FPS,N.Shakuri.CompletedCount,double(N.Egi.DepthM),double(N.Egi.LineLengthM),N.Egi.RodToEgiDistanceM,N.Shakuri.TotalRequestedRetrieveM,N.Shakuri.TotalActualRetrieveM));
+  }
+ }
+ return true;
+}
+
+
 #endif

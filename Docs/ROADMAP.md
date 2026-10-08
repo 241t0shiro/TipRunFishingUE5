@@ -1,5 +1,7 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-10-08 最新: ユーザーがR5のAutomation・最終手動PIEを正式合格と確認。R6のみ共有Slack-aware ReelとRequested/Actual/Net分離を実装し、自動受入126件成功（新規4＋関連122）、正常42条件Technical Abort0。UHT10生成・実C++/Development Editor Win64成功。Config/Content/係数は保持、R6手動PIE未実施。現行契約はFISHING_SYSTEM末尾、証跡/途中FAIL/警告/手動5項目は[R6記録](R6_SLACK_AWARE_REEL.md)。R7以降/H/M11は未着手。以下は履歴。
+
 2026-10-04 最新状態: R4正式合格、R5は最終手動Camera Down不具合により正式合格保留。R5Aのみ修正・自動検証完了、修正後手動再確認待ち。R6以降/R7/H/M11未着手。現行証跡は末尾と[R5A記録](R5A_CAMERA_INDEPENDENCE.md)。以下の自動成功は各時点の履歴。
 
 2026-10-04 R5実装・自動受入完了: ユーザーがR4をAutomation・Runtime Integration・最終手動PIEまで正式合格と確認。R5はUp/Recover予約Sequence＋最大1turn/Action・名目0.8mの限定巻取り要求を保存Rodへ明示適用。固定Root/Base/Length2m、A4 Pending/技術復旧を維持。UHT生成・実C++/Development Editor Win64成功、最終採用101件（新規8＋関連93）成功・errors0、外部HTTP警告4。今回R5手動PIE未実施。R6以降/R7/H/M11は未着手。現行契約はFISHING_SYSTEM末尾、証跡/限界/変更一覧は[R5実施記録](R5_SHAKURI_SEQUENCE.md)。以下のR4不合格/手動待ち記録は各時点の履歴。
@@ -577,7 +579,7 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 |R3b First-person camera|R2b/R3a|CameraManager、Camera Tuning、Rod/Reel表示参照|選択舷Eye、角度制限、表示のみ補間、ViewTarget競合なし|Rod/Reel/海面中心、真上真下なし。入力仕上げはR4|
 |R4 Fishing input/aim|R3b|Controller、Input設定、RodControl、Modeキュー接続|Mouse基準Aim/Camera読取、Snap余裕、UI遮断、保持解除、Cast/ModeEpoch/30-120fps。D/E/M09/F関連回帰|通常釣りにShift不要。右/左操作維持。Sequenceは旧挙動と明示|
 |R5 Shakuri Sequence|R4|Fishing/TRShakuriSequenceComponent新設、TRFishingComponent/TRRodControlComponent、Snapshot|1/2/3/5要求、Repeat拒否、Recoverと予約順、終了時だけTF、無AutoStay、割込/寿命。D/M10/E関連回帰|2026-10-04ユーザー指定で限定Handle Turn Demandと保存Rodへの明示適用もR5対象。Slack-aware/Drag/slip完成と全Jerk物理品質はR6へ残す|
-|R6 Slack-aware Reel|R5/C|TREgiSpatialSimulationのライン要求、Sequence接続、Rod/Fishing Tuning|全Jerkの因果対照試験、必要余長だけ回収、5回過剰回収なし、拘束/境界/有限数、30-120fps、左との競合。C該当/D/E/M10回帰|間隔違いの1〜5回すべて作用。固定2mや直接速度注入で代用不可|
+|R6 Slack-aware Reel|R5/C|TRReelResolver/TRLineGeometry、Egi Reel Snapshot、Sequence/Normal接続|2026-10-08実装・自動受入完了。新規4＋関連122成功。Slack/Taut/未実現、10/20/50、fps、Normal42/Intentional N、R4/R5回帰|現行ユーザー指定のSlack→安全Taut配分を採用。係数変更なし。手動PIE待ち、詳細は末尾とR6記録|
 |R7 Drift measurement/tuning|R2a/R3a/B|Prototype Boat設定、測定Snapshot/試験、必要な表示|0.4/.7/1 knot、風/潮方向別、10/30/60秒変位、停止/航行後比較、決定性。B関連回帰|固定基準に対する体感評価。式を無条件に置換せず係数調整を記録|
 |R8a F1/HUD fix|F/G、独立着手可|Controller/Widget/TRHUD/TRPrototypePresentation、必要ならConfig/DefaultInput.iniの限定除外|実入力経路1押下1toggle、UI/Pause/Close、ViewMode等不変、20往復、HUD値。F/M09回帰|紫表示なし/閉じられる実キー確認。Engine設定編集禁止|
 |R8b Visual/readability|R3b/R4/R8a|表示Actor、Prototype Mesh/Material/Level、モード別HUD|Snapshot→表示、釣り座/Rod/Reel/Line参照、Asset load、UI/Input非干渉|塗りの船/左右舷/海中/固定基準、1080p/1440p。物理値を表示都合で変更しない|
@@ -926,3 +928,10 @@ R5B自動検証完了、R5正式不合格・修正後手動PIE待ち。R6以降/
 新規4試験は218保存World条件（方向/回数別168、間隔別36、手動再現8、fps6）。1/2/3/5/10/20/50回、両舷/Camera上下左右、固定Root/Base/2m、Sequence完了/Queue0/Temporary0、Actual<=Requested、正常Technical Abort0を確認。正常42条件は全Retrieved/Abort0、Intentional NaNとN回復も保持。
 
 最終採用150件成功（新規4＋関連146）、errors0/notRun0、外部HTTP警告6。追加M07大ステップ回帰で既存fixtureのMode準備時間不足を検出し、設定固定Step1回へ試験準備だけ修正。依存103試験全成功。採用元/途中FAIL、UHT7生成・実C++/Development Editor Win64、保全/変更一覧/数値/手動3項目は[R5C記録](R5C_OFFSCREEN_REPEATED_SHAKURI.md)。git diff --check成功、Config/Content20ファイルhash不変。R5C自動受入成功、R5正式不合格・ユーザー修正後PIE待ち。R6以降/R7/H/M11未着手。
+
+
+### R6 Slack-aware Reel / Effective Retrieve（2026-10-08）
+
+R5はユーザーが最終手動PIEまで正式合格と確認。今回R6のみ、R5C海面幾何を共有化し、Shakuri/Normalの同一ResolverとSnapshot/Insert診断を実装。名目0.8m、Sequence/Root/2m/Camera/環境/安全閾値/Config/Contentを保持。ActualとNetを分離し、未実現を正常継続として観測する。
+
+最終採用126件成功（新規4＋関連122）、正常42条件Technical Abort0、Intentional Abort/N復旧成功。UHT10生成・変更Runtime/最終試験の実C++/Link・Development Editor Win64・git diff --check成功。試験内外部HTTP警告6、新R6試験内警告0。最終2採用元/途中FAIL、0.8m配分/50回再評価、変更17ファイル、手動5項目は[R6記録](R6_SLACK_AWARE_REEL.md)。実装/自動合格と手動PIE未実施を区別し、R7以降/H/M11へ進まない。

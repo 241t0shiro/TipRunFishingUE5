@@ -1,5 +1,7 @@
 # 釣りシステム技術設計
 
+2026-10-08 最新: ユーザーがR5のAutomation・最終手動PIEを正式合格と確認。R6のみ共有Slack-aware ReelとRequested/Actual/Net分離を実装し、自動受入126件成功（新規4＋関連122）、正常42条件Technical Abort0。UHT10生成・実C++/Development Editor Win64成功。Config/Content/係数は保持、R6手動PIE未実施。現行契約はFISHING_SYSTEM末尾、証跡/途中FAIL/警告/手動5項目は[R6記録](R6_SLACK_AWARE_REEL.md)。R7以降/H/M11は未着手。以下は履歴。
+
 2026-10-04 最新: R5は手動Camera Down不具合により正式合格保留。R5AのStation-local Temporary Actionを本書末尾の現行契約とし、旧画面上向きAction/Base EnvelopeによるFinal制限を置換する。修正・自動検証済み、手動再確認待ち。R6以降/R7/H/M11未着手。[R5A証跡](R5A_CAMERA_INDEPENDENCE.md)。以下は履歴。
 
 2026-10-04 R5実装・自動受入完了: ユーザーがR4をAutomation・Runtime Integration・最終手動PIEまで正式合格と確認。R5はUp/Recover予約Sequence＋最大1turn/Action・名目0.8mの限定巻取り要求を保存Rodへ明示適用。固定Root/Base/Length2m、A4 Pending/技術復旧を維持。UHT生成・実C++/Development Editor Win64成功、最終採用101件（新規8＋関連93）成功・errors0、外部HTTP警告4。今回R5手動PIE未実施。R6以降/R7/H/M11は未着手。現行契約はFISHING_SYSTEM末尾、証跡/限界/変更一覧は[R5実施記録](R5_SHAKURI_SEQUENCE.md)。以下のR4不合格/手動待ち記録は各時点の履歴。
@@ -591,3 +593,22 @@ Shakuri後のStay/Holdでも、竿先のMouse移動と海面が要求するラ�
 現行では全LineModeに共通して、海面接触または拘束候補が海面へ達する場合、既存の `sqrt(SurfaceHeight² + max(0,EndpointHorizontalRadius − AllowedReelM)²)` を必要幾何長として評価する。必要なspan増加を認め、海面交差円の消失・瞬間的な横補正を防ぐ。これはA4と同じ簡易幾何整合の拡張であり、R6のDrag/slip/弛み回収モデルではない。海面に必要なspanを満たせない名目回収を強制しない。Actualは当Tick/Action/累積Requested以下を保持する。
 
 Camera/Viewportを物理条件に使用しない。Root/Base/2m、Up/Recover/Queue、1turn/名目0.8m、Pending/Quick/Abort/N復旧、安全閾値、Environmentは保持。読取専用Egi SnapshotにLineConstraintCorrectionMとGeometrySpanAccommodationMを追加。Insert詳細から必要長/弛み/不足/補正/幾何span増加を観測する。修正前再現、最終検証、手動受入は[R5C記録](R5C_OFFSCREEN_REPEATED_SHAKURI.md)を参照。R5正式不合格を維持し、R6以降へ進まない。
+
+### R6 Slack-aware Reel / Effective Retrieve（2026-10-08、現行契約）
+
+ユーザーがR5のAutomationと最終手動PIEを正式合格と確認。本節は第14節の旧「Preparing/Recoverの余長だけを回収」案を置換する。R5の1入力1Action、Up/Recover配分、1turn/名目0.8m、連続予約/Pendingを変更しない。今回の対象は実効巻取りであり、Drag物理・R7環境・H/M11は未実装。
+
+revision 2ではShakuriの当Tick距離要求とNormal Retrieveの既存ReelMps×fixed dtを、同じ `TRReelResolver` に渡す。Sequenceは要求を生成/予約し、Egi Spatialだけがラインを適用する。Resolverは端点を変更せず、ライン短縮と配分を返す。Slack分に端点牽引速度を加えず、Taut分だけが既存ライン拘束の速度整合へ入る。EgiのPosition/Velocityを入力側から直接変更しない。
+
+`TRLineGeometry` がR5Cの海面交差spanを一元所有する。必要長はMinLine、竿先から当地海面までの高さ、現在の候補端点距離、および海面到達条件でのR5C spanの最大。spanは `sqrt(height² + max(horizontal radius - allowed motion,0)²)`。短縮前だけでなく短縮候補が海面へ達する場合も評価する。Stay/Hold、Shakuri、Normal Retrieve、Re-Fallで同じ幾何を使用し、必要spanの増加はReel実績と別計上する。
+
+- `Slack = max(Line - Required,0)`。revision 2の既存SlackMも最終Requiredと一致させる。MinLine/海面spanより下を巻ける弛みとは扱わない。LineSlackAllowanceMは従来どおりFreeFallの繰出し目標と水中ライン伝達判定に使用し、回収時に必ず残す固定余長へ転用しない。
+- `SlackConsumed = min(Requested, AvailableSlack)`。Remaining要求をTaut候補にする。Taut予算は従来の `max(0, MaxEgiSpeed - RodTipSpeed - CandidateEgiSpeed) × substep dt`。海面では既存交差spanを満たす短縮へさらに制限。Normalも同じ予算を使用する。既存安全閾値/係数は変更しない。
+- `Actual = SlackConsumed + TautApplied <= Requested`、`Unrealized = Requested - Actual`。未実現は正常な実効slipの観測値で、次Tickへ強制繰越しない。本格Drag/slip物理ではないゲーム近似。
+- Actualは物理演算中にスプールへ適用した正の短縮量。`NetDelta = LineAfter - LineBefore = Payout + GeometryAccommodation - Actual + PublicationDelta`。正のNetDeltaはライン増加。必要span増加や繰出しを負のActualへ混ぜない。既存float Line境界は予算を超える追加ULP短縮を避ける上向き丸めとし、PublicationDeltaを分離する。
+
+`FTREgiSnapshot.Reel` の `FTRReelSnapshot` は最後に成功したSpatial TickとCast累積を公開。Requested/Actual、SlackBefore/After/Consumed、TautApplied、Unrealized、RequiredBefore/Final、LineBefore/After、NetDelta、Payout、GeometryAccommodation、PublicationDelta、TensionBefore/After、TautBudget、Sourceを保持する。LineBeforeはTick開始値、SlackBefore/RequiredBeforeは最初のsubstepで繰出し/幾何整合後・Reel適用前の値、Finalは拘束後の端点値。初期化直後はReel.Tick=0で未評価、失敗Tickは成功Snapshotへcommitしない。
+
+Sequence累積Requestedは開始したActionの名目予約量、Unrealizedは名目Requested−Actual（進行中/中断時の未発行分も含む）。Egi Reel累積Requestedは実際に発行したTick要求で、NormalとShakuri双方を含む。完了したShakuriだけのCastでは両者が一致する。Actualは成功Spatial Snapshotからのみ反映し、Tick/Source/配分等式を検証する。
+
+Left Releaseで新しいNormal要求を停止。Re-FallはPayoutのみ、Quickは共有Resolverを使わず既存固定期間→Ready/Unlock。固定Station-local Grip/Base/Length2m、Camera独立、画面外操作、Abort/N復旧を保持する。最終数値・試験・限界は [R6記録](R6_SLACK_AWARE_REEL.md)。

@@ -28,7 +28,11 @@ void UTRShakuriSequenceComponent::Advance(const FTRSimTime& Time,const FTREgiSna
   State.RequestedHandleTurns=Frozen.HandleTurnsPerShakuri;
   State.RequestedRetrieveM=Frozen.NominalRetrievePerHandleTurnM*Frozen.HandleTurnsPerShakuri;
   State.TotalRequestedHandleTurns+=State.RequestedHandleTurns;State.TotalRequestedRetrieveM+=State.RequestedRetrieveM;
-  State.ActualRetrieveM=0;
+  State.ActualRetrieveM=0;State.SlackConsumedM=State.TautRetrieveAppliedM=0;
+  // Sequence totals are nominal booked demand; any unissued/cancelled portion
+  // remains unrealized. Egi reel totals separately measure issued tick demand.
+  State.UnrealizedRetrieveM=State.RequestedRetrieveM;
+  State.TotalUnrealizedRetrieveM=State.TotalRequestedRetrieveM-State.TotalActualRetrieveM;
  }
  const int64 Elapsed=Time.TickIndex-StartTick;
  if(!bRunning || Elapsed<0 || Elapsed>=UpTicks+RecoverTicks){return;}
@@ -36,16 +40,28 @@ void UTRShakuriSequenceComponent::Advance(const FTRSimTime& Time,const FTREgiSna
  const double Fraction=Up?Frozen.UpDemandFraction01:1-Frozen.UpDemandFraction01;
  const double Nominal=State.RequestedRetrieveM*Fraction/double(Up?UpTicks:RecoverTicks);
  // Allocation is per action, including demand which geometry cannot fulfill.
- // Unfulfilled demand is not carried/retried: that is R6 policy, not a forced spool.
+ // Unfulfilled demand is not carried/retried: unrealized demand is observed, never a forced spool.
  State.TickDemandM=FMath::Min(Nominal,FMath::Max(0.,State.RequestedRetrieveM-AllocatedM));
  AllocatedM+=State.TickDemandM;
 }
-bool UTRShakuriSequenceComponent::RecordActual(double ActualM)
+bool UTRShakuriSequenceComponent::RecordActual(const FTRReelSnapshot& Reel)
 {
- if(!FMath::IsFinite(ActualM) || ActualM<0 || ActualM>State.TickDemandM+1.e-9 ||
+ const double ActualM=Reel.ActualRetrieveM;
+ if(!FMath::IsFinite(ActualM) || !FMath::IsFinite(Reel.SlackConsumedM) || !FMath::IsFinite(Reel.TautRetrieveAppliedM) ||
+  !FMath::IsFinite(Reel.UnrealizedRetrieveM) || Reel.SlackConsumedM<0 || Reel.TautRetrieveAppliedM<0 || Reel.UnrealizedRetrieveM<0 ||
+  Reel.Tick!=State.Tick || Reel.Source!=ETRReelSource::Shakuri ||
+  !FMath::IsNearlyEqual(Reel.RequestedRetrieveM,State.TickDemandM,1.e-9) ||
+  !FMath::IsNearlyEqual(ActualM,Reel.SlackConsumedM+Reel.TautRetrieveAppliedM,1.e-9) ||
+  !FMath::IsNearlyEqual(Reel.RequestedRetrieveM,ActualM+Reel.UnrealizedRetrieveM,1.e-9) ||
+  ActualM<0 || ActualM>State.TickDemandM+1.e-9 ||
   State.ActualRetrieveM+ActualM>State.RequestedRetrieveM+1.e-9 ||
   State.TotalActualRetrieveM+ActualM>State.TotalRequestedRetrieveM+1.e-9){return false;}
- State.ActualRetrieveM+=ActualM;State.TotalActualRetrieveM+=ActualM;return true;
+ State.ActualRetrieveM+=ActualM;State.TotalActualRetrieveM+=ActualM;
+ State.SlackConsumedM+=Reel.SlackConsumedM;State.TotalSlackConsumedM+=Reel.SlackConsumedM;
+ State.TautRetrieveAppliedM+=Reel.TautRetrieveAppliedM;State.TotalTautRetrieveAppliedM+=Reel.TautRetrieveAppliedM;
+ State.UnrealizedRetrieveM=FMath::Max(0.,State.RequestedRetrieveM-State.ActualRetrieveM);
+ State.TotalUnrealizedRetrieveM=FMath::Max(0.,State.TotalRequestedRetrieveM-State.TotalActualRetrieveM);
+ return true;
 }
 void UTRShakuriSequenceComponent::Stop()
 {

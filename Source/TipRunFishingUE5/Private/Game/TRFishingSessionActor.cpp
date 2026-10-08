@@ -340,7 +340,7 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 			return DestinationOcean;
 		});
 	if (Event == ETREgiStepEvent::EnvironmentInvalid) { AbortInternal(EgiSimulation->GetLastDiagnosticFailure()); return; }
- if(Action.bLimitedReelDemand && !ShakuriSequence->RecordActual(FMath::Max(0.,double(Before.LineLengthM)-double(EgiSimulation->BuildSnapshot(Fishing->GetState()).LineLengthM))))
+ if(Action.bLimitedReelDemand && !ShakuriSequence->RecordActual(EgiSimulation->BuildSnapshot(Fishing->GetState()).Reel))
  {AbortInternal(TEXT("Sequence.ActualDemandExceeded"));return;}
 	Fishing->ApplyEgiStep(EgiSimulation->BuildSnapshot(Fishing->GetState()), Event, EgiSimulation->IsTransientComplete());
 	if (Event == ETREgiStepEvent::Retrieved) { FinishInternal(ETRCastOutcome::Retrieved, true); return; }
@@ -613,7 +613,7 @@ FTRFishingStationSnapshot ATRFishingSessionActor::GetStationSnapshot() const
 
 FString ATRFishingSessionActor::GetRuntimeDiagnostics() const
 {
- const auto F=Fishing->GetSnapshot();const auto M=GetPlayerModeSnapshot();const auto Q=ShakuriSequence->GetSnapshot();
+ const auto F=Fishing->GetSnapshot();const auto M=GetPlayerModeSnapshot();const auto Q=ShakuriSequence->GetSnapshot();const auto& R=F.Reel;
  FString Available;for(auto C:{ETRFishingCommandType::Deploy,ETRFishingCommandType::Jerk,ETRFishingCommandType::Fall,ETRFishingCommandType::RetrieveStarted,ETRFishingCommandType::RetrieveStopped,ETRFishingCommandType::QuickRetrieve,ETRFishingCommandType::NextCast})
  {if(IsCommandAvailable(C)){Available+=StaticEnum<ETRFishingCommandType>()->GetNameStringByValue(int64(C))+TEXT(" ");}}
  return FString::Printf(TEXT("Mode=%s Side=%s State=%s cast=%lld epoch=%lld registration=%lld\nactive=%d onboard=%d locked=%d pendingJerk=%lld reeling=%d jerkCount=%lld enteredTick=%lld egiTick=%lld line=%.6g egi=%s\nQueue=%s\nRod: %s\nAction: %s\nConsumed mouse=%s count=%lld\nEnd=%s Failure=%s\nAvailable=%s"),
@@ -625,5 +625,9 @@ FString ATRFishingSessionActor::GetRuntimeDiagnostics() const
  *StaticEnum<ETRShakuriPhase>()->GetNameStringByValue(int64(Q.Phase)),Q.SequenceIndex,Q.CompletedCount,Q.QueuedCount,Q.RequestedHandleTurns,Q.TotalRequestedHandleTurns,Q.RequestedRetrieveM,Q.TotalRequestedRetrieveM,Q.ActualRetrieveM,Q.TotalActualRetrieveM,Q.TickDemandM,Q.bPendingRetrieve,Q.bPendingReFall)
  + FString::Printf(TEXT("\nRecoveryAvailable=%d PendingAction=%s\nBase=%s Final=%s TemporaryShakuriOffset=%.12g\nSpatial: %s"),IsRecoveryAvailable(),Fishing->bPendingRetrieve?TEXT("Retrieve"):Fishing->bPendingFall?TEXT("Fall"):TEXT("None"),*RodControl->GetSnapshot().BaseRodDirectionLocal.ToString(),*RodControl->GetSnapshot().FinalRodDirectionLocal.ToString(),RodControl->GetSnapshot().TemporaryShakuriOffsetRad,*EgiSimulation->GetSpatialDiagnostics())
  + FString::Printf(TEXT("\nR5C lineRequired=%.12g slack=%.12g deficit=%.12g lastCorrection=%.12g geometrySpanAccommodation=%.12g"),
- F.RodToEgiDistanceM,F.SlackM,FMath::Max(0.,F.RodToEgiDistanceM-double(F.LineLengthM)),F.LineConstraintCorrectionM,F.GeometrySpanAccommodationM);
+ F.RodToEgiDistanceM,F.SlackM,FMath::Max(0.,F.RodToEgiDistanceM-double(F.LineLengthM)),F.LineConstraintCorrectionM,F.GeometrySpanAccommodationM)
+ + FString::Printf(TEXT("\nR6 source=%s tick=%lld requested=%.12g total=%.12g actual=%.12g total=%.12g\nslackBefore=%.12g slackAfter=%.12g consumed=%.12g total=%.12g taut=%.12g total=%.12g unrealized=%.12g total=%.12g\nrequiredBefore=%.12g required=%.12g lineBefore=%.12g lineAfter=%.12g netDelta=%.12g totalNet=%.12g payout=%.12g geometryGrowth=%.12g publication=%.12g tensionBefore=%.9g tensionAfter=%.9g tautBudget=%.12g"),
+ *StaticEnum<ETRReelSource>()->GetNameStringByValue(int64(R.Source)),R.Tick,R.RequestedRetrieveM,R.TotalRequestedRetrieveM,R.ActualRetrieveM,R.TotalActualRetrieveM,
+ R.SlackBeforeM,R.SlackAfterM,R.SlackConsumedM,R.TotalSlackConsumedM,R.TautRetrieveAppliedM,R.TotalTautRetrieveAppliedM,R.UnrealizedRetrieveM,R.TotalUnrealizedRetrieveM,
+ R.RequiredLineBeforeM,R.RequiredLineLengthM,R.LineLengthBeforeM,R.LineLengthAfterM,R.NetLineLengthDeltaM,R.TotalNetLineLengthDeltaM,R.PayoutM,R.GeometryAccommodationM,R.PublicationDeltaM,R.TensionBefore01,R.TensionAfter01,R.TautBudgetM);
 }

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Data/TRIdentifiers.h"
 #include "Data/TRTypes.h"
+#include "Data/TRReelTypes.h"
 #include "TRSnapshots.generated.h"
 
 // Operation/tempo data, separate from the last physically integrated Egi sample.
@@ -133,6 +134,7 @@ USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTREgiSnapshot
 {
 	GENERATED_BODY()
+ UPROPERTY(BlueprintReadOnly) FTRReelSnapshot Reel;
 	// Sole position authority, meters, +Z up. False only for legacy initialization callers.
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") bool bWorldPositionValid = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector WorldPositionM = FVector::ZeroVector;

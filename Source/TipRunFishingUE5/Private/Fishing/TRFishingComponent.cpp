@@ -158,7 +158,8 @@ void UTRFishingComponent::ApplyEgiStep(const FTREgiSnapshot& Updated, ETREgiStep
 {
 	if (Updated.CastId != Snapshot.CastId || Updated.Tick <= Snapshot.Tick) { return; }
 	LastRetrieveSpeedMps = State == ETRFishingState::Retrieving && bReeling ?
-		float(FMath::Max(0.0,double(Snapshot.LineLengthM-Updated.LineLengthM)/StepSeconds)) : 0.0f;
+		float(Updated.EgiModelRevision==2 ? Updated.Reel.ActualRetrieveM/StepSeconds :
+   FMath::Max(0.0,double(Snapshot.LineLengthM-Updated.LineLengthM)/StepSeconds)) : 0.0f;
 	Snapshot = Updated;
 	if (State == ETRFishingState::TensionFall || State == ETRFishingState::Stay) { RangeObservationSeconds += StepSeconds; }
 	if (Updated.bBottomContact && (State == ETRFishingState::FreeFall || State == ETRFishingState::TensionFall || State == ETRFishingState::Stay))
