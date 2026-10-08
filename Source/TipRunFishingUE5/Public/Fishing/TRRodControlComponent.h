@@ -41,7 +41,8 @@ private:
  FVector ConstrainLocalDirection(const FVector& Direction, FString& Reason) const;
  FTRRodSnapshot MakeLocalSolve() const;
  void PublishLocalPose(FTRRodSnapshot& Next,const FVector& FinalDirection) const;
-	bool ResolveScreenPose(FTRRodSnapshot& Next,const FQuat& Basis,double Offset,double SurfaceZ, bool bDirectProjection=false) const;
+ // One-time station setup only. Temporary actions never call a projection solver.
+	bool ResolveInitialScreenPose(FTRRodSnapshot& Next,double SurfaceZ) const;
 	bool bUseStation=false;
 	double StationYawRad=0;
 	FTRRodParameters Frozen;

@@ -145,6 +145,9 @@ struct TIPRUNFISHINGUE5_API FTREgiSnapshot
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") double RodToEgiDistanceM = 0.0;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector LineDirection = FVector::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") double SlackM = 0.0;
+ // Read-only R5C diagnostics; never used as physics inputs.
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Debug") double LineConstraintCorrectionM=0;
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Debug") double GeometrySpanAccommodationM=0;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector CurrentAtEgiDepthMps = FVector::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") float TotalMassG = 0.0f;
 
@@ -228,6 +231,13 @@ struct TIPRUNFISHINGUE5_API FTRRodSnapshot
  UPROPERTY() int64 AimCameraFrame=0;
  UPROPERTY() int64 AimSequence=0;
  UPROPERTY() FString AimResult;
+ // Last mouse observation diagnostics; viewport visibility is not a pose limit.
+ UPROPERTY() FString AimMapping;
+ UPROPERTY() FString AimProjectionStatus;
+ UPROPERTY() FString AimSphereResult;
+ UPROPERTY() double AimSphereDiscriminant=0;
+ UPROPERTY() bool bAimProjectionValid=false;
+ UPROPERTY() bool bAimOutsideViewRect=false;
 
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FVector AimCameraWorldM=FVector::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Rod") FRotator AimCameraRotation=FRotator::ZeroRotator;

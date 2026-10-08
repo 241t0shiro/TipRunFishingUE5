@@ -45,6 +45,7 @@ private:
 	bool bSeriesClosed = false, bReeling = false;
     bool bPendingRetrieve = false, bPendingFall = false;
  bool bUseRodProfileBoundaries = false;
+ bool bUseShakuriSequence = false;
 	TArray<TPair<ETRFishingState, ETRFishingState>> PendingTransitions;
 	void PublishStateChanges();
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Fishing", meta = (AllowPrivateAccess = "true"))

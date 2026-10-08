@@ -22,6 +22,9 @@ bool UTRRodControlComponent::ApplyAim(FVector2D Delta,const FTRSimTime& Time,con
 	{
   Snapshot.bEnvelopeEnabled=Frozen.Envelope.bEnabled; Snapshot.bEnvelopeLimited=false; Snapshot.EnvelopeReason=TEXT("None");
   Snapshot.AimMouseDelta=Delta;Snapshot.AimCameraFrame=View.CameraFrame;Snapshot.AimSequence=Sequence;
+  Snapshot.AimMapping=TEXT("None");Snapshot.AimProjectionStatus=TEXT("ProjectionInvalid");Snapshot.AimSphereResult=TEXT("NotAttempted");
+  Snapshot.AimSphereDiscriminant=0;Snapshot.bAimProjectionValid=false;Snapshot.bAimOutsideViewRect=false;
+  Snapshot.AimCurrentPixel=Snapshot.AimTargetPixel=FVector2D::ZeroVector;
   auto Reject=[&](const TCHAR* Reason){Snapshot.AimResult=Reason;return false;};
   if(!View.bValid || View.CameraWorldM.ContainsNaN() || View.CameraRotation.ContainsNaN() ||
    View.BoatWorldM.ContainsNaN() || !FMath::IsFinite(View.BoatHeadingRad) ||
@@ -31,43 +34,68 @@ bool UTRRodControlComponent::ApplyAim(FVector2D Delta,const FTRSimTime& Time,con
   const FVector CameraLocal=Basis.UnrotateVector(View.CameraWorldM-(View.BoatWorldM+H.RotateVector(StationOriginM)));
   const FQuat CameraLocalRotation=Basis.Inverse()*View.CameraRotation.Quaternion();
   const FVector P=CameraLocalRotation.UnrotateVector(RootLocal+BaseDirectionLocal*Frozen.LengthM-CameraLocal);
-  if(P.ContainsNaN() || P.X<=UE_DOUBLE_SMALL_NUMBER){return Reject(TEXT("BehindCamera"));}
+  if(P.ContainsNaN()){return Reject(TEXT("InvalidPose"));}
   const double TanHalf=FMath::Tan(FMath::DegreesToRadians(View.FOVDeg*.5));
   // Non-viewport unit fixtures use aspect 16:9 only. Runtime always captures ViewRect.
   const double Width=View.ViewRect.Width()>0?View.ViewRect.Width():1.;
   const double Height=View.ViewRect.Height()>0?View.ViewRect.Height():9./16.;
   const FVector2D Scale=View.bHasProjection?View.ProjectionScale:FVector2D(1./TanHalf,Width/(Height*TanHalf));
   const FVector2D ProjectionOffset=View.bHasProjection?View.ProjectionOffset:FVector2D::ZeroVector;
-  if(Scale.ContainsNaN() || ProjectionOffset.ContainsNaN() || Scale.X<=0 || Scale.Y<=0){return Reject(TEXT("InvalidProjection"));}
-  const FVector2D Current(P.Y/P.X*Scale.X+ProjectionOffset.X,P.Z/P.X*Scale.Y+ProjectionOffset.Y);
-  FVector2D Target=Current;
+  const bool ProjectionValid=P.X>UE_DOUBLE_SMALL_NUMBER && !Scale.ContainsNaN() && !ProjectionOffset.ContainsNaN() && Scale.X>0 && Scale.Y>0;
+  FVector2D Move=FVector2D::ZeroVector;
   const double Budget=Frozen.Screen.MaxRatePerS*Time.StepSeconds;
   for(int Axis=0;Axis<2;++Axis)
   {
    const double Wanted=FMath::Clamp(Delta[Axis],-Frozen.MaxMouseDelta,Frozen.MaxMouseDelta)*Frozen.Screen.Sensitivity[Axis]*((Axis?Frozen.bInvertY:Frozen.bInvertX)?-1:1);
-   const double Move=FMath::Clamp(Wanted,-FMath::Max(0.,Budget-UsedAimRad[Axis]),FMath::Max(0.,Budget-UsedAimRad[Axis]));
-   UsedAimRad[Axis]+=FMath::Abs(Move);
-   // Sensitivity is in horizontal half-screen units on both axes, resolution independent.
-   Target[Axis]+=Move*(Axis?Scale.Y/Scale.X:1.);
+   Move[Axis]=FMath::Clamp(Wanted,-FMath::Max(0.,Budget-UsedAimRad[Axis]),FMath::Max(0.,Budget-UsedAimRad[Axis]));
+   UsedAimRad[Axis]+=FMath::Abs(Move[Axis]);
   }
-  auto Pixel=[&](FVector2D N){return FVector2D(View.ViewRect.Min.X+(N.X+1)*Width*.5,View.ViewRect.Min.Y+(1-N.Y)*Height*.5);};
-  Snapshot.AimCurrentPixel=Pixel(Current);Snapshot.AimTargetPixel=Pixel(Target);
-  if(Target.ContainsNaN()){return Reject(TEXT("InvalidProjection"));}
-  // Projection/sphere round-off at an exact edge must not block the other axis.
-  // This tolerance is sub-nanopixel, not an expansion of the usable domain.
-  if(FMath::Abs(Target.X)>1+1.e-12 || FMath::Abs(Target.Y)>1+1.e-12)
+  FVector Direction;
+  if(ProjectionValid)
   {
-   if(!Frozen.Envelope.bEnabled){return Reject(TEXT("ScreenBoundary"));}
-   Snapshot.bEnvelopeLimited=true;Snapshot.EnvelopeReason=TEXT("ViewportBoundary");
+   // Unbounded NDC: an off-screen base is still a valid physical aim. Never
+   // clamp Current or Target to ViewRect and never read the temporary Final tip.
+   const FVector2D Current(P.Y/P.X*Scale.X+ProjectionOffset.X,P.Z/P.X*Scale.Y+ProjectionOffset.Y);
+   const FVector2D Target=Current+FVector2D(Move.X,Move.Y*Scale.Y/Scale.X);
+   auto Pixel=[&](FVector2D N){return FVector2D(View.ViewRect.Min.X+(N.X+1)*Width*.5,View.ViewRect.Min.Y+(1-N.Y)*Height*.5);};
+   if(Current.ContainsNaN() || Target.ContainsNaN()){return Reject(TEXT("InvalidProjection"));}
+   Snapshot.bAimProjectionValid=true;Snapshot.bAimOutsideViewRect=FMath::Abs(Current.X)>1 || FMath::Abs(Current.Y)>1;
+   Snapshot.AimProjectionStatus=Snapshot.bAimOutsideViewRect?TEXT("OffScreen"):TEXT("OnScreen");
+   Snapshot.AimMapping=TEXT("UnboundedProjection");Snapshot.AimCurrentPixel=Pixel(Current);Snapshot.AimTargetPixel=Pixel(Target);
+   const FVector Ray=CameraLocalRotation.RotateVector(FVector(1,(Target.X-ProjectionOffset.X)/Scale.X,(Target.Y-ProjectionOffset.Y)/Scale.Y).GetSafeNormal());
+   const FVector OC=CameraLocal-RootLocal;const double B=FVector::DotProduct(OC,Ray);
+   const double Discriminant=B*B-(OC.SizeSquared()-Frozen.LengthM*Frozen.LengthM);
+   Snapshot.AimSphereDiscriminant=Discriminant;
+   Snapshot.AimSphereResult=Discriminant>=0?TEXT("Intersected"):TEXT("NoIntersection");
+   if(!FMath::IsFinite(Discriminant) || Discriminant<0){return Reject(TEXT("NoSphereIntersection"));}
+   const double Distance=-B+FMath::Sqrt(Discriminant);
+   if(Distance<=UE_DOUBLE_SMALL_NUMBER){Snapshot.AimSphereResult=TEXT("BehindRay");return Reject(TEXT("BehindRay"));}
+   Direction=(OC+Ray*Distance).GetSafeNormal();
   }
-  Target.X=FMath::Clamp(Target.X,-1.,1.);Target.Y=FMath::Clamp(Target.Y,-1.,1.);
-  const FVector Ray=CameraLocalRotation.RotateVector(FVector(1,(Target.X-ProjectionOffset.X)/Scale.X,(Target.Y-ProjectionOffset.Y)/Scale.Y).GetSafeNormal());
-  const FVector OC=CameraLocal-RootLocal;const double B=FVector::DotProduct(OC,Ray);
-  const double Discriminant=B*B-(OC.SizeSquared()-Frozen.LengthM*Frozen.LengthM);
-  if(!FMath::IsFinite(Discriminant) || Discriminant<0){return Reject(TEXT("NoSphereIntersection"));}
-  const double Distance=-B+FMath::Sqrt(Discriminant);
-  if(Distance<=UE_DOUBLE_SMALL_NUMBER){return Reject(TEXT("BehindCamera"));}
-  FVector Direction=(OC+Ray*Distance).GetSafeNormal();
+  else
+  {
+   // A behind-camera/invalid projection cannot latch input forever. Mouse-only
+   // camera-relative tangent motion is stored back in the station, not the camera.
+   Snapshot.AimProjectionStatus=P.X<=UE_DOUBLE_SMALL_NUMBER?TEXT("BehindCamera"):TEXT("ProjectionInvalid");
+   Snapshot.AimMapping=TEXT("CameraTangent");Direction=BaseDirectionLocal;
+   for(int Axis=0;Axis<2;++Axis)
+   {
+    if(Move[Axis]==0){continue;}
+    const FVector CameraAxis=CameraLocalRotation.RotateVector(Axis?FVector::UpVector:FVector::RightVector);
+    FVector Tangent=(CameraAxis-FVector::DotProduct(CameraAxis,Direction)*Direction).GetSafeNormal();
+    if(Tangent.IsNearlyZero())
+    {
+     // At the exact axis pole screen motion has no unique tangent. Use the
+     // camera-forward meridian instead of permanently rejecting mouse recovery.
+     const FVector Forward=CameraLocalRotation.RotateVector(FVector::ForwardVector);
+     Tangent=(Forward-FVector::DotProduct(Forward,Direction)*Direction).GetSafeNormal()*
+      (FVector::DotProduct(CameraAxis,Direction)>0?-1.:1.);
+    }
+    if(Tangent.IsNearlyZero()){return Reject(TEXT("InvalidTangentBasis"));}
+    // Great-circle step keeps length normalized and makes opposite input reversible.
+    Direction=(Direction*FMath::Cos(Move[Axis])+Tangent*FMath::Sin(Move[Axis])).GetSafeNormal();
+   }
+  }
   if(Frozen.Envelope.bEnabled)
   {
    FString Reason;Direction=ConstrainLocalDirection(Direction,Reason);
@@ -116,7 +144,7 @@ bool UTRRodControlComponent::Step(const FTRSimTime& Time,const FTRBoatSnapshot& 
  if(!bPoseInitialized)
  {
   auto Initial=MakeLocalSolve();Initial.ScreenControl=Frozen.Screen.Initial;
-  if(!ResolveScreenPose(Initial,FQuat::Identity,0,SurfaceLocalZ)){return false;}
+  if(!ResolveInitialScreenPose(Initial,SurfaceLocalZ)){return false;}
   BaseDirectionLocal=(Initial.TipWorldPositionM-RootLocal).GetSafeNormal();
   if(Frozen.Envelope.bEnabled){FString Reason;BaseDirectionLocal=ConstrainLocalDirection(BaseDirectionLocal,Reason);}
   bCompatibilitySafetyLimited=Initial.bScreenSafetyLimited;bPoseInitialized=true;
@@ -126,30 +154,26 @@ bool UTRRodControlComponent::Step(const FTRSimTime& Time,const FTRBoatSnapshot& 
  if(Next.bScreenControl)
  {
   Next.ScreenControl=DeriveCompatibilityControl(); // diagnostic, never the stored pose
-  if(Offset>0)
-  {
-   // Keep the old Up/Return screen lift, but in the frozen input observation's
-   // station-local basis. Looking around cannot move either base or action pose.
-   auto Action=MakeLocalSolve();Action.ScreenControl=Next.ScreenControl;
-   if(!ResolveScreenPose(Action,FQuat::Identity,Offset,SurfaceLocalZ,true)){return false;}
-   FinalDirection=(Action.TipWorldPositionM-RootLocal).GetSafeNormal();Next.bScreenSafetyLimited=Action.bScreenSafetyLimited;
-  }
   Next.AimCameraWorldM=Origin+Basis.RotateVector(CompatibilityCameraLocal);
   Next.AimCameraRotation=(Basis*CompatibilityCameraRotation.Quaternion()).Rotator();Next.AimCameraFOVDeg=CompatibilityFOV;
-  const FVector Projected=CompatibilityCameraRotation.Quaternion().UnrotateVector(RootLocal+FinalDirection*Frozen.LengthM-CompatibilityCameraLocal);
-  const double TanHalf=FMath::Tan(FMath::DegreesToRadians(CompatibilityFOV*.5));
-  Next.ResolvedScreenControl=FVector2D(Projected.Y,Projected.Z)/(Projected.X*TanHalf);
  }
- else if(Offset>0)
+ if(Offset>0)
  {
+  // Local elevation at the base's azimuth. Station Right after base yaw is
+  // the snap axis; neither the active nor the last-input camera owns this action.
   const double Pitch=FMath::Atan2(BaseDirectionLocal.Z,FVector2D(BaseDirectionLocal).Size());
   const double Yaw=FMath::Atan2(BaseDirectionLocal.Y,BaseDirectionLocal.X);
-  FinalDirection=FRotator(FMath::RadiansToDegrees(FMath::Clamp(Pitch+Offset,Frozen.MinPitchRad,Frozen.MaxPitchRad)),FMath::RadiansToDegrees(Yaw),0).Vector();
+  const double Limit=Next.bScreenControl?FMath::DegreesToRadians(Frozen.ActionSafety.MaxPitchDeg):Frozen.MaxPitchRad;
+  const double FinalPitch=FMath::Min(Pitch+Offset,Limit);
+  FinalDirection=FRotator(FMath::RadiansToDegrees(FinalPitch),FMath::RadiansToDegrees(Yaw),0).Vector();
+  if(FinalPitch<Pitch+Offset){Next.bEnvelopeLimited=true;Next.EnvelopeReason=TEXT("Action.PitchSafety");}
  }
- if(Next.bScreenControl && Frozen.Envelope.bEnabled)
+ if(Next.bScreenControl)
  {
-  FString Reason;FinalDirection=ConstrainLocalDirection(FinalDirection,Reason);
-  if(!Reason.IsEmpty()){Next.bEnvelopeLimited=true;Next.EnvelopeReason=TEXT("Action.")+Reason;}
+  // Projection is diagnostic only, after the station-local action is resolved.
+  const FVector Projected=CompatibilityCameraRotation.Quaternion().UnrotateVector(RootLocal+FinalDirection*Frozen.LengthM-CompatibilityCameraLocal);
+  const double TanHalf=FMath::Tan(FMath::DegreesToRadians(CompatibilityFOV*.5));
+  Next.ResolvedScreenControl=FMath::Abs(Projected.X)>UE_DOUBLE_SMALL_NUMBER?FVector2D(Projected.Y,Projected.Z)/(Projected.X*TanHalf):FVector2D::ZeroVector;
  }
  Next.bEnvelopeEnabled=Next.bScreenControl && Frozen.Envelope.bEnabled;
  Next.TemporaryShakuriOffsetRad=Offset;
@@ -194,6 +218,7 @@ FVector2D UTRRodControlComponent::DeriveCompatibilityControl() const
 {
  const double TanHalf=FMath::Tan(FMath::DegreesToRadians(CompatibilityFOV*.5));
  const FVector P=CompatibilityCameraRotation.Quaternion().UnrotateVector(RootLocal+BaseDirectionLocal*Frozen.LengthM-CompatibilityCameraLocal);
+ if(P.ContainsNaN() || FMath::Abs(P.X)<=UE_DOUBLE_SMALL_NUMBER){return FVector2D::ZeroVector;} // diagnostic only at projection singularity
  const FVector2D Projected=FVector2D(P.Y,P.Z)/(P.X*TanHalf);
  return Projected; // Read-only projection, never a persistent rectangular control.
 
@@ -226,7 +251,7 @@ void UTRRodControlComponent::PublishLocalPose(FTRRodSnapshot& Next,const FVector
  Next.BaseYawRad=FMath::Atan2(BaseDirectionLocal.Y,BaseDirectionLocal.X);Next.BasePitchRad=FMath::Atan2(BaseDirectionLocal.Z,FVector2D(BaseDirectionLocal).Size());
  Next.FinalYawRad=FMath::Atan2(FinalDirection.Y,FinalDirection.X);Next.FinalPitchRad=FMath::Atan2(FinalDirection.Z,FVector2D(FinalDirection).Size());
 }
-bool UTRRodControlComponent::ResolveScreenPose(FTRRodSnapshot& Next,const FQuat& Basis,double Offset,double SurfaceZ,bool bDirectProjection) const
+bool UTRRodControlComponent::ResolveInitialScreenPose(FTRRodSnapshot& Next,double SurfaceZ) const
 {
 	const FQuat Camera=Next.AimCameraRotation.Quaternion();
 	const double TanHalf=FMath::Tan(FMath::DegreesToRadians(Next.AimCameraFOVDeg*.5));
@@ -240,7 +265,7 @@ bool UTRRodControlComponent::ResolveScreenPose(FTRRodSnapshot& Next,const FQuat&
 	const double SafeMinY=FMath::Clamp(FMath::Tan(LocalElevation)/TanHalf,Frozen.Screen.Min.Y,Frozen.Screen.MaxProjectedY-.01);
 	const double SafeMaxY=FMath::Min(Frozen.Screen.MaxProjectedY,FMath::Max(Frozen.Screen.Max.Y,SafeMinY+Frozen.Screen.Max.Y-Frozen.Screen.Min.Y));
 	const double YFraction=(Next.ScreenControl.Y-Frozen.Screen.Min.Y)/(Frozen.Screen.Max.Y-Frozen.Screen.Min.Y);
-	const FVector2D EffectiveBase=bDirectProjection?Next.ScreenControl:FVector2D(Next.ScreenControl.X,FMath::Lerp(SafeMinY,SafeMaxY,YFraction));
+	const FVector2D EffectiveBase(Next.ScreenControl.X,FMath::Lerp(SafeMinY,SafeMaxY,YFraction));
 	Next.bScreenSafetyLimited=SafeMinY>Frozen.Screen.Min.Y;
 	auto Solve=[&](FVector2D Control)
 	{
@@ -264,21 +289,18 @@ bool UTRRodControlComponent::ResolveScreenPose(FTRRodSnapshot& Next,const FQuat&
 			Next.bScreenSafetyLimited=true;
 			const double Z=FMath::Clamp(MinZ-Next.RootWorldPositionM.Z,-Next.LengthM,Next.LengthM);
 			FVector XY=FVector(Direction.X,Direction.Y,0).GetSafeNormal();
-			if(XY.IsNearlyZero()){XY=Basis.GetForwardVector();}
+			if(XY.IsNearlyZero()){XY=FVector::ForwardVector;}
 			Tip=Next.RootWorldPositionM+XY*FMath::Sqrt(FMath::Max(0.,Next.LengthM*Next.LengthM-Z*Z))+FVector(0,0,Z);
 		}
 		return Tip;
 	};
 	const FVector Base=Solve(EffectiveBase);
-	const FVector BaseLocal=Basis.UnrotateVector((Base-Next.RootWorldPositionM).GetSafeNormal());
+	const FVector BaseLocal=(Base-Next.RootWorldPositionM).GetSafeNormal();
 	Next.BaseYawRad=FMath::Atan2(BaseLocal.Y,BaseLocal.X);Next.BasePitchRad=FMath::Atan2(BaseLocal.Z,FVector2D(BaseLocal).Size());
-	// Keep the existing finite Up/Return profile, applied temporarily in the camera plane.
-	const double Lift=FMath::Tan(FMath::Clamp(Offset,0.,1.2))/TanHalf;
-	const FVector2D FinalControl(EffectiveBase.X,FMath::Max(EffectiveBase.Y,FMath::Min(Frozen.Screen.MaxProjectedY,EffectiveBase.Y+Lift)));
-	Next.TipWorldPositionM=Solve(FinalControl);
+	Next.TipWorldPositionM=Base;
 	Next.TipDirection=(Next.TipWorldPositionM-Next.RootWorldPositionM).GetSafeNormal();
 	Next.TipWorldRotation=Next.TipDirection.Rotation().Quaternion();
-	const FVector FinalLocal=Basis.UnrotateVector(Next.TipDirection);
+	const FVector FinalLocal=Next.TipDirection;
 	Next.FinalYawRad=FMath::Atan2(FinalLocal.Y,FinalLocal.X);Next.FinalPitchRad=FMath::Atan2(FinalLocal.Z,FVector2D(FinalLocal).Size());
 	const FVector Projected=Camera.UnrotateVector(Next.TipWorldPositionM-Next.AimCameraWorldM);
 	if(Projected.X<=UE_DOUBLE_SMALL_NUMBER || Projected.ContainsNaN()){return false;}

@@ -295,11 +295,14 @@ bool ATRPlayerController::SubmitMouseDelta(FVector2D Delta,int64 TargetTick)
   if(auto* LP=GetLocalPlayer();LP && LP->ViewportClient && LP->ViewportClient->Viewport)
   {
    FSceneViewProjectionData Projection;
-   if(!LP->GetProjectionData(LP->ViewportClient->Viewport,Projection)){return false;}
-   Observation.ViewRect=Projection.GetConstrainedViewRect();
    Observation.bHasProjection=true;
-   Observation.ProjectionScale=FVector2D(Projection.ProjectionMatrix.M[0][0],Projection.ProjectionMatrix.M[1][1]);
-   Observation.ProjectionOffset=FVector2D(Projection.ProjectionMatrix.M[2][0],Projection.ProjectionMatrix.M[2][1]);
+   if(LP->GetProjectionData(LP->ViewportClient->Viewport,Projection))
+   {
+    Observation.ViewRect=Projection.GetConstrainedViewRect();
+    Observation.ProjectionScale=FVector2D(Projection.ProjectionMatrix.M[0][0],Projection.ProjectionMatrix.M[1][1]);
+    Observation.ProjectionOffset=FVector2D(Projection.ProjectionMatrix.M[2][0],Projection.ProjectionMatrix.M[2][1]);
+   }
+   else{Observation.ProjectionScale=FVector2D::ZeroVector;} // explicit invalid projection, valid POV for tangent fallback
   }
   else
   {
@@ -342,6 +345,7 @@ FTRHUDSnapshot ATRPlayerController::GetDebugSnapshot() const
  Copy.RuntimeDiagnostics+=FString::Printf(TEXT("R4A2 RodRootLocal=%s BaseDirectionLocal=%s BaseTipLocal=%s\nFinalDirectionLocal=%s FinalTipLocal=%s Length=%.9g\n"),*Copy.Rod.RodRootLocal.ToString(),*Copy.Rod.BaseRodDirectionLocal.ToString(),*Copy.Rod.BaseRodTipLocal.ToString(),*Copy.Rod.FinalRodDirectionLocal.ToString(),*Copy.Rod.FinalRodTipLocal.ToString(),Copy.Rod.LengthM);
  Copy.RuntimeDiagnostics+=FString::Printf(TEXT("R4A5 Envelope enabled=%d limited=%d reason=%s (Station-local, read-only)\n"),Copy.Rod.bEnvelopeEnabled,Copy.Rod.bEnvelopeLimited,*Copy.Rod.EnvelopeReason);
  Copy.RuntimeDiagnostics+=FString::Printf(TEXT("R4A3 lastMouse=%s currentPixel=%s targetPixel=%s cameraFrame=%lld sequence=%lld result=%s\n"),*Copy.Rod.AimMouseDelta.ToString(),*Copy.Rod.AimCurrentPixel.ToString(),*Copy.Rod.AimTargetPixel.ToString(),Copy.Rod.AimCameraFrame,Copy.Rod.AimSequence,*Copy.Rod.AimResult);
+ Copy.RuntimeDiagnostics+=FString::Printf(TEXT("R5B mapping=%s projection=%s valid=%d offscreen=%d sphere=%s discriminant=%.12g clamp=%s\n"),*Copy.Rod.AimMapping,*Copy.Rod.AimProjectionStatus,Copy.Rod.bAimProjectionValid,Copy.Rod.bAimOutsideViewRect,*Copy.Rod.AimSphereResult,Copy.Rod.AimSphereDiscriminant,*Copy.Rod.EnvelopeReason);
  if(PrototypeObserver.IsValid()){Copy.RuntimeDiagnostics+=PrototypeObserver->GetRuntimeObservation().Describe();}
 
  Copy.bMouseRodInputActive=Copy.bSessionValid && BoundSession->IsInputModeAllowed(ETRPlayerMode::Fishing) && bInputFocused && !bPrototypePanelOpen && !Copy.Retrieval.bIsQuickRetrieving;

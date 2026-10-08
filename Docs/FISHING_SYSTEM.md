@@ -1,5 +1,9 @@
 # 釣りシステム技術設計
 
+2026-10-04 最新: R5は手動Camera Down不具合により正式合格保留。R5AのStation-local Temporary Actionを本書末尾の現行契約とし、旧画面上向きAction/Base EnvelopeによるFinal制限を置換する。修正・自動検証済み、手動再確認待ち。R6以降/R7/H/M11未着手。[R5A証跡](R5A_CAMERA_INDEPENDENCE.md)。以下は履歴。
+
+2026-10-04 R5実装・自動受入完了: ユーザーがR4をAutomation・Runtime Integration・最終手動PIEまで正式合格と確認。R5はUp/Recover予約Sequence＋最大1turn/Action・名目0.8mの限定巻取り要求を保存Rodへ明示適用。固定Root/Base/Length2m、A4 Pending/技術復旧を維持。UHT生成・実C++/Development Editor Win64成功、最終採用101件（新規8＋関連93）成功・errors0、外部HTTP警告4。今回R5手動PIE未実施。R6以降/R7/H/M11は未着手。現行契約はFISHING_SYSTEM末尾、証跡/限界/変更一覧は[R5実施記録](R5_SHAKURI_SEQUENCE.md)。以下のR4不合格/手動待ち記録は各時点の履歴。
+
 2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
 
 2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
@@ -550,3 +554,40 @@ R4A-3のStation-local Base/固定Grip/凍結Length・同一Final Tipを維持す
 固定RodRootLocal/BaseRodDirectionLocal/LengthMを維持。FTRRodParameters.Envelopeをopt-in追加し保存Prototypeはyaw±40度/pitch-10〜35度。Mouseの候補Local Directionを最も近い有効球面方向へ連続制限し、既存海面clearanceも維持する。設定はPrototype技術候補で製品値ではない。恒久Screen Rectangleや累積Eulerを正本へ戻さない。
 
 Shakuriの既存profile/量は変更せずTemporary Finalにも方向制約を適用、Base/Root/Lengthを保持する。境界では安全を優先し軸ずれを診断する。外向き入力で境界上の接線移動はあり得るがTarget蓄積はなく、入力停止後は不変/反対入力で即内向きへ戻る。SnapshotにEnvelope有効/直近制限/理由を公開。VisualとLineは同じFinal Tip、表示長は2m固定。A4 Pending/技術Abort/N復旧/旧入力拒否は保持。詳細、720姿勢Sweepと同一42条件Abort0の証跡は [R4A-5記録](R4A5_RUNTIME_ACCEPTANCE.md)。手動未合格、R5/H/M11未着手。
+
+
+### R5 Tip-run Shakuri Sequence + Reel Turn Demand（2026-10-04・現行）
+
+今回のユーザー指定で第14節の「R5は状態管理だけ」を拡張し、限定的Handle Turn Demandと保存Prototypeへの明示適用をR5へ含める。Preparing/Slack-aware/Drag/slip/Spoolと毎回の因果評価完成版はR6へ残す。R4はユーザーの最終手動PIEを含め正式合格。旧G固定2m、旧各Action終端TF、旧「R6前に保存適用しない」は現在のR5経路へ適用しない。
+
+- 正本の責務: Fishingが受付状態/予約回数、UTRShakuriSequenceComponentが固定TickのPhase/名目要求予算/実績、RodControlがStation-local Base/Temporary/Final、EgiSimulationが実際のライン短縮と空間拘束を所有する。Sessionは順序と寿命を接続する。
+- 1 Right Started = 1要求。初回Accepted、Jerking中はQueued、Quick中はBusy、Ready/Deploying/Result/未活動CastはInvalidState。FreeFall/BottomContact/TensionFall/Stay/RetrievingからAccepted。UIの事前可否はAccepted相当を返し、実配送時にTick/Sequence/CastId/ModeEpoch/登録世代を再検証する。
+- Base→Up→Recover。Up/Recoverは既存RodTuningの整数Tick（保存候補0.15/0.25秒=9/15Tick）。Recover完了で予約があればJerkingのまま次Up、なければTensionFall→数値過渡終了でStay。無入力猶予/AutoStayなし。RodLength2m、固定RootLocal、BaseDirection正本を維持。MouseはBaseだけ更新し、Finalは一時作用、終了時は最新Baseへ正確に戻る。
+- RodTuning.Parameters.Sequenceは明示opt-in。NominalRetrievePerHandleTurnM=0.8、HandleTurnsPerShakuri=1（0<値<=1）、UpDemandFraction01=0のPrototype候補。Up側配分と残りRecover側配分を設定可能にする。旧Speed/Secondsパルスは保存R5資産で0/0へ移行。製品値/実測値ではない。旧未移行fixtureはbEnabled=falseの互換試験に限定し、R5受入に使わない。
+- 各Up開始で当該SequenceのRequestedHandleTurns/RequestedRetrieveMと投内合計を確定。予約中に取消された未実行要求には実行済みの名目量を付けない。Phase内で固定Tick数に均等配分し、Action合計予算を超えない。R5の未実現量は繰越/強制回収しない。R6が弛み・張力・Drag/slipを扱う予定。
+- FTREgiActionのbLimitedReelDemand/RequestedRetrieveMを空間Stepへ渡す。既存LineLength→LineConstraint→Egiの順序を保持。既存海面最小幾何長の下限で実短縮が減る/0になることを許容する。限定要求だけは既存MaxEgiSpeed予算からRod移動と候補Egi速度の分を予約した残量以下へ減らす（閾値を緩めず、正常Up配分でも過大な追加巻取りを要求しない）。Egiへ直接位置/速度を注入しない。floatライン公開境界では上向き丸めを行い、余分な1ULP短縮で名目量を超えない。公開ライン前後差の非負部分をActualとして記録し、Tick/Action/投内要求上限を診断する。
+- Normal Retrieveの左Heldや連続巻取りと合算しない。Shakuriは左HeldをONにしない。A4のRetrieve/Fallは実行中profileのBase復帰までPending、予約した後続Jerkを取消す。ReleaseでPending Retrieve取消し。Pause/Focusは予約/Heldを安全解除し、進行中profileは固定時計再開後に自然完了する。QuickはE専用固定時間経路へ移行し将来の名目要求を止め、既存Temporaryだけ自然復帰する。
+- 終了/中断/明示N復旧でSequence予約/そのTick要求を解除し、終了投の要求/実績は読取コピーに保持。新Deployで投内カウンタを初期化する。Session破棄後は更新しない。意図的Safety AbortはAbortedのまま、Nで安全復旧し、成功回収に偽装しない。安全閾値/Abort semanticsは保持。
+- FTRShakuriSequenceSnapshotへPhase/SequenceIndex/CompletedCount/QueuedCount、RequestedTurns/RequestedM/ActualM各current/total、TickDemand、PendingRetrieve/PendingReFallを追加。Base/Final/Root/Lengthは同じHUD.Rodから読む。Insert詳細だけへ表示し通常HUDは変更しない。
+
+今回の受入は保存Mapの実Controller/Queue/Fixed/Rod/Egi/Camera/Presentation経路。1/2/3/5クリック、Hold、複数Base、Pending/Quick/Pause/Focus、状態拒否、30/60/120fps、A2～A5回帰を実行する。結果/未検証は[R5記録](R5_SHAKURI_SEQUENCE.md)。R6以降へ自動進行しない。
+
+### R5A Camera-independent Temporary Action（2026-10-04・現行）
+
+Mouse入力時だけ実Cameraを観測してStation-local Baseを確定するR4契約は維持。右クリックのTemporary ShakuriはBaseのStation-local azimuth/pitch＋既存時間profileの上向き角でFinal Directionを生成する。Camera/Screen/FOVをAction正本にしない。Root固定/Length2m、Base不変、終了時Final==最新Baseを維持。表示とLine Startは同一Final Snapshotを使用する。
+
+Base Envelope（yaw±40/pitch-10〜35度）は変更しない。Temporary FinalへBase用Clampを適用しない。独立Parameters.ActionSafety.MaxPitchDeg（Prototype既定75度）で背面へ向かない上限を検証・制限し、Action.PitchSafetyを診断する。設定はDataAssetで調整可能、製品値ではない。Screen solverは一度の初期化だけで使い、Actionから呼ばない。Sequence Up/Recover、名目.8m/1turn、実効上限、Pending/Quick/Abortは従来R5/R4A-4のまま。結果と限界は[R5A記録](R5A_CAMERA_INDEPENDENCE.md)。
+
+### R5B Camera Down / Off-screen Mouse契約（2026-10-05・現行）
+
+ViewRectは表示領域でありBaseの物理可動域ではない。有限な前方Base Tipのunbounded NDCへMouse deltaを足して逆投影し、固定Grip中心2m球へ写像する。Current/Targetを画面端へClampしない。後方/投影尺度無効時だけ、発行Camera Right/UpのBase Direction接平面への投影から短い大円ステップを作り、Station-local Baseへ保存する。Camera-only Tickで再計算しない。真の安全制約は既存Base Envelope yaw±40/pitch−10〜35と海面/外向き条件。画面外、投影不能、Envelopeを別診断とする。
+
+ShakuriはBase水平方位を維持するStation-local縦平面内でPitchだけを上げ戻しし、Action上限75度もPitchだけへ適用する。Mouseの現在点は常にBase TipでありTemporary Final Tipを取り込まない。Root/Length2m/最新Base復帰、1Started/Sequence/0.8m、安全/Pending契約は保持。原因・数値・試験/制限は[R5B記録](R5B_CAMERA_DOWN_CONTROL.md)。R5正式不合格を維持し修正後手動待ち、R6以降へ進まない。
+
+### R5C 水面・短ラインの幾何整合（2026-10-05）
+
+Shakuri後のStay/Holdでも、竿先のMouse移動と海面が要求するライン幾何を固定更新で整合する。従来A4の海面接触時の必要長はReelIn内部だけで評価され、HoldでLineLengthがRodTipの海面上高さを下回ると有効な拘束解が存在せず技術Abortしていた。
+
+現行では全LineModeに共通して、海面接触または拘束候補が海面へ達する場合、既存の `sqrt(SurfaceHeight² + max(0,EndpointHorizontalRadius − AllowedReelM)²)` を必要幾何長として評価する。必要なspan増加を認め、海面交差円の消失・瞬間的な横補正を防ぐ。これはA4と同じ簡易幾何整合の拡張であり、R6のDrag/slip/弛み回収モデルではない。海面に必要なspanを満たせない名目回収を強制しない。Actualは当Tick/Action/累積Requested以下を保持する。
+
+Camera/Viewportを物理条件に使用しない。Root/Base/2m、Up/Recover/Queue、1turn/名目0.8m、Pending/Quick/Abort/N復旧、安全閾値、Environmentは保持。読取専用Egi SnapshotにLineConstraintCorrectionMとGeometrySpanAccommodationMを追加。Insert詳細から必要長/弛み/不足/補正/幾何span増加を観測する。修正前再現、最終検証、手動受入は[R5C記録](R5C_OFFSCREEN_REPEATED_SHAKURI.md)を参照。R5正式不合格を維持し、R6以降へ進まない。

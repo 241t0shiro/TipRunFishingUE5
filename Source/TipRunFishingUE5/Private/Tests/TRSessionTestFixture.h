@@ -97,7 +97,8 @@ namespace
 		{
 			const auto Mode = Session->GetPlayerModeSnapshot();
 			if (!Test.TestTrue(TEXT("Explicit Fishing mode queued"), Session->SubmitModeChange(ETRPlayerMode::Fishing, Mode.ModeEpoch, Session->GetRegistrationId()))) { return false; }
-			Step();
+			// Respect the configured clock: large-step fixtures need a full fixed boundary.
+			Sim()->AdvanceFrame(Clock->StepSeconds);
 			return Test.TestTrue(TEXT("Fishing mode at fixed boundary"), Session->GetPlayerModeSnapshot().Mode == ETRPlayerMode::Fishing);
 		}
 		void Step(int32 Count = 1) { for (int32 I = 0; I < Count; ++I) { Sim()->AdvanceFrame(1.0 / 60.0); } }

@@ -83,6 +83,7 @@ ETRCommandResult UTRFishingComponent::HandleCommand(const FTRFishingCommand& Com
 		if (State == ETRFishingState::Jerking)
 		{
 			++PendingJerkCount;
+   if(bUseShakuriSequence){return ETRCommandResult::Queued;}
 		}
 		else { BeginJerk(Time.TickIndex); }
 		return ETRCommandResult::Accepted;
@@ -103,6 +104,8 @@ void UTRFishingComponent::PrepareStep(const FTRSimTime& Time)
 {
 	if (State == ETRFishingState::Jerking && Time.TickIndex - StateEnteredTick >= JerkTicks)
 	{
+  if(bUseShakuriSequence && PendingJerkCount>0 && !bPendingRetrieve && !bPendingFall)
+  { --PendingJerkCount; BeginJerk(Time.TickIndex); return; }
 		TransitionTo(ETRFishingState::TensionFall, Time.TickIndex);
         if (bPendingRetrieve) { bPendingRetrieve=false; bReeling=true; TransitionTo(ETRFishingState::Retrieving,Time.TickIndex); }
         else if (bPendingFall) { bPendingFall=false; TransitionTo(ETRFishingState::FreeFall,Time.TickIndex); }

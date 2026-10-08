@@ -1,5 +1,9 @@
 # UI・入力接続技術設計
 
+2026-10-04 最新: R5手動Camera Down不具合を受けR5A修正・自動検証完了、R5正式合格は手動再確認待ち。既存キー/感度/Camera/FOV/通常HUDを変更しない。再確認は本書末尾と[R5A記録](R5A_CAMERA_INDEPENDENCE.md)。R6以降/R7/H/M11未着手。以下は履歴。
+
+2026-10-04 R5実装・自動受入完了: ユーザーがR4をAutomation・Runtime Integration・最終手動PIEまで正式合格と確認。R5はUp/Recover予約Sequence＋最大1turn/Action・名目0.8mの限定巻取り要求を保存Rodへ明示適用。固定Root/Base/Length2m、A4 Pending/技術復旧を維持。UHT生成・実C++/Development Editor Win64成功、最終採用101件（新規8＋関連93）成功・errors0、外部HTTP警告4。今回R5手動PIE未実施。R6以降/R7/H/M11は未着手。現行契約はFISHING_SYSTEM末尾、証跡/限界/変更一覧は[R5実施記録](R5_SHAKURI_SEQUENCE.md)。以下のR4不合格/手動待ち記録は各時点の履歴。
+
 2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
 
 2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
@@ -591,3 +595,39 @@ InsertにRecoveryAvailable/PendingAction/TemporaryShakuriOffset、Rod前後/Delt
 通常HUD/入力キーは保持。Insert詳細の読取専用診断へEnvelope有効/直近制限理由を追加し、既存Root/Base/Final/Length・実投影長・Camera/Mouse・Pending/Result/Failure・Lock/Onboardと併読する。境界ではEnvelopeYaw/Pitch/YawPitch、実画面端ではViewportBoundary、Temporary profile制限はAction.を表示する。
 
 保存MapとFOV80/CameraAnchor/Grip/Gunwaleは保持。実投影長と到達域は改善したが、OS Mouse/GPU描画/主観操作感は自動試験の代用外。**正式手動受入は [R4A-5記録の最大6項目](R4A5_RUNTIME_ACCEPTANCE.md#手動pie最大6項目正式受入の残作業) だけ**。両舷Mouse軸/Camera独立/可動域と見かけ長さ/即Shakuri回収/Quick保持/UI・Pause・Focus・舷変更を確認する。自動GUI PIEは起動していない。R4正式不合格を維持、R5/H/M11未着手。
+
+
+### R5 Shakuri Sequenceの確認（2026-10-04）
+
+R4はユーザーが自動/Runtime/最終手動PIEまで正式合格と確認済み。Mouse感度、DPI設定、Camera/FOV、通常HUD、既存キーは今回変更しない。Right Mouse押下ごとに1Up/Recover、Heldでは増えず、素早い複数押下は予約順で実行する。最終Recover後だけTensionFall/Stay。Base Aimは保持し、Action中MouseもBaseだけへ作用する。
+
+Insert詳細へR5 Phase、Sequence/Completed/Queued、Handle Turn要求current/total、名目RetrieveM/実績current/total、当Tick予算、PendingRetrieve/PendingReFallを追加。通常HUDには追加しない。0.8m/turnはPrototype名目要求であり実効量の保証ではない。最大1turn/Action、5回の名目は4mまで。今後R6がSlack/Drag/slip等を評価する。
+
+将来Settings要件（文書のみ）: プレイヤーがRod Mouse Sensitivity X/Yまたは感度倍率を変更できるようにする。普段のOS Mouse DPIとの操作感差を調整可能にし、既存感度をその場で変えて隠さない。今回Settings UI/保存/DPI制御は実装しない。
+
+手動PIEは最大5項目:
+1. Editor再起動→保存 /Game/TipRun/Prototype/M105/L_TR_M105_Prototype→Enter/AまたはD/Enter→投入、沈下後右1/2/3/5クリック。入力数どおりUp/Recover、途中Stayなし、最後TF/Stay。Insertの要求1turn/0.8m、5回4m、Actual<=Requestedを確認。
+2. 右長押しは1回だけ。離して再押下で次1回。中央/左右/上下Baseで開始し同じBaseへ戻る。Action中MouseでBaseを動かした場合は最新Baseへ戻る。Rootと2m長は固定。
+3. Action途中に左保持/早期Release、F。Base復帰後に保留回収/再Fallが進み、早期Releaseでは回収が始まらないこと。左Holdの通常回収と右要求は混同しない。
+4. Action途中Q、Pause、Focus移動、Tab。Base/Root/Length/Camera独立を維持し、保留/保持が残らない。Q完了はReady/Unlock、N不要。
+5. 両舷でRod/Reel/Line/Egiが同じSnapshotへ追従し、正常操作にTechnical Abort/永久Lockがないこと。OS Mouse/GPU/主観演出はheadless Runtimeの代用外。異常があればInsert理由を記録しN（技術復旧）を使用する。
+
+R5の実装/自動結果は[R5記録](R5_SHAKURI_SEQUENCE.md)。R6/H/M11への着手許可にしない。
+
+### R5A Camera Down再確認（2026-10-04）
+
+Mouse=その時点のCameraでBase操作、WASD=視線、右クリック=Station-local BaseからShakuri。視線により画面上の見え方は変わるが、Action軌跡/振幅を画面端で削らない。Insertの既存Base/Final/Temporary/Root/Length、Phase/要求/実績/Pending/Failureを併読する。通常HUDは変更なし。
+
+Editor再起動→保存L_TR_M105_Prototype→PIE→Enter/AまたはD/Enter→投入後、両舷で正面/上/十分下/左右の右1クリックを確認。下向きで小さなMouse操作後にも実施し、同じBaseからActionが消えないこと。左右/上端Base、1/2/3/5クリック/Hold、Action中視線変更、Pending/F/Q/UI/Pause/Focusは[R5A手動4項目](R5A_CAMERA_INDEPENDENCE.md#手動pie再確認最大4項目)に従う。GPU/実OS Mouse/主観演出の合否は手動で確認する。
+
+### R5B Camera Down診断・再確認（2026-10-05）
+
+WASD=Camera、Mouse=Rod、右クリック=Shakuriは維持。Camera LookでTipが画面外になってもMouseを無効化しない。最初の反対MouseからBaseが変化し、画面端へ強制スナップしない。後方投影時はCamera-relative tangentの復帰操作とし、CameraへRod poseを親付けしない。
+
+Insert詳細にmapping、OnScreen/OffScreen/BehindCamera/ProjectionInvalid、projection valid/outside、sphere交差結果/判別式、実Envelope理由を追加。通常HUD/キー/Camera/FOV/感度は保持。最小4項目の手動再確認は[R5B記録](R5B_CAMERA_DOWN_CONTROL.md#最小手動pie再確認4項目)。R5は正式不合格・修正後手動待ち。
+
+### R5C 水面付近の操作停止診断（2026-10-05）
+
+通常HUD/操作キーは保持。Insert詳細のR5既存Sequence/要求/実績/Pendingに、R5CのlineRequired、slack、deficit、lastCorrection、geometrySpanAccommodationを追加。最後の技術停止理由とAbort前Contextは従来どおり表示する。Actual累積は各Tickの正のライン短縮の合計であり、キャスト全体の開始長−終了長ではない（必要span増加を別途伴い得る）。
+
+手動確認は[R5C記録](R5C_OFFSCREEN_REPEATED_SHAKURI.md)の3項目。水深約5mから約10回連打し、水面付近でWASDの下/左右視線とMouseの竿左右を分けて確認する。正常操作でN復旧が必要なら未合格。R5の正式手動受入は保留、R6以降/H/M11は開始しない。

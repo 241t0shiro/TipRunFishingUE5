@@ -19,11 +19,23 @@ bool FTRRodEnvelopeParameters::Validate() const
   MinPitchDeg>-60 && MaxPitchDeg<75 && MinPitchDeg<MaxPitchDeg;
 }
 
+bool FTRRodActionSafetyParameters::Validate() const
+{
+ return FMath::IsFinite(MaxPitchDeg) && MaxPitchDeg>0 && MaxPitchDeg<85;
+}
+bool FTRShakuriSequenceParameters::Validate() const
+{
+ return FMath::IsFinite(NominalRetrievePerHandleTurnM) && NominalRetrievePerHandleTurnM>0 && NominalRetrievePerHandleTurnM<=MAX_flt &&
+  FMath::IsFinite(HandleTurnsPerShakuri) && HandleTurnsPerShakuri>0 && HandleTurnsPerShakuri<=1 &&
+  FMath::IsFinite(NominalRetrievePerHandleTurnM*HandleTurnsPerShakuri) &&
+  FMath::IsFinite(UpDemandFraction01) && UpDemandFraction01>=0 && UpDemandFraction01<=1;
+}
 bool FTRRodParameters::Validate(TArray<FText>& Errors) const
 {
 	const double Values[]={MinPitchRad,MaxPitchRad,MinYawRad,MaxYawRad,InitialPitchRad,InitialYawRad,
 		SensitivityXRad,SensitivityYRad,MaxMouseDelta,MaxAimRateRadPerS,LengthM,ShakuriAmplitudeRad,ShakuriUpSeconds,ShakuriReturnSeconds,ShakuriReelSpeedMps,ShakuriReelSeconds};
-	bool Valid=!MountOffsetM.ContainsNaN() && Screen.Validate() && Envelope.Validate();
+	bool Valid=!MountOffsetM.ContainsNaN() && Screen.Validate() && Envelope.Validate() && Sequence.Validate() && ActionSafety.Validate();
+ Valid &= !Envelope.bEnabled || ActionSafety.MaxPitchDeg>=Envelope.MaxPitchDeg;
 	Valid &= (ShakuriReelSpeedMps==0 && ShakuriReelSeconds==0) ||
 		(ShakuriReelSpeedMps>0 && ShakuriReelSpeedMps<=MAX_flt && ShakuriReelSeconds>0 && ShakuriReelSeconds<=ShakuriReturnSeconds && FMath::IsFinite(ShakuriReelSpeedMps*ShakuriReelSeconds));
 	for(double Value:Values){Valid &= FMath::IsFinite(Value);}

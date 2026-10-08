@@ -77,6 +77,10 @@ struct TIPRUNFISHINGUE5_API FTREgiAction
 
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun")
 	float ReelMps = 0.0f;
+ // R5 fixed-step budget. Normal retrieval retains its continuous rate path.
+ UPROPERTY(BlueprintReadOnly) bool bLimitedReelDemand=false;
+ UPROPERTY(BlueprintReadOnly) double RequestedRetrieveM=0;
+
 };
 
 USTRUCT(BlueprintType)

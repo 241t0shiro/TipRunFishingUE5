@@ -16,6 +16,7 @@ class UTREgiSimulationComponent;
 class ATREgiActor;
 class UStaticMesh;
 class UTRRodControlComponent;
+class UTRShakuriSequenceComponent;
 class UTRRodTuningDataAsset;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FTRCommandProcessed, const FTRFishingCommand&, ETRCommandResult);
@@ -40,6 +41,7 @@ public:
 	bool IsInputModeAllowed(ETRPlayerMode RequiredMode) const;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodTuningDataAsset> RodTuning;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TipRun|Rod") TObjectPtr<UTRRodControlComponent> RodControl;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TipRun|Sequence") TObjectPtr<UTRShakuriSequenceComponent> ShakuriSequence;
 	bool SubmitRodAim(FVector2D Delta,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1,const FTRRodAimObservation& View={});
 	bool SubmitRodView(FVector2D YawPitchDeg,FTRCastId ExpectedCastId,FTRActorSimId ExpectedRegistration,int64 TargetTick=-1);
 	// Configuration-time entry points may resolve assets; never invoke inside a fixed step.

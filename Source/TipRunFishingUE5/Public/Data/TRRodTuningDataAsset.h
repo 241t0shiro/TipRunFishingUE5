@@ -4,7 +4,7 @@
 #include "TRRodTuningDataAsset.generated.h"
 
 // Camera-plane coordinates: +X right, +Y up, both in horizontal half-screen units.
-// Legacy initialization/action profile bounds. R4A-3 mouse reach uses visibility/geometry,
+// Legacy initialization bounds. R4A-3 mouse reach uses visibility/geometry,
 // not Min/Max as a permanent rectangle. Sensitivity/rate remain shared tuning.
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRRodScreenParameters
@@ -15,7 +15,7 @@ struct TIPRUNFISHINGUE5_API FTRRodScreenParameters
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) FVector2D Initial=FVector2D(0,.15);
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) FVector2D Sensitivity=FVector2D(.004,.004);
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) double MaxRatePerS=1.5;
-	// Upper projected boundary shared by safety remapping and the temporary Shakuri lift.
+	// Initialization only. Never limits a temporary Shakuri action.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) double MaxProjectedY=.5;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(Units="m")) double SurfaceClearanceM=.02;
 	bool Validate() const;
@@ -35,6 +35,29 @@ struct TIPRUNFISHINGUE5_API FTRRodEnvelopeParameters
  bool Validate() const;
 };
 
+// Temporary station-local action safety, separate from the player's base envelope.
+// Default is a Prototype safety candidate. No Camera/viewport/framing parameters.
+USTRUCT(BlueprintType)
+struct TIPRUNFISHINGUE5_API FTRRodActionSafetyParameters
+{
+ GENERATED_BODY()
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(Units="deg")) double MaxPitchDeg=75;
+ bool Validate() const;
+};
+
+// R5 nominal demand, not guaranteed physical shortening. Opt-in for saved migration.
+USTRUCT(BlueprintType)
+struct TIPRUNFISHINGUE5_API FTRShakuriSequenceParameters
+{
+ GENERATED_BODY()
+ UPROPERTY(EditAnywhere, BlueprintReadOnly) bool bEnabled=false;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(Units="m")) double NominalRetrievePerHandleTurnM=.8;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly) double HandleTurnsPerShakuri=1;
+ // Remaining demand belongs to Recover; no independent post-action pulse.
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0",ClampMax="1")) double UpDemandFraction01=0;
+ bool Validate() const;
+};
+
 // Explicit Prototype/Test configuration. Angles are radians, lengths meters, time seconds.
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRRodParameters
@@ -42,6 +65,8 @@ struct TIPRUNFISHINGUE5_API FTRRodParameters
 	GENERATED_BODY()
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod|Screen") FTRRodScreenParameters Screen;
  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod|Envelope") FTRRodEnvelopeParameters Envelope;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod|Action") FTRRodActionSafetyParameters ActionSafety;
+ UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod|Sequence") FTRShakuriSequenceParameters Sequence;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double MinPitchRad=0;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double MaxPitchRad=0;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TipRun|Rod") double MinYawRad=0;

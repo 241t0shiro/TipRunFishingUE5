@@ -1,5 +1,13 @@
 # TipRunFishingUE5 — Codex実装規約
 
+2026-10-05 R5C: 手動の約5m→10連打→水面で下/左右操作による停止を、実保存Runtimeで両舷6条件のTechnical Abort/Result/RecoveryAvailableとして再現。A4海面必要span整合のReelIn限定を撤去しHold等でも評価。閾値/係数/Camera/環境/0.8mとAbort/N契約は保持。UHT7生成・実C++/Development Editor Win64成功、最終採用150件成功（新規4＋関連146）、外部HTTP警告6。R5正式不合格・修正後手動PIE待ち。R6以降/R7/H/M11未着手。証跡/途中FAIL/最小3項目は[R5C記録](Docs/R5C_OFFSCREEN_REPEATED_SHAKURI.md)。以下は履歴。
+
+2026-10-05 R5B: R5A手動PIEはCamera Down時のMouse操作不合格。保存RuntimeでViewport Clamp由来の別軸移動を修正前FAILとして再現（Shakuri yawは0）。Mouseをunbounded投影＋後方/無効投影時の接平面Fallbackへ改訂し、Base Envelope/Action縦平面/Root/Length2m/Sequence/0.8mを保持。UHT6生成・実C++/Development Editor Win64成功、最終採用91件（新規4＋関連87）成功、正常42条件Technical Abort0、外部HTTP警告3。Config/Content20ファイルhash不変。R5は正式不合格・修正後手動PIE待ち、R6以降/R7/H/M11未着手。[R5B記録](Docs/R5B_CAMERA_DOWN_CONTROL.md)を現行証跡として優先。以下は履歴。
+
+2026-10-04 R5A: R5最終手動PIEのCamera Down不具合により正式合格保留。Camera投影でTemporaryを作る旧経路とBase EnvelopeによるAction抑制を撤去し、Station-local Base＋Temporary elevationと独立Action安全上限へ改訂。Root/Base/Length2m、Sequence/名目0.8m、A4安全契約は維持。UHT3生成・実C++/Development Editor Win64成功、最終採用87件（新規4＋関連83）成功、外部HTTP警告3。修正後の手動PIE待ち。R6以降/R7/H/M11未着手。現行契約と証跡は[R5A記録](Docs/R5A_CAMERA_INDEPENDENCE.md)。以下は各時点の履歴。
+
+2026-10-04 R5実装・自動受入完了: ユーザーがR4をAutomation・Runtime Integration・最終手動PIEまで正式合格と確認。R5はUp/Recover予約Sequence＋最大1turn/Action・名目0.8mの限定巻取り要求を保存Rodへ明示適用。固定Root/Base/Length2m、A4 Pending/技術復旧を維持。UHT生成・実C++/Development Editor Win64成功、最終採用101件（新規8＋関連93）成功・errors0、外部HTTP警告4。今回R5手動PIE未実施。R6以降/R7/H/M11は未着手。現行契約はFISHING_SYSTEM末尾、証跡/限界/変更一覧は[R5実施記録](Docs/R5_SHAKURI_SEQUENCE.md)。以下のR4不合格/手動待ち記録は各時点の履歴。
+
 2026-10-04 R4A-5: 固定Station-local Root/BaseDirection/2mを維持し、保存Rodへopt-inのErgonomic Envelope（yaw±40/pitch-10〜35度）を追加。Camera/Grip/FOV80/感度/Action係数は保持。保存実Runtime受入は新規5＋関連88、採用93件成功（外部HTTP警告1件）、正常42条件はTechnical Abort0。投影長は同一A1列で比100.67→1.92257、広域720姿勢で435.991〜1382.100px（比3.17002）。UHT生成・実C++/Development Editor Win64成功。表示端点最大差約5.03e-15m。手動6項目未実施、R4全体は正式不合格を維持。証跡/限界/境界挙動/手順はDocs/R4A5_RUNTIME_ACCEPTANCE.md。R5以降/H/M11未着手。以下は履歴。
 
 2026-10-04 R4A-4: 同一42条件の8Abortと舷変更後3Abortを、Shakuri上昇中の海面/短Line交差円の不整合へ分類。必要幾何長の整合、既存profileのBase復帰までRetrieve/FallをPending、技術Abort後の明示N復旧を実装。安全閾値/係数/Config/Contentは保持、LastResult=Abortedを保持。最終採用は新規3件＋関連109件成功、試験内警告0。同一42条件は28回収/14操作可能Stay/Abort0、舷変更6条件成功。UHT生成・実C++/Development Editor Win64成功。投影長10.9937〜1106.74pxの視覚問題は残り、R4全体は正式不合格。証跡/限界/変更一覧はDocs/R4A4_ACTION_BOUNDARY_RECOVERY.md。A5/R5以降/H/M11未着手。以下は履歴。
@@ -145,7 +153,7 @@
 
 ## 9. M10.5 Prototype Realism Revision
 
-- R1/R2の実装・自動検証まで完了。A〜Fの基盤を保持し、G不合格を受けたROADMAPのR3〜R9は後続の明示依頼ごとに実装する。R手動合格前にHへ進まず、M11以降のAI/ATTACK/BITE/Hook/Fight/Range評価を先行実装しない。
+- R1〜R4はユーザー手動を含め正式合格。R5はR5A後の手動Camera Down操作不具合により正式不合格、R5B修正・自動検証済みで手動再確認待ち。A〜Fの基盤を保持し、ROADMAPのR6〜R9は後続の明示依頼ごとに実装する。R全体の手動合格前にHへ進まず、M11以降のAI/ATTACK/BITE/Hook/Fight/Range評価を先行実装しない。
 - M10までの自動試験成功と、ユーザーPIEの品質不合格を両方記録する。M10.5は自動試験とPIE再評価が両方合格するまで未完了。旧「M11へ進める」という記録を進行許可に使わない。
 - 位置正本の移行、風/表層潮/深度別潮の分離、船体応答、需要に応じたFreeFall繰出し、通常回収停止の連続性を一体で検証する。水深30mで80m以上のラインが出る問題を表示値や80m clampで隠さない。
 - 右クリックは1押下1シャクリ。左保持で通常回収、解放で位置/ラインを引き継ぐStay相当、F再Fall、Q Quick Retrieve、Enter投入。マウス竿入力もCastId/登録世代/固定Tick/Sequenceを通し、Actor/Widget Tickから正本を動かさない。

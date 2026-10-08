@@ -3,6 +3,7 @@
 #include "Fishing/TREgiSimulationComponent.h"
 #include "Fishing/TREgiActor.h"
 #include "Fishing/TRRodControlComponent.h"
+#include "Fishing/TRShakuriSequenceComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Ocean/TROceanWorldSubsystem.h"
 #include "Engine/World.h"
@@ -15,6 +16,7 @@ ATRFishingSessionActor::ATRFishingSessionActor()
 	Fishing = CreateDefaultSubobject<UTRFishingComponent>(TEXT("Fishing"));
 	EgiSimulation = CreateDefaultSubobject<UTREgiSimulationComponent>(TEXT("EgiSimulation"));
 	RodControl = CreateDefaultSubobject<UTRRodControlComponent>(TEXT("RodControl"));
+ ShakuriSequence=CreateDefaultSubobject<UTRShakuriSequenceComponent>(TEXT("ShakuriSequence"));
 }
 bool ATRFishingSessionActor::Initialize(UTRSimulationWorldSubsystem* Simulation, FTRActorSimId InBoatId,
 	UDataTable* Egis, UDataTable* Sinkers, UTRFishingTuningDataAsset* Tuning, FName InitialSinkerId, TArray<FText>& Errors)
@@ -48,6 +50,8 @@ bool ATRFishingSessionActor::Initialize(UTRSimulationWorldSubsystem* Simulation,
 	{ Coordinator.Reset(); Phase=ETRSessionPhase::Error;return false; }
 	if(RodTuning && Boat.PositionM.Z+RodTuning->Parameters.MountOffsetM.Z+RodTuning->Parameters.LengthM*FMath::Sin(RodTuning->Parameters.MinPitchRad)<Ocean.SurfaceZ_M)
 	{Errors.Add(FText::FromString(TEXT("Rod minimum pitch places tip below surface")));RodControl->Reset();Coordinator.Reset();Phase=ETRSessionPhase::Error;return false;}
+ if(RodTuning && !ShakuriSequence->Configure(RodTuning->Parameters,Simulation->GetSimulationTime().StepSeconds))
+ {Errors.Add(FText::FromString(TEXT("Invalid Shakuri sequence tuning")));Phase=ETRSessionPhase::Error;return false;}
 	if (NavigationTuning && (!Navigation->Configure(NavigationTuning->Parameters) ||
 		!Simulation->ConfigureBoatNavigation(BoatId,FMath::Max(NavigationTuning->Parameters.MaxSpeedMps,NavigationTuning->Parameters.BoostMaxSpeedMps))))
 	{ Errors.Add(FText::FromString(TEXT("Navigation requires valid parameters and a revision 2 boat"))); Phase=ETRSessionPhase::Error; return false; }
@@ -237,6 +241,7 @@ void ATRFishingSessionActor::ProcessCommand(const FTRFishingCommand& Command)
 			bCastActive = true; bHasResult = false; DiagnosticLastFailure.Reset(); DiagnosticAbortContext.Reset();
 			Fishing->BeginCast(CurrentCastId, Coordinator->GetSimulationTime(), LockedEquipment);
 			Fishing->bUseRodProfileBoundaries=RodControl->IsInitialized();
+   Fishing->bUseShakuriSequence=ShakuriSequence->IsEnabled();ShakuriSequence->BeginCast(CurrentCastId);
 			if(RodControl->IsInitialized()){Fishing->JerkTicks=RodControl->GetJerkTicks();}
 			LastCommandResult = ETRCommandResult::Accepted;
 		}
@@ -276,7 +281,9 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 	FTRBoatSnapshot Boat; FTROceanSample Ocean;
 	if (!ReadEnvironment(Boat, Ocean)) { AbortInternal(TEXT("Session.InvalidBoatOcean")); return; }
 	ConsumeInputReset();
-	if(bCastActive){Fishing->PrepareStep(Time);}
+	if(bCastActive){Fishing->PrepareStep(Time);
+  ShakuriSequence->Advance(Time,Fishing->GetSnapshot(),Fishing->bPendingRetrieve,Fishing->bPendingFall);}
+
 	if(RodControl->IsInitialized())
 	{
 		auto RodFishing=Fishing->GetSnapshot();RodFishing.CastId=CurrentCastId;
@@ -319,7 +326,9 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 		Action.LiftMps=0;
 		if(Action.FishingState==ETRFishingState::Jerking)
 		{
-			Action.ReelMps=RodControl->GetReelPulseMps(Time,Fishing->GetSnapshot());
+			if(ShakuriSequence->IsEnabled())
+   {Action.bLimitedReelDemand=true;Action.RequestedRetrieveM=ShakuriSequence->GetSnapshot().TickDemandM;Action.ReelMps=0;}
+   else{Action.ReelMps=RodControl->GetReelPulseMps(Time,Fishing->GetSnapshot());}
 			// Reel mode also preserves the minimum rod-to-surface span during the up phase.
 			Action.LineMode=ETRLineMode::ReelIn;
 		}
@@ -331,6 +340,8 @@ void ATRFishingSessionActor::FixedStep(ETRSimulationPhase StepPhase, const FTRSi
 			return DestinationOcean;
 		});
 	if (Event == ETREgiStepEvent::EnvironmentInvalid) { AbortInternal(EgiSimulation->GetLastDiagnosticFailure()); return; }
+ if(Action.bLimitedReelDemand && !ShakuriSequence->RecordActual(FMath::Max(0.,double(Before.LineLengthM)-double(EgiSimulation->BuildSnapshot(Fishing->GetState()).LineLengthM))))
+ {AbortInternal(TEXT("Sequence.ActualDemandExceeded"));return;}
 	Fishing->ApplyEgiStep(EgiSimulation->BuildSnapshot(Fishing->GetState()), Event, EgiSimulation->IsTransientComplete());
 	if (Event == ETREgiStepEvent::Retrieved) { FinishInternal(ETRCastOutcome::Retrieved, true); return; }
 	if (!ActiveEgi->ApplySimulationSnapshot(Fishing->GetSnapshot(), DestinationOcean.SurfaceZ_M)) { AbortInternal(TEXT("Session.InvalidVisualSnapshot")); }
@@ -344,7 +355,7 @@ void ATRFishingSessionActor::AbortInternal(const FString& Reason)
 void ATRFishingSessionActor::FinishInternal(ETRCastOutcome Outcome, bool bReturnedOnboard, bool bQuickReturned)
 {
 	if (!bCastActive) { return; }
-	bCastActive = false; bHasResult = true;
+	bCastActive = false; bHasResult = true; ShakuriSequence->Stop();
 	ReleaseEgi();
 	LastResult = {}; LastResult.CastId = CurrentCastId;
 	LastResult.bQuickRetrieved = bQuickReturned;
@@ -376,7 +387,7 @@ void ATRFishingSessionActor::ResetInternal()
 {
     // Explicit technical recovery, never a successful retrieval or a new result event.
     if (IsRecoveryAvailable()) { ReleaseEgi(); bEgiOnboard=true; CurrentCastId={}; }
-    RodControl->ClearAction(); bClearRodReservations=bClearNormalRetrieve=false;
+    RodControl->ClearAction(); ShakuriSequence->Stop(); bClearRodReservations=bClearNormalRetrieve=false;
 	Fishing->Prepare(); Phase = ETRSessionPhase::Ready; bEquipmentLocked = !bEgiOnboard;
 	CaptureHUD(Coordinator->GetSimulationTime());
 	Unregister(); Register(); // New queue generation, unchanged equipment lock and cast counter.
@@ -395,7 +406,7 @@ void ATRFishingSessionActor::EndFishing()
 	bFishingStarted = false; bEquipmentLocked = !bEgiOnboard;
 	PlayerMode->Stop();
 	ReleaseEgi(); LockedEgiMesh = nullptr;
-	Fishing->Stop(); Phase = bInitialized ? ETRSessionPhase::Ready : ETRSessionPhase::Initializing;
+	Fishing->Stop(); ShakuriSequence->Stop(); Phase = bInitialized ? ETRSessionPhase::Ready : ETRSessionPhase::Initializing;
 	RodControl->InvalidateSnapshot(); bClearRodReservations=false; bClearNormalRetrieve=false;
 	// A stopped session has no later Publish phase. Deliver its pending terminal event once.
 	if (bPendingResultNotification && !IsActorBeingDestroyed())
@@ -408,7 +419,7 @@ void ATRFishingSessionActor::ReleaseSession()
 	EndFishing();
 	bInitialized = false;
 	Coordinator.Reset(); BoatId = {};
-	RodControl->Reset();
+	RodControl->Reset(); ShakuriSequence->Reset();
 	EgiTable = nullptr; SinkerTable = nullptr; FishingTuning = nullptr;
 	Fishing->OnFishingStateChanged.Clear();
 	OnCommandProcessed.Clear(); OnCastCompleted.Clear(); SelectedEgiMesh = nullptr;
@@ -471,6 +482,7 @@ void ATRFishingSessionActor::CaptureHUD(const FTRSimTime& Time)
 	if (!bInitialized || !Coordinator.IsValid()) { return; }
 	PublishedHUD.Egi = Fishing->GetSnapshot();
 	PublishedHUD.Rod = RodControl->GetSnapshot();
+ PublishedHUD.Shakuri = ShakuriSequence->GetSnapshot();
 	PublishedHUD.Retrieval = Fishing->GetRetrievalSnapshot(Time.TickIndex);
 	if (!Coordinator->GetBoatSnapshot(BoatId, PublishedHUD.Boat)) { return; }
 	FTROceanQuery Q; Q.SimTick = Time.TickIndex;
@@ -601,7 +613,7 @@ FTRFishingStationSnapshot ATRFishingSessionActor::GetStationSnapshot() const
 
 FString ATRFishingSessionActor::GetRuntimeDiagnostics() const
 {
- const auto F=Fishing->GetSnapshot();const auto M=GetPlayerModeSnapshot();
+ const auto F=Fishing->GetSnapshot();const auto M=GetPlayerModeSnapshot();const auto Q=ShakuriSequence->GetSnapshot();
  FString Available;for(auto C:{ETRFishingCommandType::Deploy,ETRFishingCommandType::Jerk,ETRFishingCommandType::Fall,ETRFishingCommandType::RetrieveStarted,ETRFishingCommandType::RetrieveStopped,ETRFishingCommandType::QuickRetrieve,ETRFishingCommandType::NextCast})
  {if(IsCommandAvailable(C)){Available+=StaticEnum<ETRFishingCommandType>()->GetNameStringByValue(int64(C))+TEXT(" ");}}
  return FString::Printf(TEXT("Mode=%s Side=%s State=%s cast=%lld epoch=%lld registration=%lld\nactive=%d onboard=%d locked=%d pendingJerk=%lld reeling=%d jerkCount=%lld enteredTick=%lld egiTick=%lld line=%.6g egi=%s\nQueue=%s\nRod: %s\nAction: %s\nConsumed mouse=%s count=%lld\nEnd=%s Failure=%s\nAvailable=%s"),
@@ -609,5 +621,9 @@ FString ATRFishingSessionActor::GetRuntimeDiagnostics() const
  bCastActive,bEgiOnboard,bEquipmentLocked,F.PendingJerkCount,Fishing->bReeling,F.JerkCount,F.StateEnteredTick,F.Tick,double(F.LineLengthM),*F.WorldPositionM.ToString(),
  *(Coordinator.IsValid()?Coordinator->GetDiagnosticQueue(RegistrationId):TEXT("unregistered")),*DiagnosticLastRod,*DiagnosticLastAction,*DiagnosticConsumedMouse.ToString(),DiagnosticConsumedCount,
  *(bHasResult?StaticEnum<ETRCastOutcome>()->GetNameStringByValue(int64(LastResult.Outcome)):TEXT("None")),*DiagnosticLastFailure,*Available)
- + FString::Printf(TEXT("\nRecoveryAvailable=%d PendingAction=%s\nBase=%s Final=%s TemporaryShakuriOffset=%.12g\nSpatial: %s"),IsRecoveryAvailable(),Fishing->bPendingRetrieve?TEXT("Retrieve"):Fishing->bPendingFall?TEXT("Fall"):TEXT("None"),*RodControl->GetSnapshot().BaseRodDirectionLocal.ToString(),*RodControl->GetSnapshot().FinalRodDirectionLocal.ToString(),RodControl->GetSnapshot().TemporaryShakuriOffsetRad,*EgiSimulation->GetSpatialDiagnostics());
+ + FString::Printf(TEXT("\nR5 phase=%s sequence=%lld completed=%lld queued=%lld turns=%.9g/%.9g requestedM=%.9g/%.9g actualM=%.9g/%.9g tickDemand=%.9g pendingRetrieve=%d pendingReFall=%d"),
+ *StaticEnum<ETRShakuriPhase>()->GetNameStringByValue(int64(Q.Phase)),Q.SequenceIndex,Q.CompletedCount,Q.QueuedCount,Q.RequestedHandleTurns,Q.TotalRequestedHandleTurns,Q.RequestedRetrieveM,Q.TotalRequestedRetrieveM,Q.ActualRetrieveM,Q.TotalActualRetrieveM,Q.TickDemandM,Q.bPendingRetrieve,Q.bPendingReFall)
+ + FString::Printf(TEXT("\nRecoveryAvailable=%d PendingAction=%s\nBase=%s Final=%s TemporaryShakuriOffset=%.12g\nSpatial: %s"),IsRecoveryAvailable(),Fishing->bPendingRetrieve?TEXT("Retrieve"):Fishing->bPendingFall?TEXT("Fall"):TEXT("None"),*RodControl->GetSnapshot().BaseRodDirectionLocal.ToString(),*RodControl->GetSnapshot().FinalRodDirectionLocal.ToString(),RodControl->GetSnapshot().TemporaryShakuriOffsetRad,*EgiSimulation->GetSpatialDiagnostics())
+ + FString::Printf(TEXT("\nR5C lineRequired=%.12g slack=%.12g deficit=%.12g lastCorrection=%.12g geometrySpanAccommodation=%.12g"),
+ F.RodToEgiDistanceM,F.SlackM,FMath::Max(0.,F.RodToEgiDistanceM-double(F.LineLengthM)),F.LineConstraintCorrectionM,F.GeometrySpanAccommodationM);
 }

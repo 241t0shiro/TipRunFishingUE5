@@ -1,5 +1,9 @@
 # TipRun Fishing — 全体技術設計の正本
 
+2026-10-04 最新状態: R4正式合格を維持。R5は最終手動PIEのCamera Down不具合により正式合格保留。R5AはTemporary ShakuriをCameraから切り離しStation-localへ修正、自動検証完了・手動再確認待ち。現行契約/証跡は[R5A記録](R5A_CAMERA_INDEPENDENCE.md)。R6以降/R7/H/M11には着手しない。以下のR5自動成功は修正前の履歴。
+
+2026-10-04 R5実装・自動受入完了: ユーザーがR4をAutomation・Runtime Integration・最終手動PIEまで正式合格と確認。R5はUp/Recover予約Sequence＋最大1turn/Action・名目0.8mの限定巻取り要求を保存Rodへ明示適用。固定Root/Base/Length2m、A4 Pending/技術復旧を維持。UHT生成・実C++/Development Editor Win64成功、最終採用101件（新規8＋関連93）成功・errors0、外部HTTP警告4。今回R5手動PIE未実施。R6以降/R7/H/M11は未着手。現行契約はFISHING_SYSTEM末尾、証跡/限界/変更一覧は[R5実施記録](R5_SHAKURI_SEQUENCE.md)。以下のR4不合格/手動待ち記録は各時点の履歴。
+
 2026-09-18 R1実装・自動検証完了: 初期Navigationと明示Fishing/Navigation固定Command、Session所有Mode、ModeEpoch/拒否条件/Snapshot/入力Context接続を実装。UHT16生成ファイル・実C++・Development Editor Win64成功。R1 4件＋関連回帰32件成功、試験内エラー/警告0。今回PIEは未実施。Sideは未選択を許容する型のみ、操船/Camera/Sequenceは未実装。R2以降/H/M11未着手。APIはGAME_DESIGN末尾、証跡はROADMAP末尾、開発確認方法はUI_SPEC末尾を参照。以下のR設計のみ/G記録は履歴。
 
 2026-09-17 M10.5-R設計改訂: A〜F基盤は保持。最新手動PIEでGはゲームプレイ品質不合格。Rは設計/実装分割のみ完了し、実装未着手。最新契約は本書末尾のM10.5-R節を優先。以前のG合否保留・固定Pulse・観測カメラ等は履歴。R自動検証とユーザー手動合格後もHへ自動進行しない。H/M11以降は保留。
@@ -372,3 +376,16 @@ R4は正式不合格を維持。永続Rod poseは固定Station-local Grip・Base
 ### R4A-5 技術受入と正式合格ゲート（2026-10-04）
 
 Rodの永続正本はStation-local固定Grip/BaseDirection/LengthM。Cameraは兄弟系統の視線で、非ゼロMouse入力だけが実投影を用いてLocal Baseを変更する。Station-local ergonomic envelopeを保存Rodへ明示適用し、Root/2m/FOV80を維持して極端な短縮を除外する。表示とLineは同じFinal Snapshot端点を使う。技術受入93件は成功だが、手動6項目は未実施。R4正式不合格を維持し、R5/H/M11へ進行しない。制約/実測/限界/正式受入手順は [R4A-5記録](R4A5_RUNTIME_ACCEPTANCE.md)。
+
+
+### R5実装境界（2026-10-04）
+
+ユーザーがR4の自動/Runtime/最終手動PIEを正式合格と確認。今回R5のみ、Shakuri Up/Recoverの予約順と最大1turn/Actionの名目Retrieve Demandを導入し、保存Rodへ明示適用する。名目0.8m/turnはPrototype候補であり、実効回収を強制せず要求上限を保持する。旧Gの2m pulseはR5経路から撤去。R4のStation-local Base/Root/Length2m、Camera独立とA4 Pending/技術復旧を維持する。数値責務と正本はFISHING_SYSTEM末尾、操作/未実装SettingsはUI_SPEC末尾、試験証跡はR5_SHAKURI_SEQUENCE。Slack-aware/Drag/slip、環境調整、Range/BITEとR6以降/H/M11は今回未実装。
+
+### R5B受入状態（2026-10-05）
+
+R5Aの手動Camera Down評価は不合格。R5BでViewRectとBase可動域を分離し、Shakuri方位不変・画面外Mouse復帰を実保存Runtimeで検証した。現行数値契約はFISHING_SYSTEM末尾、証跡/限界は[R5B記録](R5B_CAMERA_DOWN_CONTROL.md)。自動成功を手動受入の代用にせず、R5正式不合格を維持して修正後PIEを待つ。R6以降/R7/H/M11へ進まない。
+
+### R5C受入状態（2026-10-05）
+
+R5B手動で残った水面付近の連続Shakuri後の停止を、Hold時の短Line/海面幾何不整合と分類し修正。Sequence/名目0.8m、安全停止/明示N復旧、Camera/環境の契約は保持。現行幾何契約はFISHING_SYSTEM末尾、修正前FAIL/自動受入/最小手動確認は[R5C記録](R5C_OFFSCREEN_REPEATED_SHAKURI.md)。R5正式不合格を維持し、修正後ユーザーPIEを待つ。R6以降/R7/H/M11へ進まない。
