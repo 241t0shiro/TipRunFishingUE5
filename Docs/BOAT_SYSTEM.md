@@ -202,3 +202,15 @@ Wind/Surface Current/Depth Currentは独立Vector。Prototype標準で3つを同
 
 
 R4 Screen改訂（2026-09-28）: 保存PrototypeのRodMountだけを(0.6,±1,1.1)mへ変更。RootLocalは釣り座確定後固定し、Quick中もBoatへの追従を継続。上記R3の(0.85,±1,1.25)は旧配置。Boat Physics/環境係数/Camera anchorは変更しない。計算契約はFISHING_SYSTEM末尾。
+
+### R7A環境入力の監査診断（2026-10-08）
+
+Boat SnapshotへEnvironmentSamplePositionM（当Tick開始の問い合わせ元船位置、問い合わせはXY/深度0）を追加。Wind/SurfaceCurrent/各積分Δvの既存責務を維持し、深度潮を駆動へ転用しない。係数/Navigation/Fishing切替は不変。標準条件の同速度仮説/相対運動の実測とR7B未確定案は[R7A記録](R7A_RELATIVE_DRIFT_AUDIT.md)。
+
+### R7B代表条件のPrototype調整（2026-10-12）
+
+保存PrototypeのWindResponseKgPerS .1→.45、InertiaKg10→5。CurrentResponse1/Drag1/方向倍率は保持。既存軸別抗力・指数積分式を維持し、定常速度を設定/Clampしない。共通慣性変更はNavigation応答にも及ぶため関連回帰に含める。 段階比較・実測・変更前後・未確認の手動PIEは[R7B記録](R7B_DRIFT_RANGE_TUNING.md)。R7C以降/H/M11へ自動進行しない。
+
+### R7C深度監査・長距離表示（2026-10-13）
+
+R7Bの船体係数/積分は不変。船・Camera・Gunwaleは長距離でも正しく追従していた。World Y100m固定の表示背景による遮蔽と原点固定の有限表示領域を修正し、自然Drift50〜500m/両舷/代表HeadingでCamera・Boat-local配置を検証する。 実測/限界/修正前証跡/最大3項目手動は[R7C記録](R7C_DEPTH_AND_LONG_DRIFT.md)。R7B正式完了は修正後ユーザー表示確認待ち、Range scoring/BITE/R8/H/M11へ進まない。

@@ -6,6 +6,7 @@
 #include "Data/TRNavigationTuningDataAsset.h"
 #include "Data/TRFishingStationDataAsset.h"
 #include "Data/TRShakuriSequenceTypes.h"
+#include "Data/TRRelativeDriftTypes.h"
 #include "TRHUDSnapshot.generated.h"
 
 // Display copies only. No simulated state or future AI metrics are owned by UI.
@@ -13,6 +14,7 @@ USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTRHUDSnapshot
 {
 	GENERATED_BODY()
+ UPROPERTY(BlueprintReadOnly) FTRRelativeDriftSnapshot RelativeDrift;
  UPROPERTY(BlueprintReadOnly) bool bRecoveryAvailable=false;
  // R4A-1 observation only; never consumed by simulation or compact HUD.
  UPROPERTY(BlueprintReadOnly, Category="TipRun|Debug") FString RuntimeDiagnostics;

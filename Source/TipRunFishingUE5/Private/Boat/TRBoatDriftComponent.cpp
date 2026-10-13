@@ -90,6 +90,7 @@ bool UTRBoatDriftComponent::InitializeMotion(const FTRBoatParameters& Settings, 
 	}
 	FTRBoatSnapshot Initial;
 	Initial.Tick = Ocean.SampleTick;
+ Initial.EnvironmentSamplePositionM=FVector(InitialXYM.X,InitialXYM.Y,0);
 	Initial.PositionM = FVector(InitialXYM.X, InitialXYM.Y, double(Ocean.SurfaceZ_M) + Settings.HullHeightOffsetM);
 	Initial.HeadingRad = float(FMath::Fmod(double(HeadingRad), 2.0 * UE_DOUBLE_PI));
 	Initial.ModelRevision = Settings.ModelRevision;
@@ -116,6 +117,7 @@ bool UTRBoatDriftComponent::StepDrift(const FTRSimTime& Time, const FTROceanSamp
 		Ocean.SampleTick != Time.TickIndex || !ValidOcean(Ocean)) { return false; }
 	FTRBoatSnapshot Next = Snapshot;
 	Next.Tick = Time.TickIndex;
+ Next.EnvironmentSamplePositionM=Snapshot.PositionM;
 	if (FrozenSettings.ModelRevision == 2)
 	{
 		if (NavigationYawRateRadPerS != 0)

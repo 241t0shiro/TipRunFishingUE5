@@ -5,5 +5,10 @@ FString FTRRuntimeObservation::Describe() const
  return FString::Printf(TEXT("valid=%d projected=%d rodTick=%lld worldFrame=%llu visualFrame=%llu cameraFrame=%llu\nBoatRootLocal=%s BoatTipLocal=%s BoatDirLocal=%s Length=%.9g m\nSimRoot=%s SimTip=%s\nMeshRoot=%s MeshTip=%s errorRoot=%.9g errorTip=%.9g m\nActiveCamera=%s rotation=%s FOV=%.6g ViewRect=%s\nScreenRoot=%s ScreenTip=%s projectedLength=%.6g px"),
  bValid,bProjected,RodTick,WorldFrame,VisualFrame,CameraFrame,*RootLocal.ToString(),*TipLocal.ToString(),*DirectionLocal.ToString(),LengthM,
  *SimulationRootM.ToString(),*SimulationTipM.ToString(),*VisualRootM.ToString(),*VisualTipM.ToString(),RootErrorM,TipErrorM,
- *CameraM.ToString(),*CameraRotation.ToString(),FOV,*ViewRect.ToString(),*PixelRoot.ToString(),*PixelTip.ToString(),(PixelTip-PixelRoot).Size())+FString::Printf(TEXT("\nStationRootLocal=%s TipLocal=%s DirectionLocal=%s"),*StationRootLocal.ToString(),*StationTipLocal.ToString(),*StationDirectionLocal.ToString());
+ *CameraM.ToString(),*CameraRotation.ToString(),FOV,*ViewRect.ToString(),*PixelRoot.ToString(),*PixelTip.ToString(),(PixelTip-PixelRoot).Size())+FString::Printf(TEXT("\nStationRootLocal=%s TipLocal=%s DirectionLocal=%s"),*StationRootLocal.ToString(),*StationTipLocal.ToString(),*StationDirectionLocal.ToString())+Presentation.Describe();
+}
+
+FString FTRWorldPresentationObservation::Describe() const
+{
+ return FString::Printf(TEXT("\nR7C World valid=%d tick=%lld frame=%llu BoatM=%s\nCamera/Station error=%.9g m VisualBoat error=%.9g m\nWater center=%s boundsM=%s Seabed coversBoat=%d boundsM=%s\nBackdrop distance=%.9g m cameraInside=%d (render-only)"),bValid,BoatTick,Frame,*BoatWorldM.ToString(),CameraStationErrorM,BoatVisualErrorM,*WaterCenterM.ToString(),*WaterBoundsM.ToString(),bSeabedCoversBoat,*SeabedBoundsM.ToString(),BackgroundDistanceM,bCameraInsideBackground);
 }

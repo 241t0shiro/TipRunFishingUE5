@@ -135,3 +135,15 @@ Aの5試験とM03/M05/M08回帰20件は成功、各試験エラー/警告0。詳
 AのEnvironmentField、Wind/SurfaceCurrent/CurrentAtDepthと単位契約は変更しない。Navigationは船の現在XYで環境を問い合わせる。ポイント確認用の深度潮を表示する場合は評価深度を明示し、存在しないエギの実測潮と混同しない。FishingではCのEgi WorldPositionから深度と潮を評価する。
 
 現行Prototypeは平坦約30mであり、Rのポイント探索は移動位置・環境・船首を選ぶ操作から始める。位置依存問い合わせは維持するが、地形差/海底生成/CFDをRで追加する意味ではない。無効Sampleでは推進/更新を安全停止して異常を通知し、水深0として続行しない。表示用海面/海底Meshやグリッドから環境値へ逆流させない。環境実装の全面改造・A全試験の毎回再実行は要求せず、問い合わせ契約変更時に該当回帰を追加する。
+
+### R7Aサンプル観測（2026-10-08）
+
+Ocean API/Fieldの責務は変更しない。診断はBoat開始XY/深度0、Egi自位置由来の深度、Line水中3代表点のXY/深度/Tickを区別する。保存revision2 OceanはConstantなので深度差0、試験専用Transient DepthProfileでは実使用値が異なることを照合済み。環境Assetや風/潮の値は変更しない。結果は[R7A記録](R7A_RELATIVE_DRIFT_AUDIT.md)。
+
+### R7B代表条件のPrototype調整（2026-10-12）
+
+保存OceanのConstantを連続DepthProfileへ明示移行。0/15/30mキーは(.360111111,0,0)/(.255055556,0,0)/(.15,0,0)m/s、風(0,2)独立。Field/API/XY/Depth/Tick/補間/無効判定の責務は不変。 段階比較・実測・変更前後・未確認の手動PIEは[R7B記録](R7B_DRIFT_RANGE_TUNING.md)。R7C以降/H/M11へ自動進行しない。
+
+### R7C深度監査・長距離表示（2026-10-13）
+
+R7Cの10/20/30/40/50m試験はTransient複製のFlatDepthだけを変更し、保存R7Bの風/絶対深度Profileを固定。海面グリッド/海底は船周辺の表示窓となるが、OceanのWorld座標/bounds/評価口は動かさない。 実測/限界/修正前証跡/最大3項目手動は[R7C記録](R7C_DEPTH_AND_LONG_DRIFT.md)。R7B正式完了は修正後ユーザー表示確認待ち、Range scoring/BITE/R8/H/M11へ進まない。

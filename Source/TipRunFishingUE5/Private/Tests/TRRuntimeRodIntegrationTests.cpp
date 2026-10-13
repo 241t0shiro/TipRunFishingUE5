@@ -15,6 +15,7 @@
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "Misc/ScopeExit.h"
 #include "Misc/PackageName.h"
 #include "UObject/SavePackage.h"
 #include "SceneView.h"
@@ -53,7 +54,7 @@ namespace
   double Dt=1./60,OldDelta=0,ConfiguredLengthM=0;
   FString Trace,Name;
   bool bTraceFrames=true;
-  bool Start(FAutomationTestBase& Test,const FString& CaseName,int FPS=60,bool Port=true,int Width=1920,int Height=1080,double HeadingDeg=0)
+  bool Start(FAutomationTestBase& Test,const FString& CaseName,int FPS=60,bool Port=true,int Width=1920,int Height=1080,double HeadingDeg=0,UTRSessionConfigDataAsset* TestConfig=nullptr)
   {
    Name=CaseName;Dt=1./FPS;OldDelta=FApp::GetDeltaTime();PreviousWorld=GWorld;PreviousViewport=GEngine->GameViewport;
    Instance.Reset(NewObject<UGameInstance>(GEngine));Instance->InitializeStandalone();
@@ -68,6 +69,14 @@ namespace
    auto* LP=Instance->CreateLocalPlayer(0,Error,false);
    if(!Test.TestNotNull(TEXT("Runtime LocalPlayer"),LP)){return false;}
    const FURL URL(nullptr,TEXT("/Game/TipRun/Prototype/M105/L_TR_M105_Prototype"),TRAVEL_Absolute);
+   // Candidate tuning uses copies of the saved config through the real startup.
+   // Restore the class default immediately; no package is dirtied or saved.
+   auto* ModeClass=LoadClass<ATRGameModeBase>(nullptr,TEXT("/Game/TipRun/Prototype/M105/BP_TR_M105GameMode_Prototype.BP_TR_M105GameMode_Prototype_C"));
+   if(!ModeClass){Test.AddError(TEXT("Saved Prototype GameMode class missing"));return false;}
+   auto* ModeDefault=ModeClass->GetDefaultObject<ATRGameModeBase>();
+   TStrongObjectPtr<UTRSessionConfigDataAsset> OriginalConfig(ModeDefault->SessionConfig.Get());
+   ON_SCOPE_EXIT{ModeDefault->SessionConfig=OriginalConfig.Get();};
+   if(TestConfig){ModeDefault->SessionConfig=TestConfig;}
    if(!GEngine->LoadMap(Context,URL,nullptr,Error)){Test.AddError(TEXT("Runtime LoadMap: ")+Error);return false;}
    World=Context.World();PC=Cast<ATRPlayerController>(LP->PlayerController);
    for(TActorIterator<ATRPrototypeViewActor> It(World);It;++It){Visual=*It;break;}
@@ -1726,4 +1735,7 @@ bool FTRR6Replay::RunTest(const FString&)
 }
 
 
+#include "TRRelativeDriftRuntimeAudit.inl"
+#include "TRDriftRangeTuningRuntimeTests.inl"
+#include "TRDepthLongDriftRuntimeTests.inl"
 #endif

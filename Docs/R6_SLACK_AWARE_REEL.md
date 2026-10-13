@@ -1,5 +1,7 @@
 # R6 Slack-aware Reel / Effective Retrieve
 
+2026-10-08受入更新: ユーザーがR6のAutomationと最終手動PIEを正式合格と確認。以下の手動未実施記録は実装時の履歴。今回のR7A監査で係数/Actionを変更していない。
+
 2026-10-08。対象はM10.5-R6のみ。ユーザーがR5のAutomation・最終手動PIEを正式合格と確認。R6の実装/自動受入は成功、今回のGPU描画・OS実入力による手動PIEは未実施。R7以降/H/M11は未着手。
 
 ## 実装の正本

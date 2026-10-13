@@ -1,5 +1,11 @@
 # ロードマップ・Codex向けMVP実装順序
 
+2026-10-13 R7C最新: R7B最終手動PIEの深度未確認/長距離青画面により正式完了保留。R7Cのみ水深10〜50mの係数固定Runtime監査と表示修正を実施。固定Y100mの背景遮蔽を両舷で修正前FAIL再現、背景/海面/海底表示窓を改訂。Camera/Station/Rod/物理係数/Config/Contentは保持。最終採用124件成功（新規3＋関連121）、正常42条件Technical Abort0、UHT/実C++/Development Editor Win64成功。実測・最終検証・手動3項目は[R7C記録](R7C_DEPTH_AND_LONG_DRIFT.md)。修正後手動は未実施、R8以降/Range scoring/BITE/H/M11は未着手。以下は各時点の履歴。
+
+2026-10-12 R7B最新: R6/R7Aはユーザー正式合格。代表30m/35g/Heading0を両舷で測定し、保存Ocean DepthProfile・Boat風応答/慣性・Fishing Stay沈下倍率を段階比較後に明示適用。物理式/ライン抗力/R4〜R6操作は維持。最終採用128件成功（新規6＋関連122）、Normal42 Technical Abort0、UHT実行/実C++/Development Editor Win64成功。手動PIEは未実施。実測・候補・保存値・受入状況は[R7B記録](R7B_DRIFT_RANGE_TUNING.md)。R7C以降/H/M11は未着手。以下は各時点の履歴。
+
+2026-10-08 R7A最新: ユーザーがR6の自動試験・最終手動PIEを正式合格と確認。今回は相対ドリフト監査/診断のみ、最終採用108件成功（新規4＋関連104）、正常42条件Technical Abort0、UHT11生成・実C++/Development Editor Win64成功。保存環境はConstantで深度潮差0だがBoat/Egi速度は異なる。係数/Config/Contentは不変。実測・R7B未確定受入案は[R7A記録](R7A_RELATIVE_DRIFT_AUDIT.md)。R7B/H/M11は未着手。以下は各時点の履歴。
+
 2026-10-08 最新: ユーザーがR5のAutomation・最終手動PIEを正式合格と確認。R6のみ共有Slack-aware ReelとRequested/Actual/Net分離を実装し、自動受入126件成功（新規4＋関連122）、正常42条件Technical Abort0。UHT10生成・実C++/Development Editor Win64成功。Config/Content/係数は保持、R6手動PIE未実施。現行契約はFISHING_SYSTEM末尾、証跡/途中FAIL/警告/手動5項目は[R6記録](R6_SLACK_AWARE_REEL.md)。R7以降/H/M11は未着手。以下は履歴。
 
 2026-10-04 最新状態: R4正式合格、R5は最終手動Camera Down不具合により正式合格保留。R5Aのみ修正・自動検証完了、修正後手動再確認待ち。R6以降/R7/H/M11未着手。現行証跡は末尾と[R5A記録](R5A_CAMERA_INDEPENDENCE.md)。以下の自動成功は各時点の履歴。
@@ -579,8 +585,9 @@ A〜H実装完了、設定移行/保存済みLevelの再読込成功、UHT生成
 |R3b First-person camera|R2b/R3a|CameraManager、Camera Tuning、Rod/Reel表示参照|選択舷Eye、角度制限、表示のみ補間、ViewTarget競合なし|Rod/Reel/海面中心、真上真下なし。入力仕上げはR4|
 |R4 Fishing input/aim|R3b|Controller、Input設定、RodControl、Modeキュー接続|Mouse基準Aim/Camera読取、Snap余裕、UI遮断、保持解除、Cast/ModeEpoch/30-120fps。D/E/M09/F関連回帰|通常釣りにShift不要。右/左操作維持。Sequenceは旧挙動と明示|
 |R5 Shakuri Sequence|R4|Fishing/TRShakuriSequenceComponent新設、TRFishingComponent/TRRodControlComponent、Snapshot|1/2/3/5要求、Repeat拒否、Recoverと予約順、終了時だけTF、無AutoStay、割込/寿命。D/M10/E関連回帰|2026-10-04ユーザー指定で限定Handle Turn Demandと保存Rodへの明示適用もR5対象。Slack-aware/Drag/slip完成と全Jerk物理品質はR6へ残す|
-|R6 Slack-aware Reel|R5/C|TRReelResolver/TRLineGeometry、Egi Reel Snapshot、Sequence/Normal接続|2026-10-08実装・自動受入完了。新規4＋関連122成功。Slack/Taut/未実現、10/20/50、fps、Normal42/Intentional N、R4/R5回帰|現行ユーザー指定のSlack→安全Taut配分を採用。係数変更なし。手動PIE待ち、詳細は末尾とR6記録|
-|R7 Drift measurement/tuning|R2a/R3a/B|Prototype Boat設定、測定Snapshot/試験、必要な表示|0.4/.7/1 knot、風/潮方向別、10/30/60秒変位、停止/航行後比較、決定性。B関連回帰|固定基準に対する体感評価。式を無条件に置換せず係数調整を記録|
+|R6 Slack-aware Reel|R5/C|TRReelResolver/TRLineGeometry、Egi Reel Snapshot、Sequence/Normal接続|2026-10-08実装・自動受入完了。新規4＋関連122成功。Slack/Taut/未実現、10/20/50、fps、Normal42/Intentional N、R4/R5回帰|現行ユーザー指定のSlack→安全Taut配分を採用。係数変更なし。ユーザー最終手動PIEも正式合格（2026-10-08）、詳細は末尾とR6記録|
+|R7A Relative drift audit|R6/R2/R3/B/C|読取Snapshot/Insert診断、保存Runtime監査|2026-10-08完了。新規4＋関連104成功、30m全Cast/Stay20秒、A〜E/重量/非理想条件、Normal42 Abort0|係数/保存環境変更なし。R7A記録参照|
+|R7B Drift tuning|R7A|Prototype環境/Boat/Egi調整（未着手）|R7Aの実測から事前受入を決定し、角度とレンジを別評価|次の明示依頼まで実装・製品値確定しない|
 |R8a F1/HUD fix|F/G、独立着手可|Controller/Widget/TRHUD/TRPrototypePresentation、必要ならConfig/DefaultInput.iniの限定除外|実入力経路1押下1toggle、UI/Pause/Close、ViewMode等不変、20往復、HUD値。F/M09回帰|紫表示なし/閉じられる実キー確認。Engine設定編集禁止|
 |R8b Visual/readability|R3b/R4/R8a|表示Actor、Prototype Mesh/Material/Level、モード別HUD|Snapshot→表示、釣り座/Rod/Reel/Line参照、Asset load、UI/Input非干渉|塗りの船/左右舷/海中/固定基準、1080p/1440p。物理値を表示都合で変更しない|
 |R9 Integration / PIE gate|R1〜R8全て|保存R Prototypeの明示参照移行、GameMode/Input/Session接続、統合試験と記録|保存後別プロセスload、全モード往復、投入〜回収〜装備〜再投入、全Jerk、古い世代/破棄、関連機能統合|下記全項目をユーザー手動確認。Hの全統合試験を先取りしない|
@@ -935,3 +942,15 @@ R5B自動検証完了、R5正式不合格・修正後手動PIE待ち。R6以降/
 R5はユーザーが最終手動PIEまで正式合格と確認。今回R6のみ、R5C海面幾何を共有化し、Shakuri/Normalの同一ResolverとSnapshot/Insert診断を実装。名目0.8m、Sequence/Root/2m/Camera/環境/安全閾値/Config/Contentを保持。ActualとNetを分離し、未実現を正常継続として観測する。
 
 最終採用126件成功（新規4＋関連122）、正常42条件Technical Abort0、Intentional Abort/N復旧成功。UHT10生成・変更Runtime/最終試験の実C++/Link・Development Editor Win64・git diff --check成功。試験内外部HTTP警告6、新R6試験内警告0。最終2採用元/途中FAIL、0.8m配分/50回再評価、変更17ファイル、手動5項目は[R6記録](R6_SLACK_AWARE_REEL.md)。実装/自動合格と手動PIE未実施を区別し、R7以降/H/M11へ進まない。
+
+### R7A相対ドリフト監査（2026-10-08）
+
+R6はユーザー正式合格。今回の完了は診断/監査のみで、R7全体の調整・PIE品質合格ではない。現行式/実サンプル、全Cast/Stay20秒、A〜E/重量/非理想条件、108採用試験とBuild、変更一覧、R7B未確定受入案は[R7A記録](R7A_RELATIVE_DRIFT_AUDIT.md)。R7B/H/M11へ自動進行しない。
+
+### R7B Representative Tip-run Drift / Range Tuning（2026-10-12）
+
+代表30m/35g/シンカーなし/Heading0/両舷を事前固定し、Ocean→Boat応答→Drag/Inertia→沈下倍率をRuntime Sweep。採用3資産をUE保存し別プロセスで再受入する。候補・採用値・品質ゲート・最大5項目手動は[R7B記録](R7B_DRIFT_RANGE_TUNING.md)。今回の手動PIEは未実施。R7C以降/H/M11は未着手。
+
+### R7C Depth Scaling / Long Drift Presentation（2026-10-13）
+
+係数固定の5水深・3代表水深重量比較、固定World背景の遮蔽修正、両舷×4Heading×50/100/250/500mのRuntime受入。R7B正式完了は保留し修正後手動3項目を別ゲートとする。証跡/最終受入/変更一覧は[R7C記録](R7C_DEPTH_AND_LONG_DRIFT.md)。R8以降/Range scoring/BITE/H/M11は未着手。

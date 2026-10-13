@@ -117,6 +117,7 @@ struct TIPRUNFISHINGUE5_API FTRBoatSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
 	FVector ForwardVector = FVector::ForwardVector;
 	// Environmental inputs sampled at the start position of this integration tick.
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Debug") FVector EnvironmentSamplePositionM=FVector::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
 	FVector2D WindMps = FVector2D::ZeroVector;
 	UPROPERTY(BlueprintReadOnly, Category = "TipRun|Boat")
@@ -130,11 +131,40 @@ struct TIPRUNFISHINGUE5_API FTRBoatSnapshot
 	FVector DragDeltaVelocityMps = FVector::ZeroVector;
 };
 
+// R7A observation of the LAST numerical substep of a successful fixed tick.
+// Never fed back into physics. Field queries precede integration/constraint;
+// CurrentAtEgiDepthMps on FTREgiSnapshot is the final destination query instead.
+USTRUCT(BlueprintType)
+struct TIPRUNFISHINGUE5_API FTREgiDriftObservation
+{
+ GENERATED_BODY()
+ UPROPERTY(BlueprintReadOnly) bool bValid=false;
+ UPROPERTY(BlueprintReadOnly) int64 Tick=0;
+ UPROPERTY(BlueprintReadOnly) int32 Substep=0;
+ UPROPERTY(BlueprintReadOnly) FVector EgiSamplePositionM=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly) double EgiSampleDepthM=0;
+ UPROPERTY(BlueprintReadOnly) FVector EgiSampleCurrentMps=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly) TArray<FVector> LineSamplePositionsM;
+ UPROPERTY(BlueprintReadOnly) TArray<FVector> LineSampleCurrentsMps;
+ UPROPERTY(BlueprintReadOnly) TArray<double> LineSampleDepthsM;
+ UPROPERTY(BlueprintReadOnly) FVector RodVelocityMps=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly) FVector LineForcingMps=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly) FVector EquilibriumVelocityMps=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly) FVector CandidateVelocityMps=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly) FVector ConstrainedMotionVelocityMps=FVector::ZeroVector;
+ UPROPERTY(BlueprintReadOnly) double WetLengthM=0;
+ UPROPERTY(BlueprintReadOnly) double Transfer01=0;
+ UPROPERTY(BlueprintReadOnly) double LineDragRatePerS=0;
+ UPROPERTY(BlueprintReadOnly) double LineEndWeight=0;
+ UPROPERTY(BlueprintReadOnly) double HorizontalResponsePerS=0;
+};
+
 USTRUCT(BlueprintType)
 struct TIPRUNFISHINGUE5_API FTREgiSnapshot
 {
 	GENERATED_BODY()
  UPROPERTY(BlueprintReadOnly) FTRReelSnapshot Reel;
+ UPROPERTY(BlueprintReadOnly, Category="TipRun|Debug") FTREgiDriftObservation DriftObservation;
 	// Sole position authority, meters, +Z up. False only for legacy initialization callers.
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") bool bWorldPositionValid = false;
 	UPROPERTY(BlueprintReadOnly, Category="TipRun|Spatial") FVector WorldPositionM = FVector::ZeroVector;

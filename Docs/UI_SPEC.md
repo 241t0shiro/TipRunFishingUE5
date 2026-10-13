@@ -641,3 +641,11 @@ Insert詳細にmapping、OnScreen/OffScreen/BehindCamera/ProjectionInvalid、pro
 Actualはスプール短縮実績であり、Net Deltaは最終ラインの増減。要求0.8mに対してActualが小さいこと自体は正常。初期化直後のReel Tick0は未評価、Quick中は最後の水中観測を凍結したまま。Sequence側の名目予約累積とReel側の発行済み累積の区別はFISHING_SYSTEMのR6現行契約を参照。
 
 R5はユーザーが最終手動PIEまで正式合格と確認。R6の手動確認は [R6記録](R6_SLACK_AWARE_REEL.md) の最大5項目。R7以降/H/M11へ自動進行しない。
+
+### R7A Insert相対ドリフト監査（2026-10-08）
+
+通常HUD/キー/操作ガイドは維持。Insert詳細へ「相対ドリフト監査（同Tick・読取専用）」を追加し、風/表層潮/エギ深度潮、Boat/Egi/相対Velocity、距離増加率、船/竿先水平距離/鉛直差/直線距離、海面からの角度、Line/Required/Slack/総重量、Boat各Δv寄与とEgi最後substepの応答/候補/拘束後を表示する。未評価/Quick凍結/異Tickは未評価表示。旧角度（鉛直から）とは別値。状態/物理を変更するコマンドをUIから発行しない。実測・任意観測手順は[R7A記録](R7A_RELATIVE_DRIFT_AUDIT.md)。
+
+### R7C深度監査・長距離表示（2026-10-13）
+
+通常HUD/操作キーは保持。Insert詳細の既存Runtime診断へBoat World位置、Camera/Station誤差、Visual Boat誤差、Water表示中心/Bounds、Seabed coverage/Bounds、Backdrop距離/内部侵入を追加。BackdropだけはActive Cameraの100m前方、グリッド/海底は船周辺表示窓。Cameraを再AttachせずRod/Cameraの正本も変更しない。 実測/限界/修正前証跡/最大3項目手動は[R7C記録](R7C_DEPTH_AND_LONG_DRIFT.md)。R7B正式完了は修正後ユーザー表示確認待ち、Range scoring/BITE/R8/H/M11へ進まない。

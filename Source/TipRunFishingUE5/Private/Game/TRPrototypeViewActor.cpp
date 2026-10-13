@@ -106,20 +106,33 @@ void ATRPrototypeViewActor::ApplyObservation(const FTRHUDSnapshot& S,const FTRRo
  BoatCabin->SetWorldLocation((S.Boat.PositionM+Heading.RotateVector(FVector(-1,0,.6)))*100);BoatCabin->SetWorldRotation(Heading);BoatCabin->SetWorldScale3D(FVector(1,1.3,.8));
  for(int Side:{-1,1}){auto* Rail=Side<0?PortGunwale.Get():StarboardGunwale.Get();Rail->SetWorldLocation((S.Boat.PositionM+Heading.RotateVector(FVector(0,Side*1.,1.05)))*100);Rail->SetWorldRotation(Heading);Rail->SetWorldScale3D(FVector(5,.1,.12));}
  const FVector O(0,0,SurfaceM); ReferenceSurfaceM=SurfaceM;
+ // A moving display window whose grid lines remain world-aligned multiples of
+ // 5m. Simulation coordinates and the fixed origin buoy are never recentered.
+ const FVector WaterCenter(FMath::FloorToDouble(S.Boat.PositionM.X/5)*5,FMath::FloorToDouble(S.Boat.PositionM.Y/5)*5,SurfaceM);
  ReferenceBuoy->SetWorldLocation((O+FVector(0,-4,.35))*100);ReferenceBuoy->SetWorldScale3D(FVector(.5,.5,.7));
  for(int32 I=0;I<21;++I)
  {
   const double V=(I-10)*5.0;
-  Segment(WorldGrid[I*2],O+FVector(-50,V,0),O+FVector(50,V,0),.025);
-  Segment(WorldGrid[I*2+1],O+FVector(V,-50,0),O+FVector(V,50,0),.025);
+  Segment(WorldGrid[I*2],WaterCenter+FVector(-50,V,0),WaterCenter+FVector(50,V,0),.025);
+  Segment(WorldGrid[I*2+1],WaterCenter+FVector(V,-50,0),WaterCenter+FVector(V,50,0),.025);
  }
  // Open water frame, not an opaque surface that conceals the underwater egi.
- Segment(SurfaceEdges[0],O+FVector(-12,-8,0),O+FVector(12,-8,0),.04);
- Segment(SurfaceEdges[1],O+FVector(-12,8,0),O+FVector(12,8,0),.04);
- Segment(SurfaceEdges[2],O+FVector(-12,-8,0),O+FVector(-12,8,0),.04);
- Segment(SurfaceEdges[3],O+FVector(12,-8,0),O+FVector(12,8,0),.04);
- SeabedVisual->SetWorldLocation(TRUnits::MetersToCentimeters(FVector(O.X,O.Y,SurfaceM-DepthM-.2)));
- BackgroundVisual->SetWorldLocation(TRUnits::MetersToCentimeters(O+FVector(0,100,0)));
+ Segment(SurfaceEdges[0],WaterCenter+FVector(-12,-8,0),WaterCenter+FVector(12,-8,0),.04);
+ Segment(SurfaceEdges[1],WaterCenter+FVector(-12,8,0),WaterCenter+FVector(12,8,0),.04);
+ Segment(SurfaceEdges[2],WaterCenter+FVector(-12,-8,0),WaterCenter+FVector(-12,8,0),.04);
+ Segment(SurfaceEdges[3],WaterCenter+FVector(12,-8,0),WaterCenter+FVector(12,8,0),.04);
+ SeabedVisual->SetWorldLocation(TRUnits::MetersToCentimeters(FVector(WaterCenter.X,WaterCenter.Y,SurfaceM-DepthM-.2)));
+ // The old fixed wall at world Y=100m intersected the boat/camera. Keep the
+ // backdrop 100m beyond the actual active camera, perpendicular to its view.
+ // Only this render primitive moves; the camera/boat/rod contract is unchanged.
+ FVector BackgroundCenter=S.Boat.PositionM+FVector(0,100,0);FQuat BackgroundRotation=FQuat::Identity;
+ if(Controller.IsValid() && Controller->PlayerCameraManager)
+ {
+  const auto& POV=Controller->PlayerCameraManager->GetCameraCacheView();
+  BackgroundCenter=POV.Location*.01+POV.Rotation.Vector()*100;
+  BackgroundRotation=POV.Rotation.Quaternion()*FQuat(FVector::UpVector,-UE_PI/2);
+ }
+ BackgroundVisual->SetWorldLocationAndRotationNoPhysics(BackgroundCenter*100,BackgroundRotation.Rotator());
  if(!FishingVisible){return;}
  // Configured stations require an authoritative rod pair; never synthesize a
  // camera/initial-pose fallback when a snapshot is invalid. Legacy preview only.
@@ -157,6 +170,21 @@ void ATRPrototypeViewActor::Tick(float DeltaSeconds)
 void ATRPrototypeViewActor::CaptureRuntimeObservation(const FTRHUDSnapshot& S,ATRPlayerController* PC)
 {
  RuntimeObservation={};auto& O=RuntimeObservation;O.WorldFrame=GFrameCounter;O.VisualFrame=GFrameCounter;O.RodTick=S.Rod.Tick;
+ auto& P=O.Presentation;
+ if(S.bEnvironmentValid && PC && PC->PlayerCameraManager)
+ {
+  P.bValid=true;P.Frame=GFrameCounter;P.BoatTick=S.Boat.Tick;P.BoatWorldM=S.Boat.PositionM;P.StationWorldM=S.Station.CameraWorldM;
+  P.CameraWorldM=PC->PlayerCameraManager->GetCameraCacheView().Location*.01;
+  P.CameraStationErrorM=S.Station.bValid?(P.CameraWorldM-P.StationWorldM).Size():0;
+  P.BoatVisualWorldM=BoatVisual->GetComponentLocation()*.01;P.BoatVisualErrorM=(P.BoatVisualWorldM-P.BoatWorldM).Size();
+  P.WaterCenterM=FVector(FMath::FloorToDouble(P.BoatWorldM.X/5)*5,FMath::FloorToDouble(P.BoatWorldM.Y/5)*5,ReferenceSurfaceM);
+  P.WaterBoundsM=FBox(P.WaterCenterM-FVector(50,50,.02),P.WaterCenterM+FVector(50,50,.02));
+  P.SeabedBoundsM=FBox((SeabedVisual->Bounds.Origin-SeabedVisual->Bounds.BoxExtent)*.01,(SeabedVisual->Bounds.Origin+SeabedVisual->Bounds.BoxExtent)*.01);
+  P.BackgroundBoundsM=FBox((BackgroundVisual->Bounds.Origin-BackgroundVisual->Bounds.BoxExtent)*.01,(BackgroundVisual->Bounds.Origin+BackgroundVisual->Bounds.BoxExtent)*.01);
+  P.bSeabedCoversBoat=P.BoatWorldM.X>=P.SeabedBoundsM.Min.X && P.BoatWorldM.X<=P.SeabedBoundsM.Max.X && P.BoatWorldM.Y>=P.SeabedBoundsM.Min.Y && P.BoatWorldM.Y<=P.SeabedBoundsM.Max.Y;
+  P.BackgroundDistanceM=(BackgroundVisual->GetComponentLocation()*.01-P.CameraWorldM).Size();
+  P.bCameraInsideBackground=BackgroundVisual->GetStaticMesh()->GetBoundingBox().IsInsideOrOn(BackgroundVisual->GetComponentTransform().InverseTransformPosition(P.CameraWorldM*100));
+ }
  if(!S.Rod.bValid || !RodVisual || !RodVisual->GetStaticMesh() || !PC || !PC->PlayerCameraManager){return;}
  O.bValid=true;O.SimulationRootM=S.Rod.RootWorldPositionM;O.SimulationTipM=S.Rod.TipWorldPositionM;
  const FBox Box=RodVisual->GetStaticMesh()->GetBoundingBox();const FTransform T=RodVisual->GetComponentTransform();

@@ -67,6 +67,16 @@ TArray<FTRPrototypeReadoutRow> UTRFishingHUDWidget::BuildReadout(const FTRHUDSna
   Rows[1].Label=LOCTEXT("Mode","モード");
   Rows[1].Value=Value(S.bPaused?TEXT("一時停止 / 操船 (Navigation)"):TEXT("操船 (Navigation)"));
  }
+ const auto& D=S.RelativeDrift;const auto& A=S.Egi.DriftObservation;
+ Add(LOCTEXT("RelativeDrift", "相対ドリフト監査（同Tick・読取専用）"),D.bValid ?
+  FString::Printf(TEXT("Tick=%lld BoatV=%s EgiV=%s\nBoat-EgiV=%s separationRate=%+.6f m/s\n水平距離 boat=%.6f rod=%.6f / 鉛直差=%.6f / 直線=%.6f m\n海面からの角度=%.6f° / Line=%.6f Required=%.6f Slack=%.6f m / 重量=%.1f g\n風=%s 表層潮=%s 深度潮=%s\nBoat deltaV wind=%s current=%s drag=%s\nEgi lastSub=%d sampleDepth=%.6f wetLength=%.6f transfer=%.6f dragRate=%.6f response=%.6f /s\nlineForcing=%s rodV=%s equilibrium=%s candidateV=%s constrainedV=%s"),
+   D.Tick,*S.Boat.VelocityMps.ToString(),*S.Egi.VelocityMps.ToString(),*D.RelativeHorizontalVelocityMps.ToString(),D.SeparationRateMps,
+   D.BoatEgiHorizontalSeparationM,D.RodEgiHorizontalSeparationM,D.VerticalSeparationM,D.StraightDistanceM,D.LineAngleToSurfaceDeg,
+   double(S.Egi.LineLengthM),S.Egi.Reel.RequiredLineLengthM,S.Egi.SlackM,double(S.Egi.TotalMassG),
+   *S.Boat.WindMps.ToString(),*S.Boat.SurfaceCurrentMps.ToString(),*S.Egi.CurrentAtEgiDepthMps.ToString(),
+   *S.Boat.WindDeltaVelocityMps.ToString(),*S.Boat.CurrentDeltaVelocityMps.ToString(),*S.Boat.DragDeltaVelocityMps.ToString(),
+   A.Substep,A.EgiSampleDepthM,A.WetLengthM,A.Transfer01,A.LineDragRatePerS,A.HorizontalResponsePerS,
+   *A.LineForcingMps.ToString(),*A.RodVelocityMps.ToString(),*A.EquilibriumVelocityMps.ToString(),*A.CandidateVelocityMps.ToString(),*A.ConstrainedMotionVelocityMps.ToString()) : TEXT("未評価／凍結／Tick不一致"));
  Add(LOCTEXT("RuntimeDiagnostics", "Rod / Input / Action 最終診断（読取専用）"),S.RuntimeDiagnostics);
  return Rows;
 }

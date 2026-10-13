@@ -612,3 +612,17 @@ revision 2ではShakuriの当Tick距離要求とNormal Retrieveの既存ReelMps�
 Sequence累積Requestedは開始したActionの名目予約量、Unrealizedは名目Requested−Actual（進行中/中断時の未発行分も含む）。Egi Reel累積Requestedは実際に発行したTick要求で、NormalとShakuri双方を含む。完了したShakuriだけのCastでは両者が一致する。Actualは成功Spatial Snapshotからのみ反映し、Tick/Source/配分等式を検証する。
 
 Left Releaseで新しいNormal要求を停止。Re-FallはPayoutのみ、Quickは共有Resolverを使わず既存固定期間→Ready/Unlock。固定Station-local Grip/Base/Length2m、Camera独立、画面外操作、Abort/N復旧を保持する。最終数値・試験・限界は [R6記録](R6_SLACK_AWARE_REEL.md)。
+
+### R7A相対ドリフト診断契約（2026-10-08）
+
+ユーザーがR6の自動/最終手動PIEを正式合格と確認。Boat/Egi/Rodの同一固定Tickコピーから水平相対Velocity（Boat−Egi）、船/竿先水平距離、鉛直差、直線距離、海面水平面からのLineAngleToSurfaceDeg=atan2(abs(vertical),horizontal)を導出する。既存LineAngleRadは鉛直からの角度として維持。実Line/Required/Slack、相対速の大きさと距離増加率を混同しない。
+
+FTREgiDriftObservationは成功Tick最後substepの実問い合わせ位置/深度/潮（Egi＋水中Line3点）、抗力/応答/竿先速度/候補/拘束後Motion Velocityを公開するだけ。Quick/未活動Cast/異TickのRelativeDriftは無効。物理式/係数/Reel/Action/安全閾値は変更しない。定義の詳細、角度不足の実測とR7B未確定案は[R7A記録](R7A_RELATIVE_DRIFT_AUDIT.md)。Range/BITE評価は未実装。
+
+### R7B代表条件のPrototype調整（2026-10-12）
+
+保存FishingのStaySinkScale .2→.9のみ採用。SinkSpeed/HorizontalResponse質量曲線、VerticalResponse2、LineDrag.0001、3深度サンプル、Reel/安全閾値は保持。代表35gの安定は特定環境/Heading/投入列での候補であり、Depth固定・Range score/BITEではない。シャクリ後の初期過渡を除外して合格を捏造しない。 段階比較・実測・変更前後・未確認の手動PIEは[R7B記録](R7B_DRIFT_RANGE_TUNING.md)。R7C以降/H/M11へ自動進行しない。
+
+### R7C深度監査・長距離表示（2026-10-13）
+
+水深別の角度へ直接補正しない。固定Hなら深いほど海面角が大きいが、保存実Runtimeでは落下時間に伴うH増加により35g Bottom角は10m52.976°→50m49.445°へ逆順となる。30/35/40gのレンジ順序は10/30/50mで維持。R7B/R4〜R6物理契約は不変。 実測/限界/修正前証跡/最大3項目手動は[R7C記録](R7C_DEPTH_AND_LONG_DRIFT.md)。R7B正式完了は修正後ユーザー表示確認待ち、Range scoring/BITE/R8/H/M11へ進まない。

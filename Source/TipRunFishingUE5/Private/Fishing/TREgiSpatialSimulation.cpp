@@ -30,6 +30,7 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
  Reel.Source=Action.LineMode==ETRLineMode::ReelIn ?
   (Action.FishingState==ETRFishingState::Jerking?ETRReelSource::Shakuri:ETRReelSource::NormalRetrieve):ETRReelSource::None;
  const auto PreviousReel=Snapshot.Reel;
+ FTREgiDriftObservation Audit;
  FTROceanSample Local = Ocean;
 	bool bBottom = false, bSurface = false;
 	auto Read = [&](const FVector& Point, FTROceanSample& Out)
@@ -51,7 +52,11 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 	{
 		const FVector Rod = FMath::Lerp(RodStart, Boat.RodTipM, double(Sub+1)/Count);
 		if (!Read(Position, Local)) { return DiagnosticFail(TEXT("Spatial.InvalidOceanAtEgi"), __LINE__); }
-		const FVector Old = Position;
+		Audit={};Audit.Tick=Time.TickIndex;Audit.Substep=Sub;
+  Audit.EgiSamplePositionM=Position;Audit.EgiSampleDepthM=FMath::Max(0.,double(Local.SurfaceZ_M)-Position.Z);
+  Audit.EgiSampleCurrentMps=Local.CurrentMps;Audit.RodVelocityMps=RodVelocity;
+  Audit.HorizontalResponsePerS=FrozenEquipment.HorizontalResponsePerS;
+  const FVector Old = Position;
 		const FVector OldVelocity = V;
 		const double OldLine = Line;
 		if (Action.FishingState == ETRFishingState::Jerking) { Residual = Action.LiftMps; }
@@ -71,7 +76,8 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 		const double Transfer = Line-Distance <= P.LineSlackAllowanceM+EpsilonM ? P.TautLineTransfer01 : P.SlackLineTransfer01;
 		const double DragRate = P.LineDragKgPerMS * WetLength * Transfer / (double(FrozenEquipment.TotalMassG)*0.001);
 		if (!FMath::IsFinite(DragRate)) { return DiagnosticFail(TEXT("Spatial.NonFiniteLineDrag"), __LINE__); }
-		FVector LineForcing = FVector::ZeroVector;
+		Audit.WetLengthM=WetLength;Audit.Transfer01=Transfer;Audit.LineDragRatePerS=DragRate;
+  FVector LineForcing = FVector::ZeroVector;
 		double EndWeight = 0;
 		if (DragRate > 0)
 		{
@@ -82,11 +88,15 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 				if (!Read(Rod+Offset*T, Water)) { return DiagnosticFail(TEXT("Spatial.InvalidOceanAtLine"), __LINE__); }
 				// Ignore points above their local surface (future spatial surfaces).
 				if ((Rod+Offset*T).Z > Water.SurfaceZ_M) { continue; }
-				LineForcing += (Water.CurrentMps - RodVelocity*(1-T)) / 3.0;
+				Audit.LineSamplePositionsM.Add(Rod+Offset*T);
+    Audit.LineSampleDepthsM.Add(FMath::Max(0.,double(Water.SurfaceZ_M)-(Rod+Offset*T).Z));
+    Audit.LineSampleCurrentsMps.Add(Water.CurrentMps);
+    LineForcing += (Water.CurrentMps - RodVelocity*(1-T)) / 3.0;
 				EndWeight += T/3.0;
 			}
 		}
-		const FVector Target(Local.CurrentMps.X, Local.CurrentMps.Y,
+		Audit.LineForcingMps=LineForcing;Audit.LineEndWeight=EndWeight;
+  const FVector Target(Local.CurrentMps.X, Local.CurrentMps.Y,
 			-double(FrozenEquipment.SinkSpeedMps)*Action.SinkScale+Residual);
 		FVector Trial = Position;
 		for (int32 Axis=0; Axis<3; ++Axis)
@@ -94,14 +104,16 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 			const double BaseRate = Axis==2 ? P.VerticalResponsePerS : double(FrozenEquipment.HorizontalResponsePerS);
 			const double Rate = BaseRate+DragRate*EndWeight;
 			const double Equilibrium = (BaseRate/Rate)*Target[Axis] + (DragRate/Rate)*LineForcing[Axis];
-			const double X = Rate*Dt;
+			Audit.EquilibriumVelocityMps[Axis]=Equilibrium;
+   const double X = Rate*Dt;
 			if (!FMath::IsFinite(X) || !FMath::IsFinite(Equilibrium)) { return DiagnosticFail(TEXT("Spatial.NonFiniteResponse"), __LINE__); }
 			const double Alpha = -std::expm1(-X);
 			const double Phi = X<1.e-5 ? 1-X/2+X*X/6-X*X*X/24 : Alpha/X;
 			Trial[Axis] += Dt*(V[Axis]*Phi+Equilibrium*(1-Phi));
 			V[Axis] += (Equilibrium-V[Axis])*Alpha;
 		}
-		if (Trial.ContainsNaN()) { return DiagnosticFail(TEXT("Spatial.PositionNonFinite"), __LINE__); }
+		Audit.CandidateVelocityMps=V;
+  if (Trial.ContainsNaN()) { return DiagnosticFail(TEXT("Spatial.PositionNonFinite"), __LINE__); }
         if (V.ContainsNaN()) { return DiagnosticFail(TEXT("Spatial.VelocityNonFinite"), __LINE__); }
         if (V.Size() > P.MaxEgiSpeedMps) { return DiagnosticFail(TEXT("Spatial.EgiCandidateVelocityExceeded"), __LINE__); }
 		// FreeFall pays only demand. No automatic TF slack accumulation;
@@ -187,7 +199,8 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 		{ const TCHAR* Failure = !FMath::IsFinite(Travel) || TRUnits::MetersToCentimeters(Trial).ContainsNaN() ? TEXT("Spatial.PositionNonFinite") :
             Travel>P.MaxStepTravelM ? TEXT("Spatial.EgiTravelExceeded") : StepTravel/Dt>P.MaxEgiSpeedMps ? TEXT("Spatial.LineCorrectionExceeded") :
             V.ContainsNaN() ? TEXT("Spatial.VelocityNonFinite") : TEXT("Spatial.EgiConstraintVelocityExceeded"); DiagnosticFail(Failure, __LINE__); DiagnosticFailure += FString::Printf(TEXT(" travel=%.9g/%.9g stepSpeed=%.9g/%.9g velocity=%.9g rodSpeed=%.9g"),Travel,double(P.MaxStepTravelM),StepTravel/Dt,double(P.MaxEgiSpeedMps),V.Size(),RodVelocity.Size()); return ETREgiStepEvent::EnvironmentInvalid; }
-		Position=Trial;
+		Audit.ConstrainedMotionVelocityMps=V;Audit.bValid=true;
+  Position=Trial;
 	}
 	// Callbacks cannot revive an old cast or a destroyed owner.
 	if (!bActive || Snapshot.CastId!=ExpectedCastId || (GetOwner() && GetOwner()->IsActorBeingDestroyed()))
@@ -198,7 +211,8 @@ ETREgiStepEvent UTREgiSimulationComponent::StepSpatial(FTRCastId ExpectedCastId,
 	{ return DiagnosticFail(TEXT("Spatial.NonFiniteDepthVelocity"), __LINE__); }
 	const ETREgiStepEvent Event = bBottom&&!bOnBottom ? ETREgiStepEvent::ReachedBottom :
 		(!bBottom&&bOnBottom ? ETREgiStepEvent::LeftBottom : ETREgiStepEvent::None);
-	Snapshot.WorldPositionM=Position; Snapshot.PositionXYM=FVector2D(Position.X,Position.Y);
+	Snapshot.DriftObservation=MoveTemp(Audit);
+ Snapshot.WorldPositionM=Position; Snapshot.PositionXYM=FVector2D(Position.X,Position.Y);
 	Snapshot.DepthM=float(Depth); Snapshot.DepthVelocityMps=float(DepthVelocity);
 	Snapshot.VelocityMps=(Position-Start)/Time.StepSeconds;
 	// Round revision 2 line conservatively at the existing float boundary.

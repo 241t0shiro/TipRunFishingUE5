@@ -498,7 +498,9 @@ FTRHUDSnapshot ATRFishingSessionActor::GetHUDSnapshot() const
 	Copy.Station=GetStationSnapshot();
 	Copy.PlayerMode = GetPlayerModeSnapshot();
 	Copy.Navigation = GetNavigationSnapshot();
-	Copy.bSessionValid = true; Copy.bEgiValid = bCastActive; Copy.bEquipmentLocked = bEquipmentLocked;
+	Copy.RelativeDrift=FTRRelativeDriftSnapshot::Observe(Copy.Boat,Copy.Egi,Copy.Rod);
+ if(!bCastActive || Fishing->GetState()==ETRFishingState::QuickRetrieving){Copy.RelativeDrift={};}
+ Copy.bSessionValid = true; Copy.bEgiValid = bCastActive; Copy.bEquipmentLocked = bEquipmentLocked;
 	Copy.bEgiOnboard = bEgiOnboard; Copy.bCanChangeEquipment = CanChangeEquipment();
 	Copy.Phase = Phase; Copy.CastId = CurrentCastId; Copy.Equipment = GetEquipmentSnapshot();
 	Copy.bRecoveryAvailable=IsRecoveryAvailable();
